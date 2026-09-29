@@ -27,6 +27,16 @@ Reader Bridge packages that setup into a guided, resumable workflow. The wizard 
 
 Progress sync is an existing KOReader/CrossPoint capability. Reader Bridge adds the setup workflow, shared-highlight collection, KOReader plugin, and custom CrossPoint highlighting and upload behavior. It does not replace Amazon's stock reader or automatically migrate DRM-protected books.
 
+## Prerequisite: jailbreak your Kindle and install KOReader
+
+**Your Kindle must already be jailbroken and able to open books in KOReader before setting up Reader Bridge.** Reader Bridge does not jailbreak your Kindle.
+
+1. Read the [KindleModding jailbreak guide](https://kindlemodding.org/jailbreaking/), then use [Find My Jailbreak](https://kindlemodding.org/kindle-models) to check your exact Kindle model and firmware version.
+2. Follow the method the wizard recommends, including its post-jailbreak steps. If no supported method is available for your device, stop here.
+3. Follow the [official KOReader installation instructions for Kindle](https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices). Open an EPUB in KOReader to confirm it works, then return here.
+
+Already reading in KOReader? Continue below. Our [Kindle setup checklist](docs/SETUP.md#1-get-koreader-working-on-the-kindle) adds the device checkpoints for this workflow.
+
 ## Quick start on macOS
 
 Start the guided setup:
