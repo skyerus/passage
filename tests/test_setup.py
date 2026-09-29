@@ -133,6 +133,18 @@ class SetupTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()) as output:
             self.assertEqual(setup.main(['--app-dir', str(self.bridge.app), 'status']), 1)
         self.assertNotIn('PRIVATE', output.getvalue()); self.assertNotIn('Traceback', output.getvalue())
+    def test_large_unicode_import_stays_below_request_limit(self):
+        self.token()
+        self.bridge.state['collector'] = {'port': 8084}
+        export = self.root / 'clippings.txt'
+        export.write_text(''.join('Book (Author)\n- Your Highlight on Location %d\n\n%s\n==========\n' %
+                                 (i, '\u0800' * 21840) for i in range(8)), encoding='utf-8')
+        def receipt(url, payload, **kwargs):
+            self.assertLess(len(payload), 1024 * 1024)
+            records = json.loads(payload)['highlights']
+            return json.dumps({'accepted': [item['id'] for item in records]}).encode()
+        with patch.object(setup, 'http', side_effect=receipt), contextlib.redirect_stdout(io.StringIO()):
+            self.bridge.import_clippings(export)
     def test_library_partial_bootstrap_preserves_secret_without_exposing_server(self):
         books = self.root / 'books'; setup.atomic_write(books / 'metadata.db', b'fixture')
         setup.atomic_write(self.bridge.app / 'library/venv/bin/python', b'fixture')

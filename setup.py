@@ -459,8 +459,10 @@ class Bridge:
         if not collector:
             raise SetupError('Install the collector first.')
         token = (self.app / 'collector/data/token').read_text().strip()
-        for start in range(0, len(rows), 8):
-            batch = rows[start:start + 8]
+        # One record also keeps escaped, near-limit Unicode excerpts below the
+        # collector's request limit. Imports remain idempotent across retries.
+        for row in rows:
+            batch = [row]
             payload = json.dumps({'source': 'koreader', 'device_id': 'kindle-clippings-import', 'highlights': batch}).encode()
             result = json.loads(http(f'http://127.0.0.1:{collector["port"]}/v1/highlights', payload, headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}))
             if set(result.get('accepted', [])) != {row['id'] for row in batch}:
