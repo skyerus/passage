@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+*.sqlite3*
+*.epub
+*.bin
+highlights.json
+highlight-tombstones.json
+*config.json
+*queue.json
