@@ -1,6 +1,35 @@
-# Reader Bridge
+# Reader Bridge: Kindle and Xteink highlight sync
 
-Set up a Mac, a Kindle running KOReader, and an Xteink X4 Pro running CrossPoint with one guided command:
+Collect highlights from **KOReader on a Kindle** and **CrossPoint on an Xteink X4 Pro** in one personal archive. Set up reading-progress sync between the readers, import existing Kindle highlights, and optionally serve the same EPUB books to both devices from your Mac.
+
+Reader Bridge is an open-source macOS setup wizard for this workflow. It brings together the reader plugins, custom CrossPoint firmware, local highlight collector, and device instructions. **Shared highlights means one quote collection; it does not copy highlight underlines into the book on the other reader.**
+
+[Setup guide](docs/SETUP.md) · [Download the release](https://github.com/skyerus/reader-bridge/releases/latest) · [Common questions](#common-questions) · [Compatibility](#compatibility)
+
+## The problem: switching readers without leaving your reading history behind
+
+You have a Kindle, a collection of highlighted passages, and a new Xteink X4 Pro. You want to read on whichever device suits the moment, pick up at the same passage, and keep the quotes you save in one place.
+
+Getting there takes several separate pieces: a supported Kindle jailbreak, KOReader, CrossPoint, a shared reading-progress account, a way to collect highlights from both readers, and identical book files. Each piece has its own installation, credentials, menus, and restart steps. An existing Amazon highlight collection also needs an import path.
+
+Reader Bridge packages that setup into a guided, resumable workflow. The wizard installs and pairs the components it can control, preserves queued highlights and credentials when rerun, and gives you the on-device steps for the parts that need a tap, eject, or restart. The Mac services start after login, so you do not need to keep a Terminal window open.
+
+## What Reader Bridge does
+
+| What you want | How it works |
+| --- | --- |
+| Keep Kindle and Xteink highlights together | KOReader highlights and CrossPoint clippings upload automatically to a local collector, then to your own private GitHub archive. Offline changes wait for a connection. |
+| Continue reading on the other device | Uses the existing KOReader-compatible CrossPoint Sync service. KOReader can sync automatically; Xteink uses manual **Upload Local** and **Apply Remote** actions. |
+| Bring your existing Kindle highlights | Imports English-format `My Clippings.txt` exports without needing an Amazon login in Reader Bridge. |
+| Highlight across pages on the X4 Pro | Custom CrossPoint firmware keeps a selection active when you drag to a page edge, within the current chapter. |
+| Download the same EPUB to both readers | Optional Calibre-Web setup provides a local OPDS book catalog, preserving the downloaded EPUB bytes needed for binary progress matching. |
+| Run it from your Mac | A local collector and optional library run after login. Your Mac needs to be awake and reachable for those services; downloaded books remain readable offline. |
+
+Progress sync is an existing KOReader/CrossPoint capability. Reader Bridge adds the setup workflow, shared-highlight collection, KOReader plugin, and custom CrossPoint highlighting and upload behavior. It does not replace Amazon's stock reader or automatically migrate DRM-protected books.
+
+## Quick start on macOS
+
+Start the guided setup:
 
 ```sh
 git clone https://github.com/skyerus/reader-bridge.git
@@ -9,12 +38,6 @@ python3 setup.py
 ```
 
 You need macOS, Python 3.10+, Git, and [GitHub CLI](https://cli.github.com/) signed in with `gh auth login`. The wizard asks before creating your own **private** highlight archive. It never chooses the developer's archive.
-
-- **Highlights:** an authenticated Mac collector stores uploads durably, then publishes them to your archive. Offline uploads retry. Deletions stay deleted across retries and later imports.
-- **Kindle:** installs the Shared highlights plugin into an existing KOReader installation, preserving its identity and pending queue. Jailbreak and KOReader installation remain guided, model-specific prerequisites.
-- **X4 Pro:** builds pinned custom CrossPoint source locally, verifies the uploaded firmware and pairing files, then pauses for the on-device update. Other Xteink models are not supported by this firmware profile.
-- **Reading progress:** walks you through using the same CrossPoint Sync account on both readers. Xteink progress actions remain manual.
-- **Optional library:** installs pinned Calibre-Web for an existing Calibre library, sets a generated administrator password before starting its LAN service, and preserves EPUB download bytes.
 
 [Follow the complete device and setup guide](docs/SETUP.md). Software tests and a firmware build do not replace the guide's physical-device checkpoints.
 
@@ -47,7 +70,7 @@ python3 setup.py uninstall
 
 This removes only owned background services. Archives, local inboxes, backups, library books and device installations remain available.
 
-## Existing highlights
+## Import existing Kindle highlights
 
 KOReader's plugin imports modern annotations from books still in reading history. Open older annotated books once to let KOReader migrate their sidecars. You can also import an English Kindle export:
 
@@ -57,6 +80,36 @@ python3 setup.py import-clippings "/path/to/My Clippings.txt"
 ```
 
 Notes and bookmarks are excluded. Unsupported languages are skipped rather than guessed; the source export is never changed. Quotes are first acknowledged locally; `status` reports whether GitHub publication is still pending.
+
+## Common questions
+
+### Can I sync Kindle highlights with an Xteink X4 Pro?
+
+Yes, when you read in KOReader on the Kindle and use the custom CrossPoint firmware on the X4 Pro. Both send saved passages to the same personal archive. Existing Amazon Kindle highlights can be imported from an English `My Clippings.txt` export. Highlights made later in Amazon's stock Kindle reader are not automatically captured by the KOReader plugin; import an updated export to add them.
+
+### Can KOReader and CrossPoint sync reading progress?
+
+Yes. Configure the same KOReader-compatible sync server and account, then use the exact same EPUB file on both readers. KOReader supports automatic progress sync. On Xteink, use **Upload Local** before switching away and **Apply Remote** when returning. The [progress setup instructions](docs/SETUP.md#6-connect-reading-progress) include a test in both directions.
+
+### Does this use Amazon Whispersync?
+
+No. Reading progress uses a KOReader-compatible service, separately from Amazon Whispersync. Highlights use the Mac collector and your archive. This workflow reads books with KOReader on Kindle and CrossPoint on Xteink; it does not sync reading positions with Amazon's stock Kindle reader or Kindle mobile app.
+
+### Do highlights appear inside the book on both devices?
+
+No. The shared archive contains the passages you saved on either reader. Each reader keeps its own in-book annotations. Cross-device underline placement is not implemented.
+
+### Do I need a hosted server or a Readwise account?
+
+You can run the highlight collector and optional EPUB library on your Mac without renting a server. Reader Bridge does not require Readwise. It uses your GitHub account for the personal highlight archive and, by default, the separate CrossPoint Sync service for reading progress. The Mac-hosted services are unavailable while the Mac is asleep or shut down.
+
+### Can one script jailbreak my Kindle and install everything?
+
+The wizard automates Mac setup, plugin pairing, and building and transferring the custom X4 Pro firmware. Kindle jailbreaking and initial KOReader installation still follow the current upstream instructions for your exact model and firmware. Firmware installation also needs confirmation on the Xteink itself. Follow the [full setup guide](docs/SETUP.md) for these checkpoints.
+
+### Can I read my Amazon purchases in this setup?
+
+KOReader and CrossPoint need supported, DRM-free book files for this EPUB workflow. Reader Bridge does not download Amazon purchases, remove DRM, or include books. Importing old Kindle highlights transfers the exported quote text, not the purchased ebook.
 
 ## Privacy and limits
 
