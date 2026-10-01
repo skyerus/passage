@@ -21,7 +21,7 @@ from urllib import request, parse, error
 
 SOURCE = Path(__file__).resolve().parent
 DEFAULT_APP = Path.home() / 'Library/Application Support/Reader Bridge'
-LABELS = {'collector': 'com.readerbridge.collector', 'library': 'com.readerbridge.library', 'cloud_backup': 'com.readerbridge.backup'}
+LABELS = {'collector': 'com.readerbridge.collector', 'library': 'com.readerbridge.library', 'cloud_backup': 'com.readerbridge.backup', 'progress_sync': 'com.readerbridge.progress'}
 CALIBRE_WEB = '0.6.27'
 BUILD_OVERRIDE = b'[env:x4pro]\nlib_deps =\n  ${base.lib_deps}\n  greiman/SdFat @ 2.3.1\n'
 

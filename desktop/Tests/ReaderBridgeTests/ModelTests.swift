@@ -49,6 +49,20 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(status.backupSummary, "GitHub backup on")
     }
 
+    func testLocalProgressIsSeparateFromOldExternalConfirmation() throws {
+        var response = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture(verified: true)) as? [String: Any])
+        var data = try XCTUnwrap(response["data"] as? [String: Any])
+        data["local_progress"] = ["enabled": true, "healthy": true, "endpoint": "http://192.168.1.20:8085", "port": 8085, "kindle_paired": true, "xteink_paired": false, "book_count": 2, "uploads": [["device": "Kindle", "received_at": 1790900000, "count": 1]], "error": "", "verified": false] as [String: Any]
+        response["data"] = data
+        let status = try Backend.decode(JSONSerialization.data(withJSONObject: response))
+        XCTAssertTrue(status.progressVerified)
+        XCTAssertEqual(status.localProgress?.verified, false)
+        XCTAssertEqual(status.localProgress?.xteinkPaired, false)
+        XCTAssertEqual(status.localProgress?.bookCount, 2)
+        XCTAssertEqual(status.localProgress?.uploads.first?.device, "Kindle")
+        XCTAssertNil(try Backend.decode(fixture()).localProgress)
+    }
+
     func testFailureResponseCannotBecomeSuccess() {
         XCTAssertThrowsError(try Backend.decode(Data(#"{"ok":false,"error":"Connect your reader first."}"#.utf8))) { error in XCTAssertEqual(error.localizedDescription, "Connect your reader first.") }
         XCTAssertThrowsError(try Backend.decode(Data(#"{"ok":true}"#.utf8)))

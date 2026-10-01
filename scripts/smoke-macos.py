@@ -122,10 +122,52 @@ def main():
             (sd / '.crosspoint').mkdir(parents=True)
             invoke('pair_xteink', mount=str(sd), endpoint=endpoint, firmware=False, model_confirmed=True)
             assert json.loads((sd / '.crosspoint/highlight-sync.json').read_text())['token'] == token
+            # The app provisions a private KOSync service independently of the
+            # highlight collector, including for legacy collector installations.
+            with socket.socket() as sock:
+                sock.bind(('127.0.0.1',0)); progress_port = sock.getsockname()[1]
+            progress = invoke('start_progress',endpoint=endpoint,port=progress_port)['local_progress']
+            assert progress['healthy'] and not progress['kindle_paired'] and progress['book_count'] == 0
+            import progress_sync
+            credentials = progress_sync.credentials(data / 'progress_sync')
+            headers = {**progress_sync.auth_headers(credentials),'Content-Type':'application/json'}
+            position = {'document':'a'*32,'progress':'/body/DocFragment[3]/body/p[1].0','percentage':.4,'device':'Kindle','device_id':'fixture-kindle'}
+            base = f'http://127.0.0.1:{progress_port}'
+            setup.http(base+'/syncs/progress',json.dumps(position).encode(),method='PUT',headers=headers)
+            pulled = json.loads(setup.http(base+'/syncs/progress/'+'a'*32,headers=headers))
+            assert pulled['progress'] == position['progress']
+            position.update(percentage=.2,progress='/body/DocFragment[2]/body/p[1].0',device='CrossPoint',device_id='crosspoint-reader')
+            setup.http(base+'/syncs/progress',json.dumps(position).encode(),method='PUT',headers=headers)
+            assert json.loads(setup.http(base+'/syncs/progress/'+'a'*32,headers=headers))['percentage'] == .2
+            invoke('pair_progress_kindle',mount=str(kindle))
+            invoke('pair_progress_xteink',mount=str(sd))
+            progress = invoke('status')['local_progress']
+            assert progress['kindle_paired'] and progress['xteink_paired'] and not progress['verified']
+            assert queue.read_text() == '{"fixture":"offline queue"}'
+            assert json.loads((sd / '.crosspoint/highlight-sync.json').read_text())['token'] == token
+            spec = __import__('plistlib').loads((agents / (labels['progress_sync']+'.plist')).read_bytes())
+            assert spec['RunAtLoad'] and spec['KeepAlive']
+            subprocess.run(['launchctl','kickstart','-k',f'gui/{os.getuid()}/{labels["progress_sync"]}'],check=True)
+            for _ in range(40):
+                if invoke('status')['local_progress']['healthy']: break
+                time.sleep(.25)
+            assert invoke('status')['local_progress']['healthy']
+            assert progress_sync.credentials(data/'progress_sync') == credentials
+            assert json.loads(setup.http(base+'/syncs/progress/'+'a'*32,headers=headers))['percentage'] == .2
+            backed_up = invoke('configure_cloud_backup',provider='folder',folder=str(backup_folder))
+            import archive_backup
+            manifest,_ = archive_backup.read_snapshot(backed_up['cloud_backup']['snapshot_path'])
+            assert manifest['version'] == 2 and manifest['positions'][0]['percentage'] == .2
+            assert credentials['password'] not in json.dumps(manifest)
+            invoke('disable_cloud_backup')
+            invoke('stop_progress')
+            assert not invoke('status')['local_progress']['healthy']
+            assert not (agents / (labels['progress_sync']+'.plist')).exists()
+            assert (data/'progress_sync/positions.sqlite3').is_file()
             invoke('stop_collector')
             assert not invoke('status')['service']['healthy']
             assert not (agents / (labels['collector'] + '.plist')).exists()
-            print('PASS: bundled runtime, launchd recovery, uploads and original cover bytes, search, export, automatic folder backup, backup-worker restart, safe restore, deletion replay, and fixture pairing.')
+            print('PASS: bundled runtime, launchd recovery, uploads and original cover bytes, search, export, automatic folder backup, backup-worker restart, safe restore, deletion replay, fixture pairing, local progress roundtrip, progress restart, and position backups.')
         finally:
             for label in labels.values():
                 subprocess.run(['launchctl', 'bootout', f'gui/{os.getuid()}/{label}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

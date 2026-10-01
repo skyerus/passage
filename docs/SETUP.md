@@ -7,7 +7,7 @@ These are three separate services:
 | Feature | Where it lives | What you should expect |
 | --- | --- | --- |
 | Shared highlights | Your Mac, with optional iCloud/folder or GitHub backups | Both readers contribute quotes to one collection. An underline on one reader does not appear inside the book on the other. |
-| Reading progress | Your account at `https://sync.crosspointreader.com` | The devices can return to the same passage. CrossPoint still needs a manual progress-sync action. |
+| Reading progress | Reader Bridge’s local progress service in the Mac app; a separate service for the legacy CLI walkthrough | The devices can return to the same passage. CrossPoint still needs a manual progress-sync action. |
 | Home Books | Calibre-Web on your Mac | Both readers download the exact same EPUB from one library. Downloaded books remain readable offline. |
 
 ## Before starting
@@ -116,6 +116,10 @@ Add the catalog URL printed by the wizard to KOReader's **OPDS catalog** and Cro
 
 ## 6. Connect reading progress
 
+**Mac app:** Enable **Settings → Reading positions → Use Reader Bridge for positions** and follow **Setup** to connect both readers. The app hosts the service, creates its private account and copies existing progress before changing the reader settings. Follow the [local progress guide](PROGRESS-SYNC.md) for the two-device test and backup/recovery details.
+
+**Legacy CLI / external-server setup:** The following walkthrough keeps a separate progress server; it is optional when using the Mac app’s local service.
+
 Run the wizard's progress step (`python3 setup.py progress`) for its device checkpoints. Use a unique progress-only username and password, separate from GitHub, Amazon, the book library, and the highlights token.
 
 1. On CrossPoint, open **Settings → System → KOReader Sync**. Set the server to `https://sync.crosspointreader.com`, enter your chosen credentials, and **Sign Up** once. Select **Ask every time** for Sync Behavior.
@@ -131,7 +135,7 @@ Run the wizard's progress step (`python3 setup.py progress`) for its device chec
 - **Highlights:** Keep reading offline; uploads resume when the Mac and reader are reachable. KOReader needs Wi-Fi already connected. Xteink can try a saved network while awake in Home/reader. Highlights remain stored on the reader after a successful upload.
 - **Long Xteink selections:** While dragging, hold at the bottom or right edge for about one second to turn forward, or top/left to turn back. Move out of the edge zone before turning again. Release to save. Selection can span pages within one chapter/spine item. It stops at 4 KiB of complete UTF-8 words and stores the actual captured endpoint. There are at most 256 clippings per book.
 - **Delete deliberately:** A deletion sends a permanent archive tombstone for the matching title, author, and passage after normalization. Stale uploads and later Amazon refreshes cannot resurrect that quote; highlighting exactly the same passage again does not restore it. There is no restore command in this version. It does not remove an annotation from the other device or erase Git history, backups, or previously sent messages.
-- **Progress:** Manually Upload Local when leaving Xteink and Apply Remote when returning. The Mac does not host the default progress server; internet access is still needed for that service.
+- **Progress:** Manually Upload Local when leaving Xteink and Apply Remote when returning. For the Mac app’s local service, the Mac must be awake and reachable. The legacy external-server walkthrough needs internet access instead.
 - **Existing Amazon highlights:** The optional `import-clippings` command imports English-format highlights from a `My Clippings.txt` file you supply. It is separate from KOReader capture. Keep Amazon account data and purchased book files out of the public repository.
 - **Creation dates:** Kindle Clippings imports retain “Added on”, and KOReader sends the original annotation date. The pinned X4 Pro firmware records its existing clock when you save a clipping, including offline; it does not connect to Wi-Fi to obtain a date. Uploads, retries, and GitHub backups preserve these dates. Set the Xteink clock correctly before highlighting. Older Xteink clippings and archives whose source omitted dates remain undated unless you recover them from an original export. Upload time is never substituted for creation time; exports without timezone information keep their recorded wall time.
 

@@ -9,6 +9,13 @@ struct BridgeStatus: Decodable {
     struct Library: Decodable { var installed: Bool; var port: Int; var books: String }
     struct ExistingSetup: Decodable { var available: Bool; var connected: Bool; var healthy: Bool; var port: Int; var archive: String }
     struct CloudBackup: Decodable { var enabled: Bool; var provider: String; var folder: String; var savedAt: String; var error: String; var cloudUploadVerified: Bool; var snapshotPath: String? = nil }
+    struct LocalProgress: Decodable {
+        struct Upload: Decodable { var device: String; var receivedAt: Double; var count: Int }
+        var enabled: Bool; var healthy: Bool; var endpoint: String; var port: Int
+        var kindlePaired: Bool; var xteinkPaired: Bool; var bookCount: Int
+        var uploads: [Upload]; var error: String; var verified: Bool
+    }
+    var localProgress: LocalProgress?
     var service: Service; var kindle: Kindle; var xteink: Xteink
     var mounts: [Mount]; var highlights: [Highlight]; var highlightCount: Int
     var progressVerified: Bool; var endpoint: String; var addresses: [String]; var warnings: [String]; var library: Library
