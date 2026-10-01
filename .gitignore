@@ -9,3 +9,7 @@ highlights.json
 highlight-tombstones.json
 *config.json
 *queue.json
+.build-cache/
+dist/
+desktop/.build/
+desktop/.swiftpm/

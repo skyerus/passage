@@ -1,0 +1,15 @@
+{
+  "provider": "https://github.com/astral-sh/python-build-standalone",
+  "release": "20260929",
+  "python": "3.13.15",
+  "architectures": {
+    "arm64": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260929/cpython-3.13.15%2B20260929-aarch64-apple-darwin-install_only.tar.gz",
+      "sha256": "003d459a75ff6949a6590812b1e02a65e849b5b2a9f47c421010138ec643a11c"
+    },
+    "x86_64": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260929/cpython-3.13.15%2B20260929-x86_64-apple-darwin-install_only.tar.gz",
+      "sha256": "54e9da9571fd13655096dbfbd2f18a04ff90fe0051c135cb6547d6e76c3db507"
+    }
+  }
+}
