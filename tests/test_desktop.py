@@ -292,6 +292,203 @@ class DesktopTests(unittest.TestCase):
                 self.bridge.start_local(8084)
         self.assertFalse(self.app.exists())
 
+class ExistingCollectorTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name).resolve()
+        self.app = self.root / 'Reader Bridge'
+        self.legacy = self.root / 'Reading Highlights'
+        self.agents = self.root / 'agents'
+        self.bridge = desktop.Desktop(self.app, agent_dir=self.agents)
+        directory, self.token = collector.initialize(self.legacy / 'data')
+        self.store = collector.Store(directory / 'inbox.sqlite3')
+        for name in ('collector.py', 'db.py'):
+            setup.atomic_write(self.legacy / name, b'fixture')
+        self.agent = self.agents / 'old.collector.plist'
+        self.spec = {'Label': 'old.collector', 'WorkingDirectory': str(self.legacy), 'ProgramArguments': [sys.executable, str(self.legacy / 'collector.py'), 'serve', '--state-dir', str(directory), '--host', '0.0.0.0', '--port', '8084', '--repo', 'reader/private', '--branch', 'main', '--publish-interval', '60']}
+        setup.atomic_write(self.agent, plistlib.dumps(self.spec))
+        setup.atomic_write(self.legacy / 'pairing/xteink-highlight-sync.json', json.dumps({'endpoint': 'http://reader.local:8084/v1/highlights', 'token': self.token}).encode())
+        self.platform = patch.object(desktop.sys, 'platform', 'darwin')
+        self.runner = patch.object(desktop.subprocess, 'run', side_effect=self.run_command)
+        self.http = patch.object(setup, 'http', side_effect=self.request)
+        self.platform.start()
+        self.runner.start()
+        self.http.start()
+        self.pid = '4242'
+        self.offline = False
+        self.bad_token = False
+
+    def tearDown(self):
+        self.http.stop()
+        self.runner.stop()
+        self.platform.stop()
+        self.temp.cleanup()
+
+    def run_command(self, args, **kwargs):
+        if args[0] == 'launchctl':
+            return Mock(returncode=int(self.offline), stdout=f'path = {self.agent}\nprogram = {sys.executable}\nworking directory = {self.legacy}\npid = 4242\n')
+        if args[0] == '/usr/sbin/lsof':
+            return Mock(returncode=0, stdout=f'p{self.pid}\nf3\n')
+        return Mock(returncode=1, stdout='')
+
+    def request(self, url, body=None, headers=None, **kwargs):
+        if url.endswith('/healthz'):
+            return b'{"status":"ok"}'
+        self.assertEqual(body, b'{}')
+        self.assertEqual(headers['Authorization'], 'Bearer ' + self.token)
+        code = 401 if self.bad_token else 400
+        raise desktop.HTTPError(url, code, 'fixture', {}, io.BytesIO(b'{"error":"invalid highlight batch"}'))
+
+    def snapshot(self):
+        protected = {str(p): (p.read_bytes(), p.stat().st_mtime_ns, p.stat().st_mode) for root in (self.legacy, self.agents) for p in root.rglob('*') if p.is_file() and p.name not in {'inbox.sqlite3-wal', 'inbox.sqlite3-shm'}}
+        con = desktop.sqlite3.connect((self.legacy / 'data/inbox.sqlite3').as_uri() + '?mode=ro', uri=True)
+        try:
+            protected['logical_archive'] = tuple(con.iterdump())
+        finally:
+            con.close()
+        return protected
+
+    def connect(self):
+        return self.bridge.mutate('connect_existing', {})
+
+    def test_detect_connect_reads_archive_without_modifying_existing(self):
+        self.store.accept({'source': 'crosspoint', 'device_id': 'reader', 'highlights': [{'id': '1', 'book_title': 'Book', 'author': 'Writer', 'text': 'Quote'}]})
+        before = self.snapshot()
+        status = self.bridge.status()
+        self.assertTrue(status['existing_setup']['available'])
+        self.assertFalse(status['existing_setup']['connected'])
+        self.assertFalse(self.app.exists())
+        connected = self.connect()
+        self.assertEqual(connected['highlight_count'], 1)
+        self.assertEqual(connected['service']['archive'], 'reader/private')
+        self.assertTrue(connected['service']['healthy'])
+        self.assertTrue(connected['xteink']['paired'])
+        self.assertFalse(connected['progress_verified'])
+        self.assertEqual(connected['endpoint'], 'http://reader.local:8084')
+        self.assertEqual(before, self.snapshot())
+        self.assertEqual(set(self.bridge.state), {'existing_collector'})
+        self.assertNotIn(self.token, (self.app / 'state.json').read_text())
+        self.assertNotIn(self.token, json.dumps(connected))
+        self.assertFalse((self.app / 'collector').exists())
+        restored = desktop.Desktop(self.app, agent_dir=self.agents).status()
+        self.assertTrue(restored['existing_setup']['connected'])
+
+    def test_nondefault_port_branch_and_interval_are_verified(self):
+        self.spec['ProgramArguments'][8] = '9084'
+        self.spec['ProgramArguments'][12] = 'archive'
+        self.spec['ProgramArguments'][14] = '120'
+        setup.atomic_write(self.agent, plistlib.dumps(self.spec))
+        status = self.connect()
+        self.assertEqual(status['existing_setup']['port'], 9084)
+        self.assertEqual(status['service']['port'], 9084)
+        self.assertEqual(self.bridge.collector_port(), 9084)
+        self.assertNotEqual(status['endpoint'], 'http://reader.local:8084')
+
+    def test_wrong_token_or_socket_pid_cannot_connect(self):
+        for flag, value in (('bad_token', True), ('pid', '9999')):
+            with self.subTest(flag=flag):
+                old = getattr(self, flag)
+                setattr(self, flag, value)
+                with self.assertRaises(setup.SetupError):
+                    self.connect()
+                self.assertFalse(self.app.exists())
+                setattr(self, flag, old)
+
+    def test_loaded_program_path_and_workdir_must_match(self):
+        good = self.run_command(['launchctl']).stdout
+        for value in (good.replace(str(self.agent), '/wrong.plist'), good.replace(sys.executable, '/wrong/python'), good.replace(str(self.legacy), '/wrong/directory')):
+            with patch.object(desktop.subprocess, 'run', return_value=Mock(returncode=0, stdout=value)):
+                with self.assertRaises(setup.SetupError):
+                    self.connect()
+
+    def test_changed_plist_or_token_cannot_be_silently_readopted(self):
+        self.connect()
+        original = self.agent.read_bytes()
+        self.spec['ProgramArguments'][10] = 'other/archive'
+        setup.atomic_write(self.agent, plistlib.dumps(self.spec))
+        status = self.bridge.status()
+        self.assertTrue(status['existing_setup']['connected'])
+        self.assertFalse(status['service']['healthy'])
+        self.assertEqual(status['highlight_count'], 0)
+        self.assertTrue(status['warnings'])
+        with self.assertRaises(setup.SetupError):
+            self.connect()
+        setup.atomic_write(self.agent, original)
+        setup.atomic_write(self.legacy / 'data/token', b'changed-token')
+        with self.assertRaises(setup.SetupError):
+            self.connect()
+
+    def test_offline_stays_connected_and_reads_inbox(self):
+        self.store.accept({'source': 'koreader', 'device_id': 'kindle', 'highlights': [{'id': '1', 'book_title': 'Book', 'author': 'Writer', 'text': 'Quote'}]})
+        self.connect()
+        self.offline = True
+        status = self.bridge.status()
+        self.assertTrue(status['existing_setup']['connected'])
+        self.assertFalse(status['existing_setup']['healthy'])
+        self.assertEqual(status['highlight_count'], 1)
+        self.assertTrue(status['kindle']['paired'])
+        self.assertTrue(status['warnings'])
+
+    def test_existing_configuration_or_data_blocks_connection(self):
+        self.bridge.state['collector'] = {'port': 8085}
+        with self.assertRaises(setup.SetupError):
+            self.connect()
+        self.bridge.state = {}
+        (self.app / 'collector/data').mkdir(parents=True)
+        with self.assertRaises(setup.SetupError):
+            self.connect()
+
+    def test_existing_control_mutations_rejected_and_exports_allowed(self):
+        self.connect()
+        before = self.snapshot()
+        for command in ('start_collector', 'stop_collector', 'configure_backup', 'disable_backup', 'install_library'):
+            with self.assertRaisesRegex(setup.SetupError, 'existing Reading Highlights'):
+                self.bridge.mutate(command, {})
+        output = self.root / 'export.json'
+        self.bridge.mutate('export', {'path': str(output)})
+        self.assertEqual(json.loads(output.read_text()), [])
+        with self.assertRaises(setup.SetupError):
+            self.bridge.mutate('export', {'path': str(self.legacy / 'export.json')})
+        self.assertEqual(before, self.snapshot())
+
+    def test_connected_import_uses_external_token_and_port(self):
+        self.connect()
+        path = self.root / 'My Clippings.txt'
+        path.write_text('Book (Author)\n- Your Highlight on Location 1-2\n\nImported passage\n==========\n')
+        def request(url, body=None, headers=None, **kwargs):
+            if body and body != b'{}':
+                self.assertEqual(url, 'http://127.0.0.1:8084/v1/highlights')
+                self.assertEqual(headers['Authorization'], 'Bearer ' + self.token)
+                batch = json.loads(body)
+                self.store.accept(batch)
+                return json.dumps({'accepted': [row['id'] for row in batch['highlights']]}).encode()
+            return self.request(url, body, headers, **kwargs)
+        with patch.object(setup, 'http', side_effect=request):
+            status = self.bridge.mutate('import_clippings', {'path': str(path)})
+        self.assertEqual(status['highlight_count'], 1)
+        self.assertFalse(status['kindle']['paired'])
+        self.assertFalse((self.app / 'collector').exists())
+
+    def test_imports_do_not_prove_reader_pairing_and_bad_pairing_not_used(self):
+        self.store.accept({'source': 'koreader', 'device_id': 'kindle-clippings-import', 'highlights': [{'id': '1', 'book_title': 'Book', 'author': 'Writer', 'text': 'Quote'}]})
+        setup.atomic_write(self.legacy / 'pairing/xteink-highlight-sync.json', json.dumps({'url': 'http://reader.local:8084', 'token': 'wrong'}).encode())
+        status = self.connect()
+        self.assertFalse(status['kindle']['paired'])
+        self.assertFalse(status['xteink']['paired'])
+        self.assertNotEqual(status['endpoint'], 'http://reader.local:8084')
+
+    def test_symlink_and_descriptor_escape_rejected(self):
+        self.connect()
+        self.bridge.state['existing_collector']['agent'] = str(self.root / 'outside.plist')
+        self.assertFalse(self.bridge.status()['existing_setup']['healthy'])
+        with self.assertRaises(setup.SetupError):
+            self.bridge.collector_data_dir()
+
+    def test_unrelated_occupied_port_still_rejected(self):
+        with patch.object(setup, 'available', return_value=False):
+            with self.assertRaisesRegex(setup.SetupError, 'unverified service'):
+                self.bridge.check_port('collector', 8084)
+
 
 if __name__ == '__main__':
     unittest.main()
