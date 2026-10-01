@@ -389,11 +389,21 @@ class Desktop(setup.Bridge):
                 receipt = json.loads(receipt_path.read_text())
         except (OSError, ValueError):
             pass
+        # A receipt from a previous destination must not advertise an unrelated file.
+        snapshot_path = ''
+        destination = config.get('destination', '')
+        if destination and receipt.get('path'):
+            candidate = Path(receipt['path'])
+            try:
+                if candidate.suffix == '.readerbridge' and candidate.is_file() and candidate.resolve().parent == Path(destination).resolve():
+                    snapshot_path = str(candidate)
+            except OSError:
+                pass
         checked = highlight_date(receipt.get('checked_at', ''))
         if config.get('enabled') and (checked is None or (datetime.now(timezone.utc) - checked).total_seconds() > 180):
             receipt.setdefault('error', 'Waiting for the background backup service. If this persists, set up the backup folder again.')
         return {'enabled': bool(config.get('enabled')), 'provider': config.get('provider', 'icloud'),
-                'folder': config.get('destination', ''), 'saved_at': receipt.get('saved_at', ''),
+                'folder': destination, 'snapshot_path': snapshot_path, 'saved_at': receipt.get('saved_at', '') if snapshot_path else '',
                 'error': receipt.get('error', ''), 'cloud_upload_verified': False}
 
     def configure_cloud_backup(self, provider, folder):

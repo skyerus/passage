@@ -6,7 +6,7 @@ These are three separate services:
 
 | Feature | Where it lives | What you should expect |
 | --- | --- | --- |
-| Shared highlights | Your Mac collector, then your chosen private GitHub archive | Both readers contribute quotes to one collection. An underline on one reader does not appear inside the book on the other. |
+| Shared highlights | Your Mac, with optional iCloud/folder or GitHub backups | Both readers contribute quotes to one collection. An underline on one reader does not appear inside the book on the other. |
 | Reading progress | Your account at `https://sync.crosspointreader.com` | The devices can return to the same passage. CrossPoint still needs a manual progress-sync action. |
 | Home Books | Calibre-Web on your Mac | Both readers download the exact same EPUB from one library. Downloaded books remain readable offline. |
 

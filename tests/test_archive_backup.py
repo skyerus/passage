@@ -150,6 +150,22 @@ class BackupTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             backup.snapshot(self.store.path, self.app, link, self.worker)
 
+    def test_finder_path_only_reveals_snapshot_in_configured_destination(self):
+        saved = self.save()
+        bridge = desktop.Desktop(self.app, agent_dir=self.root / 'agents')
+        bridge.state['cloud_backup'] = {'enabled': True, 'provider': 'icloud', 'destination': str(self.destination)}
+        self.assertEqual(bridge.cloud_backup_status()['snapshot_path'], saved['path'])
+        # Turning off automatic saves must leave old backups available in Finder.
+        bridge.state['cloud_backup']['enabled'] = False
+        self.assertEqual(bridge.cloud_backup_status()['snapshot_path'], saved['path'])
+        # A stale receipt from another destination must not select an unrelated file.
+        bridge.state['cloud_backup']['destination'] = str(self.root / 'different')
+        self.assertEqual(bridge.cloud_backup_status()['snapshot_path'], '')
+        self.assertEqual(bridge.cloud_backup_status()['saved_at'], '')
+        bridge.state['cloud_backup']['destination'] = str(self.destination)
+        Path(saved['path']).unlink()
+        self.assertEqual(bridge.cloud_backup_status()['snapshot_path'], '')
+
     def test_icloud_requires_real_icloud_folder_and_keeps_github_configuration(self):
         bridge = desktop.Desktop(self.app, agent_dir=self.root / 'agents')
         bridge.state['collector'] = {'archive':'reader/private','port':8084}

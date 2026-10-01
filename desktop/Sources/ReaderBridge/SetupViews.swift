@@ -7,10 +7,10 @@ struct ExistingSetupView: View {
     private var collectorOnline: Bool { SetupInput.existingCollectorOnline(status) }
 
     var body: some View {
-        Card(title: status.usesExistingSetup ? "Your bridge is connected" : "Keep your existing setup") {
-            Label(model.error != nil ? "Unable to check connection" : collectorOnline ? "Collector online" : "Collector offline", systemImage: model.error == nil && collectorOnline ? "checkmark.circle.fill" : "exclamationmark.triangle")
+        Card(title: status.usesExistingSetup ? "Your readers are set up" : "Connect your existing readers") {
+            Label(model.error != nil ? "Unable to check connection" : collectorOnline ? "Ready to receive highlights" : "Highlight sync is paused", systemImage: model.error == nil && collectorOnline ? "checkmark.circle.fill" : "exclamationmark.triangle")
                 .font(.callout).foregroundStyle(model.error == nil && collectorOnline ? teal : .orange)
-            Text(status.usesExistingSetup ? "Your readers and archive use their saved settings." : "Reader Bridge found your verified Reading Highlights service.").foregroundStyle(.secondary)
+            Text(status.usesExistingSetup ? "New highlights arrive here when your readers sync." : "Your existing highlight setup is ready to connect.").foregroundStyle(.secondary)
             if status.usesExistingSetup {
                 if !status.service.healthy { Text("Start your existing service, then refresh the connection.").font(.callout) }
                 HStack {
@@ -21,15 +21,6 @@ struct ExistingSetupView: View {
                 Button("Use existing setup") { Task { await model.perform("connect_existing", activity: "Connecting to your bridge…", success: "Connected to your existing bridge.") } }
                     .buttonStyle(.borderedProminent).disabled(model.busy || !collectorOnline)
             }
-            DisclosureGroup("Connection details") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Reading-position sync stays configured on your readers.").font(.callout).foregroundStyle(.secondary)
-                    if let existing = status.existingSetup {
-                        LabeledContent("Collector port", value: String(existing.port))
-                        if !existing.archive.isEmpty { LabeledContent("GitHub backup", value: existing.archive).textSelection(.enabled) }
-                    }
-                }.padding(.top, 8)
-            }.font(.callout)
         }
     }
 }
@@ -122,18 +113,18 @@ struct SetupView: View {
     }
 
     private var bridgeStep: some View {
-        Card(title: model.error != nil ? "Check your bridge" : status.service.healthy ? "Your bridge is online" : "Start your bridge") {
+        Card(title: model.error != nil ? "Check your bridge" : status.service.healthy ? "Ready to receive highlights" : "Start highlight sync") {
             DeviceIllustration(guide: .bridge)
             Text("Use the same trusted Wi-Fi. Keep your Mac awake while syncing.").foregroundStyle(.secondary)
             if model.error != nil {
                 Text("The latest check failed. Refresh before continuing.").font(.callout).foregroundStyle(.secondary)
                 action("Check again", "status", [:], "Checking your bridge…")
             } else if status.service.healthy {
-                Label("Local collector online", systemImage: "checkmark.circle.fill").font(.callout).foregroundStyle(teal)
+                Label("Ready to receive highlights", systemImage: "checkmark.circle.fill").font(.callout).foregroundStyle(teal)
                 Button("Continue to Kindle") { flow.advance(readiness) }.buttonStyle(.borderedProminent).disabled(model.busy)
             } else {
                 if status.kindle.paired || status.xteink.paired { Text("Your saved pairings are kept. Start the bridge to continue.").font(.callout) }
-                action("Start bridge", "start_collector", ["port": Int(portText) ?? 8084], "Starting your bridge…", disabled: !SetupInput.validCollectorPort(portText), success: "Your bridge is online.")
+                action("Start highlight sync", "start_collector", ["port": Int(portText) ?? 8084], "Starting your bridge…", disabled: !SetupInput.validCollectorPort(portText), success: "Your bridge is online.")
             }
             connectionOptions
         }

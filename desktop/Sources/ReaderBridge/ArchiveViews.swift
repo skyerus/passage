@@ -18,6 +18,14 @@ struct HighlightsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             archiveToolbar
+            if let backup = status.cloudBackup, !backup.folder.isEmpty {
+                HStack {
+                    Label(status.backupSummary, systemImage: backup.provider == "icloud" ? "icloud" : "folder")
+                        .foregroundStyle(backup.error.isEmpty ? Color.secondary : .orange)
+                    Spacer()
+                    BackupFinderButton(backup: backup)
+                }.font(.caption).padding(.horizontal, 4)
+            }
             if let book = selectedBook {
                 HStack(spacing: 8) {
                     Button { showAllBooks() } label: { Label("All books", systemImage: "chevron.left") }.buttonStyle(.plain).foregroundStyle(teal)
@@ -30,7 +38,12 @@ struct HighlightsView: View {
             if status.highlightCount == 0 {
                 VStack(spacing: 0) {
                     BridgeEmptyState(symbol: "books.vertical", title: "Your reading, collected", detail: "Import your Kindle highlights, or save your first quote on either reader.")
-                    Button("Import highlights…", action: importHighlights).buttonStyle(.borderedProminent).disabled(model.busy || !status.service.healthy).padding(.bottom, 40)
+                    HStack {
+                        if !status.kindle.paired || !status.xteink.paired {
+                            Button("Connect your readers") { model.selection = .setup }.buttonStyle(.borderedProminent)
+                        }
+                        Button("Import highlights…", action: importHighlights).buttonStyle(.bordered).disabled(model.busy || !status.service.healthy)
+                    }.padding(.bottom, 40)
                 }.bridgeSurface()
             } else if showingBooks {
                 bookLibrary
@@ -300,8 +313,8 @@ struct SettingsView: View {
                     Toggle("Open at login", isOn: Binding(get: { loginEnabled }, set: updateLogin)).labelsHidden().toggleStyle(.switch)
                 }
                 Divider()
-                BridgeSettingRow(title: "Background collector", detail: status.usesExistingSetup ? "Managed by your existing Reading Highlights service." : "Keeps running when you close or quit this app.") {
-                    BridgeStatusBadge(title: model.error != nil ? "Unable to check" : status.service.healthy ? "Online" : "Offline", healthy: model.error == nil && status.service.healthy)
+                BridgeSettingRow(title: "Receive highlights", detail: "Works in the background while your Mac is awake.") {
+                    BridgeStatusBadge(title: model.error != nil ? "Unable to check" : status.service.healthy ? "Ready" : "Paused", healthy: model.error == nil && status.service.healthy)
                 }
                 if loginNeedsApproval {
                     Text("Approve Reader Bridge in System Settings → General → Login Items.").font(.caption).foregroundStyle(.secondary)
@@ -309,25 +322,39 @@ struct SettingsView: View {
                 }
                 if let loginError { Text(loginError).foregroundStyle(.orange).font(.caption) }
             }
-            if status.usesExistingSetup {
-                Card(title: "Your existing bridge") {
-                    Text("Your original installation manages the collector and its GitHub backup. Folder backups above work alongside it.").font(.callout).foregroundStyle(.secondary)
-                    LabeledContent("Collector port", value: String(status.service.port)).font(.callout)
-                    LabeledContent("Archive backup", value: status.service.archive.isEmpty ? "Local only" : status.service.archive).font(.callout).textSelection(.enabled)
-                }
-            } else {
-                Card(title: "Optional extras") {
-                    DisclosureGroup {
-                        backupSettings.padding(.top, 14).padding(.bottom, 9)
-                    } label: {
-                        settingsLabel("GitHub backup", detail: status.service.mode == "github" ? "Enabled · \(status.service.archive)" : "Keep an additional copy of your archive", symbol: "externaldrive")
-                    }
-                    Divider()
-                    DisclosureGroup {
-                        librarySettings.padding(.top, 14).padding(.bottom, 9)
-                    } label: {
-                        settingsLabel("Book library", detail: status.library.installed ? "Installed · port \(status.library.port)" : "Serve your Calibre books to your readers", symbol: "books.vertical")
-                    }
+            Card(title: "Reading positions") {
+                Label("Uses a separate sync service", systemImage: "bookmark").font(.headline)
+                Text("KOReader and CrossPoint send your place in each book to the sync server chosen on your readers. Reader Bridge currently receives highlights, not reading positions.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Link("Reading-position setup guide ↗", destination: URL(string: "https://github.com/skyerus/reader-bridge/blob/main/docs/SETUP.md#6-connect-reading-progress")!).font(.callout)
+            }
+            Card(title: "Advanced") {
+                DisclosureGroup("Connection details & optional services") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("The collector is the local background service that receives highlights from your readers.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        LabeledContent("Server address", value: status.endpoint).textSelection(.enabled)
+                        LabeledContent("Port", value: String(status.service.port))
+                        if status.usesExistingSetup {
+                            Text("Your original Reading Highlights installation manages this service.").font(.caption).foregroundStyle(.secondary)
+                            LabeledContent("Additional GitHub backup", value: status.service.mode == "github" ? "Enabled" : "Off")
+                            if !status.service.archive.isEmpty {
+                                Text(status.service.archive).textSelection(.enabled).font(.caption).foregroundStyle(.secondary)
+                            }
+                        } else {
+                            DisclosureGroup("GitHub backup") { backupSettings.padding(.top, 10) }
+                            DisclosureGroup("Book library") { librarySettings.padding(.top, 10) }
+                            Button(status.service.healthy ? "Pause highlight sync" : "Start highlight sync") {
+                                Task { await model.perform(status.service.healthy ? "stop_collector" : "start_collector", ["port": status.service.port]) }
+                            }.disabled(model.busy)
+                        }
+                        if status.service.mode == "github", status.service.pendingBackup > 0 {
+                            Text("\(status.service.pendingBackup) highlights waiting for GitHub backup.").font(.caption).foregroundStyle(.secondary)
+                        }
+                        ForEach(status.warnings, id: \.self) { warning in
+                            Text(warning).font(.caption).foregroundStyle(.orange).textSelection(.enabled)
+                        }
+                    }.font(.callout).padding(.top, 14)
                 }
             }
             VStack(alignment: .leading, spacing: 10) {
