@@ -160,7 +160,7 @@ class Bridge:
         logs.mkdir(mode=0o700, parents=True, exist_ok=True)
         spec = {'Label': label, 'ProgramArguments': [str(x) for x in arguments], 'WorkingDirectory': str(directory),
                 'RunAtLoad': True, 'KeepAlive': True, 'ThrottleInterval': 10, 'Umask': 63,
-                'EnvironmentVariables': {'PATH': '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', 'PYTHONUNBUFFERED': '1'},
+                'EnvironmentVariables': {'PATH': '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', 'PYTHONUNBUFFERED': '1', 'PYTHONDONTWRITEBYTECODE': '1'},
                 'StandardOutPath': str(logs / (kind + '.log')), 'StandardErrorPath': str(logs / (kind + '-error.log'))}
         # Persist ownership intent before touching the plist. Interrupted lint or
         # bootstrap can then resume without mistaking our file for another app's.
@@ -237,7 +237,7 @@ class Bridge:
         target = self.app / 'collector'
         for filename in ('collector.py', 'db.py'):
             self.install_file(target / filename, (SOURCE / filename).read_bytes())
-        run([sys.executable, str(target / 'collector.py'), 'init', '--state-dir', str(target / 'data')])
+        run([sys.executable, '-B', str(target / 'collector.py'), 'init', '--state-dir', str(target / 'data')])
         self.state['collector'] = {**self.state.get('collector', {}), 'archive': archive, 'branch': branch, 'port': port}
         self.save()
         args = [sys.executable, target / 'collector.py', 'serve', '--state-dir', target / 'data', '--host', '0.0.0.0', '--port', str(port), '--repo', archive, '--branch', branch, '--gh', shutil.which('gh')]

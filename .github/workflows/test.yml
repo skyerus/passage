@@ -22,3 +22,12 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y lua5.1
       - run: for test in koreader/sharedhighlights.koplugin/tests/*_test.lua; do lua5.1 "$test"; done
+  mac-app:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: swift test --package-path desktop
+      - run: python scripts/build-macos.py
