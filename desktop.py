@@ -608,17 +608,23 @@ class Desktop(setup.Bridge):
             if path == self.app or self.app in path.parents or (self.app.parent / 'Reading Highlights') in path.parents or path.exists():
                 raise setup.SetupError('Choose a new export filename outside the private app directory.')
             rows, _ = self.live_rows()
-            covers = CoverLibrary(self.app)
-            for row in rows:
-                metadata = covers.metadata(row['title'], row['author'])
-                row['cover_path'] = metadata['cover_path']
-                row['cover_url'] = metadata['cover_url'] or row['cover_url']
+            try:
+                covers = CoverLibrary(self.app)
+                for row in rows:
+                    metadata = covers.metadata(row['title'], row['author'])
+                    row['cover_path'] = metadata['cover_path']
+                    row['cover_url'] = metadata['cover_url'] or row['cover_url']
+                exported_rows = covers.export_rows(rows)
+            except (OSError, ValueError, setup.SetupError):
+                # Artwork is optional: it must never block the archive recovery path.
+                exported_rows = [{k: v for k, v in row.items() if k != 'cover_path'} for row in rows]
+                extra['export_warning'] = 'Highlights and deletion history exported. Cached covers could not be read and were omitted.'
             database = self.collector_data_dir() / 'inbox.sqlite3'
             tombstones = []
             if database.exists():
                 with self.inbox_connection(database) as con:
                     tombstones = sorted(row[0] for row in con.execute('SELECT quote_key FROM tombstones'))
-            archive = {'format': 'reader-bridge', 'version': 1, 'highlights': covers.export_rows(rows), 'tombstones': tombstones}
+            archive = {'format': 'reader-bridge', 'version': 1, 'highlights': exported_rows, 'tombstones': tombstones}
             data = (json.dumps(archive, ensure_ascii=False, indent=2) + '\n').encode()
             if len(data) > MAX_EXPORT:
                 raise setup.SetupError('Export exceeds 64 MiB. Preserve the inbox and use a database export tool.')

@@ -16,6 +16,7 @@ struct BridgeStatus: Decodable {
     var books: [BookSummary]?
     struct ImportResult: Decodable { var highlights: Int; var covers: Int; var unavailable: Int }
     var importResult: ImportResult?
+    var exportWarning: String?
     var existingSetup: ExistingSetup?
     var usesExistingSetup: Bool { existingSetup?.connected == true }
     var offersExistingSetup: Bool { existingSetup?.available == true && !usesExistingSetup }
@@ -112,7 +113,8 @@ enum Backend {
                     : "\(result.highlights) highlights in your archive · \(result.covers) covers saved."
                 if result.unavailable > 0 { notice! += " \(result.unavailable) covers unavailable; retry from the archive menu or add a cover." }
                 if newStatus.service.mode == "github", newStatus.service.pendingBackup > 0 { notice! += " GitHub backup is pending." }
-            } else if let success { notice = success }
+            } else if let warning = newStatus.exportWarning { notice = warning }
+            else if let success { notice = success }
         } catch { self.error = error.localizedDescription }
     }
     func refreshStatus(interactive: Bool = false) async {

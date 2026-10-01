@@ -195,3 +195,20 @@ class ArchiveCoverTests(unittest.TestCase):
                 setup.http(endpoint, json.dumps({'tombstones': ['invalid']}).encode(), headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token})
             self.assertEqual(error.exception.code, 400)
             self.assertEqual(self.store.tombstones(), set())
+
+    def test_corrupt_cover_cache_cannot_block_recovery_export(self):
+        self.initialize()
+        self.store.accept({'source': 'koreader', 'device_id': 'fixture', 'highlights': [self.item()]})
+        tombstone = 'a' * 64
+        self.store.import_tombstones([tombstone])
+        catalog = self.app / 'covers/catalog.json'
+        catalog.parent.mkdir()
+        for index, content in enumerate(('not json', '[]', '{}' + ' ' * covers.MAX_CATALOG)):
+            catalog.write_text(content)
+            output = self.root / f'recovered-{index}.json'
+            result = self.bridge.mutate('export', {'path': str(output)})
+            archive = json.loads(output.read_text())
+            self.assertEqual(archive['highlights'][0]['text'], 'A private quote')
+            self.assertEqual(archive['tombstones'], [tombstone])
+            self.assertNotIn('cover_path', archive['highlights'][0])
+            self.assertIn('omitted', result['export_warning'])

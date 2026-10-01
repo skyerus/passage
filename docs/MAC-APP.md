@@ -74,7 +74,7 @@ Reader Bridge downloads a cover once per book during import, then displays it fr
 
 To add or replace a cover, right-click a book and choose **Change cover**, or use **Add cover / Change cover** above a quote. Choose a JPEG or PNG (up to 5 MiB), or that book’s DRM-free EPUB (up to 128 MiB). Reader Bridge reads its declared EPUB 2 or EPUB 3 cover without extracting the book onto disk. The image applies to all existing and future highlights with the same normalized book title and author. A book with no image gets a readable placeholder; Reader Bridge does not guess editions or silently search third-party catalogs by title.
 
-**Export highlights & covers** creates a versioned JSON archive. It embeds each cached cover once per book, includes deletion hashes, and omits local file paths. Importing it on another Mac does not need a cover download. It accepts older list-format Reader Bridge exports too. Deleted quotes stay deleted when a new-format archive is restored into an updated collector; an older collector must be updated before it can accept deletion history. Imports preserve recorded creation dates and do not invent dates for undated quotes.
+**Export highlights & covers** creates a versioned JSON archive. It embeds each cached cover once per book, includes deletion hashes, and omits local file paths. Importing it on another Mac does not need a cover download. It accepts older list-format Reader Bridge exports too. If the local cover cache is damaged, export still saves highlights and deletion history and reports that artwork was omitted. Deleted quotes stay deleted when a new-format archive is restored into an updated collector; an older collector must be updated before it can accept deletion history. Imports preserve recorded creation dates and do not invent dates for undated quotes.
 
 Covers you add manually are stored in the app’s local cover library and portable exports. GitHub quote backup preserves remote `cover_url` metadata; it does not upload local cover images. Keep a portable export if you want to move the complete library. The app does not scrape Amazon directly or import an unexamined Amazon personal-data ZIP; the supported JSON format is a separate input.
 
@@ -111,7 +111,7 @@ The app package bundles third-party runtime notices under Resources. Firmware re
 
 ## Cover-library development build 0.4.0
 
-The cover library adds a book grid, thumbnails in the quote list, a cover in the reading pane, explicit cover replacement, and offline portable archives. The development build passed 91 Python tests and 25 Swift tests. Automated coverage includes safe image URLs/redirects, EPUB 2/3 covers, per-book deduplication, malformed imports, failed-download retry, recorded dates, deletion-history transfer, book filtering before the 500-quote display limit, and stale selection responses. Public distribution still requires the signing, notarization and clean-install checks above.
+The cover library adds a book grid, thumbnails in the quote list, a cover in the reading pane, explicit cover replacement, and offline portable archives. The development build passed 92 Python tests and 25 Swift tests. Automated coverage includes safe image URLs/redirects, EPUB 2/3 covers, per-book deduplication, malformed imports, failed-download retry, recorded dates, deletion-history transfer, book filtering before the 500-quote display limit, and stale selection responses. Public distribution still requires the signing, notarization and clean-install checks above.
 
 ## Ordering correction in 0.3.1
 
