@@ -44,7 +44,7 @@ The menu-bar item reports the collector's status and opens the main window. The 
 
 Highlights with recorded creation dates appear newest first. Undated highlights follow alphabetically by book, author and passage; an entirely undated archive is labeled **By book · dates unavailable**. Importing old quotes does not make them recent, and the app does not invent their original dates. Equivalent passages retain the earliest known recorded date across sources. Timezone offsets are normalized; dates without a timezone use their recorded wall time as UTC for deterministic ordering.
 
-In **Highlights**, select a quote to read or copy it. Search covers book titles, authors, and quote text. The archive menu beside search contains Kindle-clippings import and JSON export. Use **⌘F** to search, **⌘1–4** to move between sections, and **⌘R** to refresh. Routine status checks run quietly in the background.
+In **Highlights**, select a quote to read or copy it. Search covers book titles, authors, and quote text. The archive menu beside search contains highlight import, missing-cover downloads, and portable export. Switch between **Books** and **Highlights** with the control beside search. Click a book to see only its quotes; choose **All books** to return. Use **⌘F** to search, **⌘1–4** to move between sections, and **⌘R** to refresh. Routine status checks run quietly in the background.
 
 ![Reader Bridge highlight archive with public-domain sample quotes](images/mac-highlights-dark.jpg)
 
@@ -57,6 +57,26 @@ Highlights remain local by default under `~/Library/Application Support/Reader B
 The optional Calibre-Web library uses a Calibre library folder containing `metadata.db`. This advanced step installs Calibre-Web and downloads its dependencies. See [library setup](SETUP.md#5-add-the-home-book-library) for its generated administrator credentials and reader account setup.
 
 The Mac can sleep normally; it will not receive uploads while asleep. Readers keep their offline queues. The app does not change device Wi-Fi or sleep policies. KOReader uploads when already connected; the Xteink firmware manages its own brief upload attempts. Highlight text is collected into one archive; underlines are not mirrored into the other device's book.
+
+## Book covers and importing highlights
+
+![Book library with labeled sample artwork](images/mac-books-dark.png)
+
+Sample artwork shown; screenshots contain no personal highlights.
+
+In **Highlights → … → Import highlights**, choose one of:
+
+- **My Clippings.txt** from a Kindle. Text and recorded dates are imported; this file does not contain covers.
+- **Kindle highlights JSON** containing `book_title`, `author`, `highlight`, and optional `created_at` and `cover_url` fields. Existing `kindle-highlights` archives work directly.
+- **Reader Bridge export JSON**, including quotes, recorded dates, cached covers, and deletion history.
+
+Reader Bridge downloads a cover once per book during import, then displays it from the Mac’s local cache. Refreshing or browsing the archive does not contact image servers. Supported remote cover sources are Amazon’s public image CDNs and Open Library’s cover service, over HTTPS. Only the image URL is requested; quote text is not sent. Unsupported links and failed downloads do not prevent highlights from being imported. Choose **Download missing covers** to retry. Reader Wi-Fi and sleep behavior are unchanged.
+
+To add or replace a cover, right-click a book and choose **Change cover**, or use **Add cover / Change cover** above a quote. Choose a JPEG or PNG (up to 5 MiB), or that book’s DRM-free EPUB (up to 128 MiB). Reader Bridge reads its declared EPUB 2 or EPUB 3 cover without extracting the book onto disk. The image applies to all existing and future highlights with the same normalized book title and author. A book with no image gets a readable placeholder; Reader Bridge does not guess editions or silently search third-party catalogs by title.
+
+**Export highlights & covers** creates a versioned JSON archive. It embeds each cached cover once per book, includes deletion hashes, and omits local file paths. Importing it on another Mac does not need a cover download. It accepts older list-format Reader Bridge exports too. Deleted quotes stay deleted when a new-format archive is restored into an updated collector; an older collector must be updated before it can accept deletion history. Imports preserve recorded creation dates and do not invent dates for undated quotes.
+
+Covers you add manually are stored in the app’s local cover library and portable exports. GitHub quote backup preserves remote `cover_url` metadata; it does not upload local cover images. Keep a portable export if you want to move the complete library. The app does not scrape Amazon directly or import an unexamined Amazon personal-data ZIP; the supported JSON format is a separate input.
 
 ## Build the app
 
@@ -88,6 +108,10 @@ Build with `--sign-identity 'Developer ID Application: …'` on the matching arc
 Test both upgrade and fresh install, including Mac logout/login, service restart, port conflicts, unavailable network/GitHub, incomplete pairing, queued uploads after reconnecting, and deletion replay. Intel builds and the full physical first-run walkthrough must be independently verified before claiming support.
 
 The app package bundles third-party runtime notices under Resources. Firmware remains a source build until its separate dependency redistribution review is complete.
+
+## Cover-library development build 0.4.0
+
+The cover library adds a book grid, thumbnails in the quote list, a cover in the reading pane, explicit cover replacement, and offline portable archives. The development build passed 91 Python tests and 25 Swift tests. Automated coverage includes safe image URLs/redirects, EPUB 2/3 covers, per-book deduplication, malformed imports, failed-download retry, recorded dates, deletion-history transfer, book filtering before the 500-quote display limit, and stale selection responses. Public distribution still requires the signing, notarization and clean-install checks above.
 
 ## Ordering correction in 0.3.1
 

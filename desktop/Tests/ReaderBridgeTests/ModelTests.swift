@@ -47,4 +47,22 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(connected.setupStep, 4)
         XCTAssertNil(try Backend.decode(fixture()).existingSetup)
     }
+    func testCoverAndBookMetadataDecodeWithoutBreakingOlderArchives() throws {
+        var response = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture()) as? [String: Any])
+        var data = try XCTUnwrap(response["data"] as? [String: Any])
+        var highlights = try XCTUnwrap(data["highlights"] as? [[String: Any]])
+        highlights[0]["cover_path"] = "/private/tmp/cover.png"
+        highlights[0]["cover_url"] = "https://m.media-amazon.com/images/I/cover.jpg"
+        highlights[0]["book_id"] = "book-key"
+        data["highlights"] = highlights
+        data["books"] = [["id": "book-key", "title": "Book", "author": "Writer", "count": 8, "cover_path": "/private/tmp/cover.png"]]
+        response["data"] = data
+        let decoded = try Backend.decode(JSONSerialization.data(withJSONObject: response))
+        XCTAssertEqual(decoded.highlights[0].coverPath, "/private/tmp/cover.png")
+        XCTAssertEqual(decoded.highlights[0].bookId, "book-key")
+        XCTAssertEqual(decoded.books?.first?.count, 8)
+        XCTAssertEqual(decoded.books?.first?.matches("writer"), true)
+        XCTAssertNil(try Backend.decode(fixture()).highlights[0].coverPath)
+    }
+
 }

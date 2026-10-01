@@ -15,7 +15,7 @@ import threading
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from db import merge, preserve_creation_date, quote_key, validate_tombstones
+from db import clean_cover_url, merge, preserve_creation_date, quote_key, validate_tombstones
 
 MAX_BODY = 1024 * 1024
 LOG = logging.getLogger("collector")
@@ -55,6 +55,8 @@ def validate(payload):
             for key, size in (("note", 65536), ("created_at", 128), ("location", 4096)):
                 if key in item:
                     record[key] = string(item[key], key, size, False)
+            if clean_cover_url(item.get("cover_url")) and not record.get("deleted"):
+                record['cover_url'] = clean_cover_url(item['cover_url'])
         if record["id"] in seen:
             raise ValueError("duplicate id within batch")
         seen.add(record["id"])
@@ -116,7 +118,10 @@ class Store:
                     record = {"id": record["id"], "deleted": True}
                 elif previous and not was_deleted:
                     # Older clients may replay an undated copy after enrichment.
-                    preserve_creation_date(record, json.loads(previous[0]))
+                    old = json.loads(previous[0])
+                    preserve_creation_date(record, old)
+                    if not record.get('cover_url') and clean_cover_url(old.get('cover_url')) and item_key(record) == item_key(old):
+                        record['cover_url'] = old['cover_url']
                 data = json.dumps(record, ensure_ascii=False, sort_keys=True)
                 revision = hashlib.sha256(data.encode()).hexdigest()
                 con.execute("INSERT INTO inbox(source,device,id,payload,revision) VALUES(?,?,?,?,?) ON CONFLICT(source,device,id) DO UPDATE SET payload=excluded.payload,revision=excluded.revision", identity + (data, revision))
@@ -155,6 +160,14 @@ class Store:
             con.executemany("INSERT OR IGNORE INTO tombstones(quote_key,published) VALUES(?,1)", [(k,) for k in keys])
             self._scrub_deleted(con)
 
+    def import_tombstones(self, keys):
+        keys = validate_tombstones(keys)
+        with self.connect() as con:
+            con.execute("BEGIN IMMEDIATE")
+            con.executemany("INSERT OR IGNORE INTO tombstones(quote_key,published) VALUES(?,0)", [(key,) for key in keys])
+            self._scrub_deleted(con)
+        return sorted(keys)
+
     def acknowledge_tombstones(self, keys):
         with self.connect() as con:
             con.executemany("UPDATE tombstones SET published=1 WHERE quote_key=?", [(k,) for k in keys])
@@ -170,7 +183,7 @@ def archive_rows(rows):
         item = json.loads(payload)
         if item.get("deleted"):
             continue
-        quote = {"highlight": item["text"], "book_title": item["book_title"], "author": item["author"], "cover_url": ""}
+        quote = {"highlight": item["text"], "book_title": item["book_title"], "author": item["author"], "cover_url": clean_cover_url(item.get("cover_url"))}
         preserve_creation_date(quote, item)
         quotes.append(quote)
     return quotes
@@ -276,7 +289,7 @@ def server(store, token, host, port):
             self.reply(200 if self.path == "/healthz" else 404, {"status": "ok", "service": "reader-bridge"} if self.path == "/healthz" else {"error": "not found"})
 
         def do_POST(self):
-            if self.path != "/v1/highlights":
+            if self.path not in ("/v1/highlights", "/v1/tombstones"):
                 return self.reply(404, {"error": "not found"})
             if not hmac.compare_digest(self.headers.get("Authorization", "").encode(), ("Bearer " + token).encode()):
                 return self.reply(401, {"error": "unauthorized"})
@@ -291,7 +304,13 @@ def server(store, token, host, port):
                 body = self.rfile.read(length)
                 if len(body) != length:
                     raise ValueError("incomplete request")
-                accepted = store.accept(json.loads(body))
+                payload = json.loads(body)
+                if self.path == '/v1/tombstones':
+                    if not isinstance(payload, dict) or set(payload) != {'tombstones'}:
+                        raise ValueError('invalid tombstone batch')
+                    accepted = store.import_tombstones(payload['tombstones'])
+                else:
+                    accepted = store.accept(payload)
             except (ValueError, UnicodeError):
                 return self.reply(400, {"error": "invalid highlight batch"})
             except sqlite3.Error:
