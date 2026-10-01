@@ -30,4 +30,21 @@ final class ModelTests: XCTestCase {
         XCTAssertThrowsError(try Backend.decode(Data(#"{"ok":false,"error":"Connect your reader first."}"#.utf8))) { error in XCTAssertEqual(error.localizedDescription, "Connect your reader first.") }
         XCTAssertThrowsError(try Backend.decode(Data(#"{"ok":true}"#.utf8)))
     }
+    func testExistingSetupDoesNotImplyProgressWasVerified() throws {
+        var response = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture(healthy: true, kindle: true, xteink: true)) as? [String: Any])
+        var data = try XCTUnwrap(response["data"] as? [String: Any])
+        data["existing_setup"] = ["available": true, "connected": false, "healthy": true, "port": 8084, "archive": "reader/quotes"] as [String: Any]
+        response["data"] = data
+        let candidate = try Backend.decode(JSONSerialization.data(withJSONObject: response))
+        XCTAssertTrue(candidate.offersExistingSetup)
+        XCTAssertFalse(candidate.usesExistingSetup)
+        data["existing_setup"] = ["available": false, "connected": true, "healthy": false, "port": 8084, "archive": "reader/quotes"] as [String: Any]
+        response["data"] = data
+        let connected = try Backend.decode(JSONSerialization.data(withJSONObject: response))
+        XCTAssertTrue(connected.usesExistingSetup)
+        XCTAssertFalse(connected.offersExistingSetup)
+        XCTAssertFalse(connected.progressVerified)
+        XCTAssertEqual(connected.setupStep, 4)
+        XCTAssertNil(try Backend.decode(fixture()).existingSetup)
+    }
 }

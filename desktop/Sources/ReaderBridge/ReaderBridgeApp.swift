@@ -71,13 +71,17 @@ struct OverviewView: View {
             metric("\(status.highlightCount)", "Archived highlights", "text.quote")
             metric(status.service.healthy ? "Online" : "Offline", "Local collector", "network")
         }
+        if status.usesExistingSetup || status.offersExistingSetup {
+            ExistingSetupView(status: status)
+        } else {
         Card(title: status.setupStep == 5 ? "Your readers are paired" : "Let’s connect your readers") {
             Text(status.setupStep == 5 ? "Your reading-position roundtrip has been confirmed. Highlights are collected in one local archive; they are not recreated as underlines in the other reader’s book." : "Connect the local collector, pair your readers, then confirm a reading-position roundtrip.")
             Button(status.setupStep == 5 ? "Review setup" : "Continue setup · step \(status.setupStep) of 4") { model.selection = .setup }.buttonStyle(.borderedProminent)
         }
+        }
         Card(title: "At a glance") {
-            LabeledContent("Kindle", value: status.kindle.paired ? (status.kindle.connected ? "Paired · USB connected" : "Paired") : "Not paired")
-            LabeledContent("X4 Pro", value: status.xteink.paired ? "Paired" : "Not paired")
+            LabeledContent("Kindle", value: status.usesExistingSetup ? (status.kindle.paired ? "Highlights received" : "No uploads recorded yet") : status.kindle.paired ? (status.kindle.connected ? "Paired · USB connected" : "Paired") : "Not paired")
+            LabeledContent("X4 Pro", value: status.usesExistingSetup ? (status.xteink.paired ? "Highlights received" : "No uploads recorded yet") : status.xteink.paired ? "Paired" : "Not paired")
             LabeledContent("Archive", value: status.service.mode == "github" ? "Local + GitHub backup" : "On this Mac")
             if status.service.pendingBackup > 0 { Text("\(status.service.pendingBackup) highlights awaiting backup").foregroundStyle(.secondary) }
             if !status.endpoint.isEmpty { Text(status.endpoint).font(.system(.callout, design: .monospaced)).textSelection(.enabled) }
@@ -85,6 +89,30 @@ struct OverviewView: View {
         ForEach(status.warnings, id: \.self) { Label($0, systemImage: "info.circle").font(.callout).foregroundStyle(.secondary) }
     }
     func metric(_ value: String, _ label: String, _ symbol: String) -> some View { Card(title: value) { Label(label, systemImage: symbol).foregroundStyle(.secondary) } }
+}
+struct ExistingSetupView: View {
+    @EnvironmentObject var model: AppModel
+    let status: BridgeStatus
+    var body: some View {
+        Card(title: status.usesExistingSetup ? "Connected to your existing bridge" : "Your existing bridge is ready") {
+            if status.usesExistingSetup {
+                Text("Your reader settings remain in place. This app shows the highlights collected by your existing Reading Highlights service.")
+                Label(status.service.healthy ? "Collector online" : "Collector offline · check the existing service, then refresh", systemImage: status.service.healthy ? "checkmark.circle.fill" : "exclamationmark.triangle")
+                Text("Uploads from your Kindle and X4 Pro continue using their saved connection. Reading-progress sync stays configured on the readers.").font(.callout).foregroundStyle(.secondary)
+                HStack {
+                    Button("View highlights") { model.selection = .highlights }.buttonStyle(.borderedProminent)
+                    Button("Refresh connection") { Task { await model.perform("status") } }.disabled(model.busy)
+                }
+            } else {
+                Text("A verified Reading Highlights service is already running on this Mac. Connect to it to see your archive and keep using your readers’ saved settings.")
+                Button("Use existing setup") { Task { await model.perform("connect_existing", activity: "Connecting to your existing bridge…", success: "Connected. Your readers can keep syncing with their existing settings.") } }.buttonStyle(.borderedProminent).disabled(model.busy)
+            }
+            if let existing = status.existingSetup {
+                Text("Collector port: \(existing.port)").font(.caption).foregroundStyle(.secondary)
+                if !existing.archive.isEmpty { Text("GitHub backup: \(existing.archive)").font(.caption).textSelection(.enabled) }
+            }
+        }
+    }
 }
 struct SetupView: View {
     @EnvironmentObject var model: AppModel
@@ -102,6 +130,9 @@ struct SetupView: View {
     var validPort: Bool { Int(portText).map { (1024...65535).contains($0) } ?? false }
     var body: some View {
         Group {
+        if status.usesExistingSetup || status.offersExistingSetup {
+            ExistingSetupView(status: status)
+        } else {
         Text(status.setupStep == 5 ? "All four steps confirmed." : "Step \(status.setupStep) of 4 · your progress is saved on this Mac.").foregroundStyle(.secondary)
         Card(title: "1. Start your local bridge") {
             Text("Your readers and Mac must share a reachable network. The bridge is unavailable while your Mac sleeps.").foregroundStyle(.secondary)
@@ -140,6 +171,7 @@ struct SetupView: View {
             Link("Read pairing and sync instructions", destination: URL(string: "https://github.com/skyerus/reader-bridge/blob/main/docs/SETUP.md#6-connect-reading-progress")!)
             action(status.progressVerified ? "Reset confirmation" : "I tested both directions successfully", "verify_progress", ["verified": !status.progressVerified], "Saving confirmation…", disabled: !status.progressVerified && (!status.kindle.paired || !status.xteink.paired))
             if status.progressVerified { Label("Roundtrip confirmed by you", systemImage: "checkmark.circle.fill").foregroundStyle(teal) }
+        }
         }
         }
         .onAppear { portText = String(status.service.port > 0 ? status.service.port : 8084); if endpoint.isEmpty { endpoint = status.endpoint }; lastSuggestedEndpoint = status.endpoint; if kindleMount.isEmpty { kindleMount = status.mounts.first(where: { $0.kind == "kindle" })?.path ?? status.kindle.mount }; if xteinkMount.isEmpty { xteinkMount = status.mounts.first(where: { $0.kind == "xteink" })?.path ?? "" }; if deviceURL.isEmpty { deviceURL = status.xteink.url } }

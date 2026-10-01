@@ -70,6 +70,14 @@ struct SettingsView: View {
             if loginNeedsApproval { Text("Approve Reader Bridge in System Settings → General → Login Items to finish enabling startup.").font(.caption); Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() } }
             if let loginError { Text(loginError).foregroundStyle(.orange).font(.caption) }
         }
+        if status.usesExistingSetup {
+            Card(title: "Existing bridge settings") {
+                Text("Your existing Reading Highlights installation manages collector startup and backup. Closing this app leaves it running.").foregroundStyle(.secondary)
+                LabeledContent("Collector port", value: String(status.service.port))
+                LabeledContent("Archive backup", value: status.service.archive.isEmpty ? "Local only" : status.service.archive)
+                Text("Existing book-library and reader settings remain managed by their original installation.").font(.callout).foregroundStyle(.secondary)
+            }
+        } else {
         Card(title: "GitHub backup · optional") {
             Text("The archive works locally without GitHub. Connect an authenticated GitHub account through the GitHub CLI before enabling backup. Only configure a repository you intend to use for your reading archive.").foregroundStyle(.secondary)
             TextField("OWNER/REPO", text: $archive).textFieldStyle(.roundedBorder)
@@ -87,6 +95,7 @@ struct SettingsView: View {
             Button(status.library.installed ? "Update library" : "Install local library") { Task { await model.perform("install_library", ["books": books, "port": Int(libraryPort) ?? 0], activity: "Installing book library…", success: "Library installed. Follow the library guide to sign in and add its catalog on both readers.") } }.disabled(model.busy || books.isEmpty || !(1024...65535).contains(Int(libraryPort) ?? 0))
             if status.library.installed { Text("Installed on port \(status.library.port)").font(.caption).foregroundStyle(.secondary) }
             Link("Library sign-in and reader setup", destination: URL(string: "https://github.com/skyerus/reader-bridge/blob/main/docs/SETUP.md#5-add-the-home-book-library")!)
+        }
         }
         Card(title: "About Reader Bridge") {
             Text("Reading positions and highlight quotes, between KOReader and Xteink X4 Pro. Local storage is the default; GitHub is an optional archive backup.").foregroundStyle(.secondary)

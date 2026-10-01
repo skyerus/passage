@@ -14,13 +14,23 @@ This is a **development build**, not a notarized public download. Source builds 
 ## First setup
 
 1. Put **Reader Bridge.app** in Applications before starting its collector. Leave it at that location: the background service runs the interpreter inside the app.
-2. Open **Setup** and start the local collector. The app checks for a conflicting port instead of replacing another service. An existing command-line Reader Bridge configuration is preserved; a separate old “Reading Highlights” installation is not automatically migrated.
+2. Open **Setup**. If it offers **Use existing setup**, select that to connect to your earlier Reading Highlights installation; your readers keep their existing settings. Otherwise start the local collector. The app checks for a conflicting port instead of replacing another service. An existing command-line Reader Bridge configuration is preserved.
 3. Exit KOReader and connect the Kindle in USB storage mode. Select the detected Kindle or its mounted folder, then install the plugin. Eject and reopen KOReader when prompted.
 4. On the X4 Pro, open File Transfer or connect its SD card. Confirm the device model in the app and pair it. If it needs the custom firmware, choose the firmware build/staging option, wait for verification, then complete **Settings → System → SD Card Firmware Update** on the reader.
 5. Follow the progress setup instructions using the same progress account and identical EPUB on both readers. Confirm a round trip only after testing the actual devices. Progress still requires **Upload Local** and **Apply Remote** on Xteink; this app does not change that firmware behavior.
 6. Make one highlight on each reader with Wi-Fi connected. Check both appear in **Highlights**. Import an English `My Clippings.txt` to bring your previous Kindle quotes into the same archive.
 
 Setup resumes from saved service and pairing state. A saved pairing is not proof that a disconnected or sleeping reader is currently reachable. The interface distinguishes these conditions.
+
+## Already using Reading Highlights
+
+The app recognizes an earlier installation in `~/Library/Application Support/Reading Highlights` after checking its LaunchAgent, listening process, and authenticated collector response. Choose **Use existing setup** in Overview or Setup. There is no need to change the port or pair your readers again.
+
+This saves a connection in the app's own settings. The original service, credentials, archive, and device settings stay where they are. Highlights, search, import, and export use the existing collector. Its original LaunchAgent continues to manage startup and GitHub backup; the app does not offer stop or backup-reconfiguration controls for that service. Previously configured reading-progress sync and book-library services remain separate.
+
+The archive shows live highlights held in the collector's local inbox. Older quotes that exist only in a GitHub archive are not downloaded automatically. “Highlights received” indicates upload records from a reader, not that the reader is currently online or that reading-progress sync has been tested.
+
+If the original service is offline, the app retains its saved connection and reports it offline. Start the original service and refresh. A changed LaunchAgent or credential must be checked before reconnecting; the app will not trust an arbitrary process on the same port. For an unrelated occupied port on a fresh installation, choose an unused collector port before pairing.
 
 ## Everyday use
 
