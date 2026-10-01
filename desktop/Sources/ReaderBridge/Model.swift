@@ -8,7 +8,7 @@ struct BridgeStatus: Decodable {
     struct Mount: Decodable, Identifiable { var name: String; var path: String; var kind: String; var id: String { path } }
     struct Library: Decodable { var installed: Bool; var port: Int; var books: String }
     struct ExistingSetup: Decodable { var available: Bool; var connected: Bool; var healthy: Bool; var port: Int; var archive: String }
-    struct CloudBackup: Decodable { var enabled: Bool; var provider: String; var folder: String; var savedAt: String; var error: String; var cloudUploadVerified: Bool }
+    struct CloudBackup: Decodable { var enabled: Bool; var provider: String; var folder: String; var savedAt: String; var error: String; var cloudUploadVerified: Bool; var snapshotPath: String? = nil }
     var service: Service; var kindle: Kindle; var xteink: Xteink
     var mounts: [Mount]; var highlights: [Highlight]; var highlightCount: Int
     var progressVerified: Bool; var endpoint: String; var addresses: [String]; var warnings: [String]; var library: Library
@@ -22,6 +22,13 @@ struct BridgeStatus: Decodable {
     var cloudBackup: CloudBackup?
     var usesExistingSetup: Bool { existingSetup?.connected == true }
     var offersExistingSetup: Bool { existingSetup?.available == true && !usesExistingSetup }
+    var backupSummary: String {
+        if let backup = cloudBackup, backup.enabled {
+            let name = backup.provider == "icloud" ? "iCloud backup" : "Folder backup"
+            return backup.error.isEmpty ? "\(name) on" : "\(name) needs attention"
+        }
+        return service.mode == "github" ? "GitHub backup on" : "Saved on this Mac"
+    }
     var setupStep: Int { !service.healthy ? 1 : !kindle.paired ? 2 : !xteink.paired ? 3 : !progressVerified ? 4 : 5 }
 }
 struct Highlight: Decodable, Identifiable {
@@ -87,16 +94,16 @@ enum Backend {
     @Published var lastUpdated: Date?
     @Published var highlightQuery = ""
     @Published var highlightBookID = ""
-    @Published var selection: Section = .overview
+    @Published var selection: Section = .highlights
     private var requestGeneration = 0
     private let runBackend: (String, [String: Any]) async throws -> BridgeStatus
     init(runBackend: @escaping (String, [String: Any]) async throws -> BridgeStatus = { command, parameters in
         try await Task.detached(priority: .userInitiated) { try Backend.run(command: command, parameters: parameters) }.value
     }) { self.runBackend = runBackend }
-    enum Section: String, CaseIterable, Identifiable { case overview = "Overview", setup = "Setup", highlights = "Highlights", settings = "Settings"; var id: String { rawValue }
-        var icon: String { switch self { case .overview: return "square.grid.2x2"; case .setup: return "link"; case .highlights: return "text.quote"; case .settings: return "slider.horizontal.3" } }
+    enum Section: String, CaseIterable, Identifiable { case highlights = "Highlights", setup = "Setup", settings = "Settings"; var id: String { rawValue }
+        var icon: String { switch self { case .setup: return "link"; case .highlights: return "text.quote"; case .settings: return "slider.horizontal.3" } }
     }
-    var serviceLabel: String { guard error == nil else { return "Status needs attention" }; guard let status else { return "Checking collector…" }; return status.service.healthy ? "Collector online" : "Collector offline" }
+    var serviceLabel: String { guard error == nil else { return "Status needs attention" }; guard let status else { return "Checking sync…" }; return status.service.healthy ? "Ready for highlights" : "Highlight sync paused" }
     func perform(_ command: String, _ parameters: [String: Any] = [:], activity: String = "Checking status…", success: String? = nil) async {
         if command == "status" { await refreshStatus(interactive: true); return }
         guard !busy else { return }
@@ -114,7 +121,7 @@ enum Backend {
                     ? "\(result.covers) covers saved on this Mac."
                     : "\(result.highlights) highlights in your archive · \(result.covers) covers saved."
                 if result.unavailable > 0 { notice! += " \(result.unavailable) covers unavailable; retry from the archive menu or add a cover." }
-                if newStatus.service.mode == "github", newStatus.service.pendingBackup > 0 { notice! += " GitHub backup is pending." }
+                if newStatus.cloudBackup?.enabled != true, newStatus.service.mode == "github", newStatus.service.pendingBackup > 0 { notice! += " GitHub backup is pending." }
             } else if let warning = newStatus.exportWarning { notice = warning }
             else if let success { notice = success }
         } catch { self.error = error.localizedDescription }
@@ -126,7 +133,7 @@ enum Backend {
         let bookID = highlightBookID
         let firstLoad = status == nil
         refreshing = true
-        if firstLoad { busy = true; activity = "Opening your bridge…" }
+        if firstLoad { busy = true; activity = "Opening your highlights…" }
         defer {
             refreshing = false
             if firstLoad { busy = false; activity = "" }

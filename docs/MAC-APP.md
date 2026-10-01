@@ -40,11 +40,11 @@ If the original service is offline, the app retains its saved connection and rep
 
 ## Everyday use
 
-The menu-bar item reports the collector's status and opens the main window. The collector starts after Mac login once installed and keeps running when you close the window or quit the app. The app's **Open at login** setting controls whether its interface also starts at login. Use the collector's stop action to stop accepting uploads.
+The app opens in **Highlights**. The sidebar has **Highlights**, **Setup**, and **Settings**; setup appears only in its own tab. The menu-bar item reports whether the Mac is ready to receive highlights and opens the main window. Technical connection details, ports and additional GitHub backup information are under **Settings → Advanced**. The collector starts after Mac login once installed and keeps running when you close the window or quit the app. The app's **Open at login** setting controls whether its interface also starts at login. Use the collector's stop action to stop accepting uploads.
 
 Highlights with recorded creation dates appear newest first. Undated highlights follow alphabetically by book, author and passage; an entirely undated archive is labeled **By book · dates unavailable**. Importing old quotes does not make them recent, and the app does not invent their original dates. Equivalent passages retain the earliest known recorded date across sources. Timezone offsets are normalized; dates without a timezone use their recorded wall time as UTC for deterministic ordering.
 
-In **Highlights**, select a quote to read or copy it. Search covers book titles, authors, and quote text. The archive menu beside search contains highlight import, missing-cover downloads, and portable export. Switch between **Books** and **Highlights** with the control beside search. Click a book to see only its quotes; choose **All books** to return. Use **⌘F** to search, **⌘1–4** to move between sections, and **⌘R** to refresh. Routine status checks run quietly in the background.
+In **Highlights**, select a quote to read or copy it. Search covers book titles, authors, and quote text. The archive menu beside search contains highlight import, missing-cover downloads, and portable export. Switch between **Books** and **Highlights** with the control beside search. Click a book to see only its quotes; choose **All books** to return. Use **⌘F** to search, **⌘1–3** to move between sections, and **⌘R** to refresh. Routine status checks run quietly in the background.
 
 ![Reader Bridge highlight archive with public-domain sample quotes](images/mac-highlights-dark.jpg)
 
@@ -52,15 +52,17 @@ Sample archive shown; these screenshots contain no personal highlights or connec
 
 The interface follows the Mac's light or dark appearance and accessibility preferences. Builds made with a current Apple SDK use native Liquid Glass controls on macOS 26 and later; older systems use standard materials. Quote-reading surfaces stay opaque for readability.
 
-Highlights remain local under `~/Library/Application Support/Reader Bridge`. In **Settings → Backup**, choose **Set up iCloud backup**, select iCloud Drive, and confirm the folder. No GitHub account or Terminal is needed. If iCloud Drive is unavailable, enable it in System Settings or choose **Another folder**, including a folder managed by your preferred cloud service.
+Highlights remain local under `~/Library/Application Support/Reader Bridge`. In **Settings → Backup**, choose **Turn on iCloud backup**. No GitHub account or Terminal is needed. If iCloud Drive is unavailable, enable it in System Settings or choose **Another folder**, including a folder managed by your preferred cloud service.
 
 The background service checks for changes every minute and saves a new `.readerbridge` snapshot only when the archive changes. It starts at login and continues after you quit the app. Backups contain highlights, original recorded dates, notes, deletion history and locally available covers. Credentials, pairing tokens, EPUB books and reading-progress service settings are excluded. Covers held only as remote URLs must be downloaded before they can be included as images.
+
+**Show in Finder**, available in Highlights and Settings → Backup, opens your backup folder and selects the latest `.readerbridge` snapshot. If that file is unavailable, it opens the folder instead. The backup summary uses your enabled iCloud/folder destination even when an earlier GitHub backup also runs.
 
 Each Mac uses its own backup subfolder. Snapshots are immutable and earlier versions are retained; they consume storage until you remove old snapshots yourself. A missing drive, full destination or offline cloud service does not block uploads from your readers. The app reports **saved to the folder**, not confirmed cloud delivery. [macOS manages iCloud Drive uploads](https://support.apple.com/guide/mac-help/store-files-in-icloud-drive-mchle5a61431/mac); use Finder to check upload status. A local save can succeed while cloud quota or connectivity delays the upload.
 
 To recover on another Mac, start the local bridge, then choose **Settings → Backup → Restore a backup** and select a downloaded snapshot. Restore merges missing records and covers, preserves existing edits and deletions, and first saves a local recovery snapshot. Pair the readers again on a new installation. Restore does not bring back intentionally deleted highlights or reinstall firmware. Limits are 256 MiB per uncompressed snapshot, 64 MiB of archive metadata and 5 MiB per cover. Keep a separate copy of large book libraries.
 
-**GitHub remains optional**, alongside folder backups. Under Optional extras, sign in through the GitHub CLI and explicitly choose your private repository. The app never creates a repository without your selection. Existing collector installations keep their GitHub configuration while using folder backups. GitHub currently archives highlight text, dates and cover URLs; the folder snapshot also includes local cover image bytes. The native app is macOS-only; these changes do not introduce a Windows or Linux app.
+**GitHub remains optional**, alongside folder backups. Under **Settings → Advanced → Connection details & optional services**, sign in through the GitHub CLI and explicitly choose your private repository. The app never creates a repository without your selection. Existing collector installations keep their GitHub configuration while using folder backups. GitHub currently archives highlight text, dates and cover URLs; the folder snapshot also includes local cover image bytes. The native app is macOS-only; these changes do not introduce a Windows or Linux app.
 
 The optional Calibre-Web library uses a Calibre library folder containing `metadata.db`. This advanced step installs Calibre-Web and downloads its dependencies. See [library setup](SETUP.md#5-add-the-home-book-library) for its generated administrator credentials and reader account setup.
 
@@ -143,3 +145,7 @@ Repeat the packaged acceptance check with the built runtime:
 ```
 
 It uses random temporary service labels and an unused port, and unloads those jobs on exit. This checks launchd restart, not an actual logout/login or reboot. Public notarization, Intel execution, clean-Mac installation, login-item approval, and the complete setup on physical devices remain unverified for this app build. The previously tested reader firmware/plugin behavior is not a substitute for those app acceptance checks.
+
+### Reading positions and highlight sync
+
+Reading positions currently use the KOReader-compatible server configured on the readers, separately from the app. The app does not host a progress server; confirming a round trip in Setup records your check, not a server migration. A local compatible server is possible, but would require the Mac to be awake and reachable when the readers sync. See the [KOReader sync server](https://github.com/koreader/koreader-sync-server) for the supported protocol.

@@ -38,6 +38,17 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(status.cloudBackup?.cloudUploadVerified, false)
         XCTAssertNil(try Backend.decode(fixture()).cloudBackup)
     }
+    func testPrimaryBackupReflectsICloudEvenWithLegacyGitHubCollector() throws {
+        var status = try Backend.decode(fixture())
+        status.service.mode = "github"
+        status.cloudBackup = .init(enabled: true, provider: "icloud", folder: "/fixture", savedAt: "", error: "", cloudUploadVerified: false)
+        XCTAssertEqual(status.backupSummary, "iCloud backup on")
+        status.cloudBackup?.error = "Drive unavailable"
+        XCTAssertEqual(status.backupSummary, "iCloud backup needs attention")
+        status.cloudBackup?.enabled = false
+        XCTAssertEqual(status.backupSummary, "GitHub backup on")
+    }
+
     func testFailureResponseCannotBecomeSuccess() {
         XCTAssertThrowsError(try Backend.decode(Data(#"{"ok":false,"error":"Connect your reader first."}"#.utf8))) { error in XCTAssertEqual(error.localizedDescription, "Connect your reader first.") }
         XCTAssertThrowsError(try Backend.decode(Data(#"{"ok":true}"#.utf8)))

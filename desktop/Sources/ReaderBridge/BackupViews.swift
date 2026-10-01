@@ -12,9 +12,9 @@ struct CloudBackupView: View {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: "icloud").font(.system(size: 27, weight: .light)).foregroundStyle(teal)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(backup?.enabled == true ? "Automatic backups are on" : "Keep your reading safe")
+                    Text(backup?.enabled == true ? status.backupSummary : "Keep your reading safe")
                         .font(.headline)
-                    Text("Highlights, dates and covers. No GitHub account needed.")
+                    Text("Your highlights, dates and book covers.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }
@@ -30,7 +30,7 @@ struct CloudBackupView: View {
                     if !backup.error.isEmpty { Text(backup.error).font(.callout).foregroundStyle(.orange) }
                     HStack {
                         Button("Back up now") { Task { await model.perform("backup_now", activity: "Saving backup…", success: "Snapshot saved to your backup folder.") } }
-                        Button("Show backups") { NSWorkspace.shared.open(URL(fileURLWithPath: backup.folder)) }
+                        BackupFinderButton(backup: backup)
                         Menu("More") {
                             Button("Use iCloud Drive…") { provider = "icloud"; chooseDestination() }
                             Button("Use another folder…") { provider = "folder"; chooseDestination() }
@@ -43,7 +43,7 @@ struct CloudBackupView: View {
                     Text("iCloud Drive · Recommended").tag("icloud")
                     Text("Another folder").tag("folder")
                 }.pickerStyle(.menu).frame(maxWidth: 360, alignment: .leading)
-                Button(provider == "icloud" ? "Set up iCloud backup…" : "Choose backup folder…", action: chooseDestination)
+                Button(provider == "icloud" ? "Turn on iCloud backup" : "Choose backup folder…", action: enableBackup)
                     .buttonStyle(.borderedProminent).tint(teal).disabled(!status.service.installed)
                 Text("Runs automatically, even after you quit the app. Earlier snapshots are kept.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -57,6 +57,13 @@ struct CloudBackupView: View {
         }
         .disabled(model.busy)
         .onAppear { provider = backup?.provider ?? "icloud" }
+    }
+
+    private func enableBackup() {
+        let cloud = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs")
+        if provider == "icloud", FileManager.default.fileExists(atPath: cloud.path) {
+            Task { await model.perform("configure_cloud_backup", ["provider": "icloud", "folder": cloud.path], activity: "Setting up iCloud backup…", success: "iCloud backup is on. Your first snapshot is saved.") }
+        } else { chooseDestination() }
     }
 
     private func chooseDestination() {
@@ -81,6 +88,28 @@ struct CloudBackupView: View {
         if let folder = backup?.folder, !folder.isEmpty { panel.directoryURL = URL(fileURLWithPath: folder) }
         if panel.runModal() == .OK, let url = panel.url {
             Task { await model.perform("restore_backup", ["path": url.path], activity: "Restoring archive…", success: "Backup restored. Your current edits and deletions were kept.") }
+        }
+    }
+}
+
+/// Reveal the actual saved archive when available, otherwise open its destination.
+struct BackupFinderButton: View {
+    @EnvironmentObject var model: AppModel
+    let backup: BridgeStatus.CloudBackup
+    var body: some View {
+        Button { reveal() } label: { Label("Show in Finder", systemImage: "folder") }
+            .disabled(backup.folder.isEmpty)
+            .help("Open your backup folder and select the latest saved highlights backup")
+    }
+    private func reveal() {
+        if let path = backup.snapshotPath, !path.isEmpty, FileManager.default.fileExists(atPath: path) {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+        } else if FileManager.default.fileExists(atPath: backup.folder) {
+            if !NSWorkspace.shared.open(URL(fileURLWithPath: backup.folder)) {
+                model.error = "Finder could not open your backup folder. Check that it is available."
+            }
+        } else {
+            model.error = "Your backup folder is unavailable. Check iCloud Drive or reconnect the drive."
         }
     }
 }
