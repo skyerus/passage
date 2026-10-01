@@ -10,13 +10,13 @@ Checked 2026-09-29. Links below were opened directly; do not use third-party mir
 | https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices | Current KPM, manual/scriptlet, KUALA and legacy paths. KPM only when supported by that jailbreak; kindlehf >=5.16.3. Exit KOReader before USB storage. EPUB supported, DRM/KFX unsupported. |
 | https://github.com/koreader/koreader/releases | Upstream packages; select device/firmware variant per guide, not merely newest filename. |
 | https://github.com/koreader/koreader/wiki/Progress-sync | Auto sync on opening/closing documents; Binary matching requires exact same file; account shared across reader installations. |
-| https://github.com/skyerus/crosspoint-reader/blob/77b30d58e260ce5405234f84fe240833b726df9d/USER_GUIDE.md | Default CrossPoint KOSync server, per-server accounts, Ask Every Time upload/apply, OPDS settings, SD updater. Pinned source revision used by this release. |
+| https://github.com/skyerus/crosspoint-reader/blob/d03f6e6a2afbdbdf99d35fcb91d35a847166f514/USER_GUIDE.md | Default CrossPoint KOSync server, per-server accounts, Ask Every Time upload/apply, OPDS settings, SD updater. Pinned source revision used by this release. |
 | https://sync.crosspointreader.com/ | Public KOReader-compatible progress service; separate from the Mac collector and personal archive. |
 | https://crosspointreader.com/ | Official CrossPoint entry point; explicitly select model. |
 | https://updates.crosspointreader.com/ | Official release/device picker; do not infer X4 Pro support from an X4/X3 description. |
 | https://github.com/janeczku/calibre-web | Native Calibre-Web application and documentation. Installer pins 0.6.27; first-run LAN exposure must wait for secure account setup. |
 
-The custom highlighting behavior is implemented in the [public CrossPoint fork at the pinned revision](https://github.com/skyerus/crosspoint-reader/tree/77b30d58e260ce5405234f84fe240833b726df9d); it is not attributed to upstream released CrossPoint. Tests and compilation do not replace fresh device acceptance tests.
+The custom highlighting behavior is implemented in the [public CrossPoint fork at the pinned revision](https://github.com/skyerus/crosspoint-reader/tree/d03f6e6a2afbdbdf99d35fcb91d35a847166f514); it is not attributed to upstream released CrossPoint. Tests and compilation do not replace fresh device acceptance tests.
 
 ## Packaging boundaries
 

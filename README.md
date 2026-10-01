@@ -26,7 +26,7 @@ Reader Bridge packages that setup into a guided, resumable workflow. The wizard 
 | --- | --- |
 | Keep Kindle and Xteink highlights together | KOReader highlights and CrossPoint clippings upload automatically to a local collector, then to your own private GitHub archive. Offline changes wait for a connection. |
 | Continue reading on the other device | Uses the existing KOReader-compatible CrossPoint Sync service. KOReader can sync automatically; Xteink uses manual **Upload Local** and **Apply Remote** actions. |
-| Bring your existing Kindle highlights | Imports English-format `My Clippings.txt` exports without needing an Amazon login in Reader Bridge. |
+| Bring your existing Kindle highlights | Imports English-format `My Clippings.txt` exports, including original creation dates, without needing an Amazon login in Reader Bridge. |
 | Highlight across pages on the X4 Pro | Custom CrossPoint firmware keeps a selection active when you drag to a page edge, within the current chapter. |
 | Download the same EPUB to both readers | Optional Calibre-Web setup provides a local OPDS book catalog, preserving the downloaded EPUB bytes needed for binary progress matching. |
 | Run it from your Mac | A local collector and optional library run after login. Your Mac needs to be awake and reachable for those services; downloaded books remain readable offline. |

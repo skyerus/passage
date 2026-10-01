@@ -1,6 +1,8 @@
 import copy
+from datetime import datetime, timezone
 import hashlib
 import json
+import re
 import unicodedata
 from pathlib import Path
 
@@ -44,6 +46,25 @@ def load_tombstones(path=None):
     return validate_tombstones(json.loads(path.read_text())) if path.exists() else set()
 
 
+def recorded_date(raw):
+    """Parse a recorded date; never substitute import or upload time."""
+    if not isinstance(raw, str) or not re.fullmatch(
+            r'\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?', raw):
+        return None
+    try:
+        value = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        return None
+
+
+def preserve_creation_date(target, incoming):
+    """Enrich missing dates and keep the earliest recorded creation of a quote."""
+    old, new = recorded_date(target.get('created_at')), recorded_date(incoming.get('created_at'))
+    if new is not None and (old is None or new < old):
+        target['created_at'] = incoming['created_at']
+
+
 def merge(existing: list[dict], scraped: list[dict], tombstones=()) -> list[dict]:
     """Union without truncating text or dropping legacy entries; preserve legacy metadata."""
     deleted = set(tombstones)
@@ -62,6 +83,7 @@ def merge(existing: list[dict], scraped: list[dict], tombstones=()) -> list[dict
             by_key[key] = q
         else:
             target = by_key[key]
+            preserve_creation_date(target, q)
             if not target.get("cover_url") and q.get("cover_url"):
                 target["cover_url"] = q["cover_url"]
     return merged

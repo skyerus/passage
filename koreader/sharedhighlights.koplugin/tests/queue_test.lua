@@ -7,6 +7,7 @@ local function capture() Q.capture(state,{a,{text="page bookmark"}},{title="Book
 capture()
 local rows,versions=Q.batch(state,encode)
 assert(#rows==1 and rows[1].text=="A quote")
+assert(rows[1].created_at==a.datetime) -- Original creation time, not upload time.
 Q.ack(state,{"unrelated"},versions); assert(next(state.pending))
 -- Editing while an upload runs must survive acknowledgement of the old revision.
 a.note="my note"; capture()
