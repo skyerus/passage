@@ -124,6 +124,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('--no-publish', args)
         self.assertNotIn('--repo', args)
 
+    @patch.object(desktop.sys, 'platform', 'darwin')
     def test_start_preserves_backup_and_disable_preserves_rows(self):
         self.initialize()
         self.store.accept({'source': 'koreader', 'device_id': 'fixture', 'highlights': [self.item()]})
