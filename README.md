@@ -6,9 +6,9 @@ Reader Bridge is an open-source macOS setup wizard for this workflow. It brings 
 
 [Setup guide](docs/SETUP.md) · [Download the release](https://github.com/skyerus/reader-bridge/releases/latest) · [Common questions](#common-questions) · [Compatibility](#compatibility)
 
-**Native Mac app in development:** Reader Bridge now includes a SwiftUI app with guided device pairing, a menu-bar status view, and a searchable local highlight archive. GitHub backup is optional in the app. The build bundles Python, so basic highlight setup needs no Terminal or Python installation. See [build and use the Mac app](docs/MAC-APP.md). The existing v0.1.0 release is the command-line setup; a notarized public app installer is not available yet.
+**Native Mac app in development:** Reader Bridge includes a SwiftUI app with guided device pairing and a searchable local highlight archive with book covers. Browse by book with covers sent automatically by the updated readers, or choose artwork from an EPUB or image. **iCloud Drive is the recommended backup option on Mac**; another folder or optional GitHub backup also works. The build bundles Python, so basic setup needs no Terminal, Python installation or GitHub account. See [build and use the Mac app](docs/MAC-APP.md). The existing v0.1.0 release is the command-line setup; a notarized public app installer is not available yet.
 
-![Reader Bridge for Mac showing a shared archive of public-domain sample highlights](docs/images/mac-highlights-dark.jpg)
+![Reader Bridge book library with offline covers and highlights](docs/images/mac-books-dark.png)
 
 The Mac app offers one-step-at-a-time setup, visual device guides, and a local archive. [See setup screenshots and instructions](docs/MAC-APP.md).
 
@@ -24,9 +24,10 @@ Reader Bridge packages that setup into a guided, resumable workflow. The wizard 
 
 | What you want | How it works |
 | --- | --- |
-| Keep Kindle and Xteink highlights together | KOReader highlights and CrossPoint clippings upload automatically to a local collector, then to your own private GitHub archive. Offline changes wait for a connection. |
+| Keep Kindle and Xteink highlights together | KOReader highlights and CrossPoint clippings upload automatically to a local collector. Add iCloud Drive, a backup folder or GitHub for another copy. Offline changes wait for a connection. |
 | Continue reading on the other device | Uses the existing KOReader-compatible CrossPoint Sync service. KOReader can sync automatically; Xteink uses manual **Upload Local** and **Apply Remote** actions. |
-| Bring your existing Kindle highlights | Imports English-format `My Clippings.txt` exports, including original creation dates, without needing an Amazon login in Reader Bridge. |
+| Bring your existing Kindle highlights | Import `My Clippings.txt` or Kindle highlights JSON in the Mac app, preserving recorded dates and cover links without an Amazon login in Reader Bridge. |
+| Browse the books behind your quotes | A visual book library with offline covers automatically sent by updated readers; portable exports include the artwork. |
 | Highlight across pages on the X4 Pro | Custom CrossPoint firmware keeps a selection active when you drag to a page edge, within the current chapter. |
 | Download the same EPUB to both readers | Optional Calibre-Web setup provides a local OPDS book catalog, preserving the downloaded EPUB bytes needed for binary progress matching. |
 | Run it from your Mac | A local collector and optional library run after login. Your Mac needs to be awake and reachable for those services; downloaded books remain readable offline. |
@@ -117,7 +118,7 @@ No. The shared archive contains the passages you saved on either reader. Each re
 
 ### Do I need a hosted server or a Readwise account?
 
-You can run the highlight collector and optional EPUB library on your Mac without renting a server. Reader Bridge does not require Readwise. It uses your GitHub account for the personal highlight archive and, by default, the separate CrossPoint Sync service for reading progress. The Mac-hosted services are unavailable while the Mac is asleep or shut down.
+You can run the highlight collector and optional EPUB library on your Mac without renting a server. Reader Bridge does not require Readwise or GitHub for the Mac app. Choose iCloud Drive or another folder for automatic snapshots; GitHub remains optional. Reading progress uses the separate CrossPoint Sync service by default. The Mac-hosted services are unavailable while the Mac is asleep or shut down.
 
 ### Can one script jailbreak my Kindle and install everything?
 
@@ -139,7 +140,7 @@ Uploads, retries and awake queue checks still consume some energy. Long-duration
 
 Use a trusted home LAN. Device highlight HTTP requests carry a dedicated bearer token without transport encryption. Do not forward these ports through your router or publish pairing files, queue files, backups, books or account exports.
 
-The shared archive collects excerpts; it does not synchronize underlines between rendering engines. Deleting a quote permanently suppresses the matching normalized title, author and passage. There is no restore command yet, and deletion does not rewrite Git history or remove annotations from the other device.
+The shared archive collects excerpts; it does not synchronize underlines between rendering engines. Deleting a quote suppresses the matching normalized title, author and passage. Snapshot restore preserves current deletions and edits. Earlier snapshots and Git history can still contain deleted text; deletion does not rewrite them or remove annotations from the other device.
 
 Custom firmware is built from the source revision in [firmware.json](firmware.json), with PlatformIO 6.2.0 and SdFat 2.3.1. This project does not redistribute prebuilt firmware, jailbreak bundles, DRM tools or books. First builds require internet access and may take several minutes. [Upstream sources and packaging notes](docs/UPSTREAM-SOURCES.md).
 

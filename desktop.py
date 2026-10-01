@@ -23,7 +23,11 @@ from urllib.error import HTTPError
 sys.dont_write_bytecode = True
 
 import setup
+import archive_backup
 from collector import Store, initialize, item_key
+from device_covers import stored_path
+from covers import CoverLibrary, book_key, epub_cover, MAX_EPUB, MAX_IMAGE
+from db import clean_cover_url
 
 MAX_REQUEST = 64 * 1024
 MAX_IMPORT = 16 * 1024 * 1024
@@ -194,7 +198,7 @@ class Desktop(setup.Bridge):
     def existing_sources(self):
         path = self.collector_data_dir() / 'inbox.sqlite3'
         with self.inbox_connection(path) as con:
-            return {row[0] for row in con.execute("SELECT DISTINCT source FROM inbox WHERE device != 'kindle-clippings-import'")}
+            return {row[0] for row in con.execute("SELECT DISTINCT source FROM inbox WHERE device NOT IN ('kindle-clippings-import', 'reader-bridge-archive-import')")}
 
     def owned(self, kind):
         path = self.agent_path(kind)
@@ -208,7 +212,8 @@ class Desktop(setup.Bridge):
             return (spec.get('Label') == setup.LABELS[kind]
                     and spec.get('WorkingDirectory') == str(directory)
                     and isinstance(args, list) and len(args) >= 2
-                    and (str(directory / 'collector.py') in args if kind == 'collector'
+                    and (args == [sys.executable, str(directory / 'archive_backup.py'), '--state-dir', str(directory)] if kind == 'cloud_backup'
+                         else str(directory / 'collector.py') in args if kind == 'collector'
                          else args[0] == str(directory / 'venv/bin/cps')))
         except (OSError, ValueError, plistlib.InvalidFileException):
             return False
@@ -322,7 +327,7 @@ class Desktop(setup.Bridge):
             return
         target = self.app / 'collector'
         self.save()
-        for filename in ('collector.py', 'db.py'):
+        for filename in ('collector.py', 'db.py', 'device_covers.py'):
             self.install_file(target / filename, (setup.SOURCE / filename).read_bytes())
         directory, _ = initialize(target / 'data')
         Store(directory / 'inbox.sqlite3')
@@ -355,17 +360,77 @@ class Desktop(setup.Bridge):
                 if key in deleted:
                     continue
                 if key not in rows:
-                    rows[key] = {'id': key, 'title': item['book_title'], 'author': item['author'], 'text': item['text'], 'source': source, 'created_at': item.get('created_at', '')}
+                    rows[key] = {'id': key, 'title': item['book_title'], 'author': item['author'], 'text': item['text'], 'source': source, 'created_at': item.get('created_at', ''), 'book_id': book_key(item['book_title'], item['author']), 'cover_url': clean_cover_url(item.get('cover_url')), 'cover_path': ''}
                 else:
+                    if not rows[key]['cover_url']:
+                        rows[key]['cover_url'] = clean_cover_url(item.get('cover_url'))
                     recorded = highlight_date(item.get('created_at', ''))
                     previous = highlight_date(rows[key]['created_at'])
                     # A duplicate without a date must not hide a recorded one.
                     # Keep the earliest known creation date of the same passage.
                     if recorded and (previous is None or recorded < previous):
                         rows[key]['created_at'] = item['created_at']
+            device_covers = {}
+            if con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='book_covers'").fetchone():
+                device_covers = {key: stored_path(path.parent, digest, extension)
+                                 for key, digest, extension in con.execute('SELECT book_key,sha256,extension FROM book_covers')}
+            by_book = {row['book_id']: row['cover_url'] for row in rows.values() if row['cover_url']}
+            for row in rows.values():
+                row['cover_url'] = by_book.get(row['book_id'], '')
+                row['cover_path'] = device_covers.get(row['book_id'], '')
             return sorted(rows.values(), key=highlight_sort_key), pending
 
-    def status(self, query=''):
+    def cloud_backup_status(self):
+        config = self.state.get('cloud_backup', {})
+        receipt_path = setup.guarded(self.app / 'cloud_backup/receipt.json')
+        receipt = {}
+        try:
+            if receipt_path.is_file():
+                receipt = json.loads(receipt_path.read_text())
+        except (OSError, ValueError):
+            pass
+        checked = highlight_date(receipt.get('checked_at', ''))
+        if config.get('enabled') and (checked is None or (datetime.now(timezone.utc) - checked).total_seconds() > 180):
+            receipt.setdefault('error', 'Waiting for the background backup service. If this persists, set up the backup folder again.')
+        return {'enabled': bool(config.get('enabled')), 'provider': config.get('provider', 'icloud'),
+                'folder': config.get('destination', ''), 'saved_at': receipt.get('saved_at', ''),
+                'error': receipt.get('error', ''), 'cloud_upload_verified': False}
+
+    def configure_cloud_backup(self, provider, folder):
+        if sys.platform != 'darwin':
+            raise setup.SetupError('Use archive_backup.py with your scheduler on this platform.')
+        self.stable_installation()
+        if provider not in ('icloud', 'folder'):
+            raise setup.SetupError('Choose iCloud Drive or a backup folder.')
+        folder = setup.guarded(Path(text_arg(folder, 'backup folder')).expanduser())
+        if not folder.is_dir():
+            raise setup.SetupError('Choose an available folder first.')
+        if provider == 'icloud':
+            cloud = setup.guarded(Path.home() / 'Library/Mobile Documents/com~apple~CloudDocs')
+            if not cloud.is_dir() or not (folder == cloud or cloud in folder.parents):
+                raise setup.SetupError('Choose a folder in iCloud Drive. Enable iCloud Drive in System Settings if it is unavailable.')
+        if folder == self.app or self.app in folder.parents or self.collector_data_dir() == folder or self.collector_data_dir() in folder.parents:
+            raise setup.SetupError('Choose a backup folder outside the live app data.')
+        self.assert_ownership('cloud_backup')
+        self.assert_loaded_ownership('cloud_backup')
+        target = setup.guarded(self.app / 'cloud_backup')
+        install_id = self.state.get('backup_installation') or __import__('uuid').uuid4().hex
+        destination = setup.guarded(folder / 'Reader Bridge Backups' / install_id)
+        destination.mkdir(mode=0o700, parents=True, exist_ok=True)
+        config = {'database': str(self.collector_data_dir() / 'inbox.sqlite3'), 'app':str(self.app), 'destination':str(destination)}
+        if not Path(config['database']).is_file():
+            raise setup.SetupError('Start your local bridge before enabling backup.')
+        # First prove the selected destination works, then enable background work.
+        archive_backup.snapshot(config['database'], self.app, destination, target)
+        self.stop_owned('cloud_backup')
+        self.install_file(target / 'archive_backup.py', (setup.SOURCE / 'archive_backup.py').read_bytes())
+        setup.atomic_write(target / 'config.json', archive_backup.encode(config))
+        self.state['backup_installation'] = install_id
+        self.state['cloud_backup'] = {**self.state.get('cloud_backup', {}), 'enabled':True, 'provider':provider, 'destination':str(destination)}
+        self.save()
+        self.launch('cloud_backup', [sys.executable, target / 'archive_backup.py', '--state-dir', target], target)
+
+    def status(self, query='', book_id=''):
         existing, descriptor = self.existing()
         service = {'port': existing['port'], 'archive': existing['archive']} if existing['connected'] else self.state.get('collector', {})
         kindle = self.state.get('kindle', {})
@@ -390,6 +455,23 @@ class Desktop(setup.Bridge):
             except (OSError, ValueError, sqlite3.Error, setup.SetupError):
                 pass
         count = len(rows)
+        try:
+            covers = CoverLibrary(self.app)
+            for row in rows:
+                metadata = covers.metadata(row['title'], row['author'])
+                row['cover_path'] = metadata['cover_path'] or row['cover_path']
+                row['cover_url'] = metadata['cover_url'] or row['cover_url']
+        except (OSError, ValueError, setup.SetupError):
+            warnings.append('Covers could not be read. Your highlights are still available.')
+        books = {}
+        for row in rows:
+            key = row['book_id']
+            if key not in books:
+                books[key] = {k: row[k] for k in ('title', 'author', 'cover_url', 'cover_path')}
+                books[key].update({'id': key, 'count': 0})
+            books[key]['count'] += 1
+        if book_id:
+            rows = [row for row in rows if row['book_id'] == book_id]
         if query:
             needle = query.casefold()
             rows = [row for row in rows if any(needle in row[key].casefold() for key in ('title', 'author', 'text'))]
@@ -436,10 +518,11 @@ class Desktop(setup.Bridge):
         if service and not healthy:
             warnings.append('Collector is stopped or unreachable. Readers retain pending uploads until it is available.')
         mode = 'github' if service.get('archive') and not service.get('backup_disabled') else 'local'
-        return {'existing_setup': existing, 'service': {'installed': existing['connected'] or self.owned('collector'), 'healthy': healthy, 'port': port, 'mode': mode, 'archive': service.get('archive', '') if mode == 'github' else '', 'pending_backup': pending if mode == 'github' else 0},
+        return {'cloud_backup': self.cloud_backup_status(), 'existing_setup': existing, 'service': {'installed': existing['connected'] or self.owned('collector'), 'healthy': healthy, 'port': port, 'mode': mode, 'archive': service.get('archive', '') if mode == 'github' else '', 'pending_backup': pending if mode == 'github' else 0},
                 'kindle': {'paired': bool(kindle.get('installed')), 'connected': bool(kindle.get('mount') and any((Path(kindle['mount']) / p / 'reader.lua').is_file() for p in ('koreader', '.adds/koreader'))), 'mount': kindle.get('mount', '')},
                 'xteink': {'paired': bool(xteink.get('paired')), 'firmware_staged': bool(xteink.get('firmware_staged')), 'url': xteink.get('device_url') or ''},
                 'mounts': mounts, 'highlights': rows[:HIGHLIGHTS_LIMIT], 'highlight_count': count, 'highlights_matches': len(rows), 'highlights_limit': HIGHLIGHTS_LIMIT,
+                'books': sorted(books.values(), key=lambda b: (b['title'].casefold(), b['author'].casefold())),
                 'highlights_order': 'newest_first' if undated < len(rows) else 'book_title', 'highlights_undated': undated,
                 'progress_verified': bool(self.state.get('progress', {}).get('verified')), 'endpoint': endpoint or (addresses[0] if addresses else ''), 'addresses': addresses, 'warnings': warnings,
                 'library': {'installed': self.owned('library'), 'port': library.get('port', 8083), 'books': library.get('books', '')}}
@@ -507,12 +590,100 @@ class Desktop(setup.Bridge):
                 result = json.loads(setup.http(f'http://127.0.0.1:{port}/v1/highlights', payload, headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}, maximum=4096, timeout=15))
                 if result.get('accepted') != [row['id']]:
                     raise setup.SetupError('Collector did not acknowledge every import. Retry safely; duplicates are ignored.')
+        elif command == 'import_archive':
+            path = setup.guarded(Path(text_arg(args.get('path'), 'archive file')).expanduser())
+            if not path.is_file() or path.stat().st_size > MAX_EXPORT:
+                raise setup.SetupError('Choose a JSON archive no larger than 64 MiB.')
+            from import_archive import parse_archive
+            try:
+                with path.open('rb') as source:
+                    data = source.read(MAX_EXPORT + 1)
+                if len(data) > MAX_EXPORT:
+                    raise ValueError('Choose a JSON archive no larger than 64 MiB.')
+                parsed, tombstones = parse_archive(data)
+            except ValueError as exc:
+                raise setup.SetupError(str(exc)) from exc
+            if not self.authenticated(self.collector_port()):
+                raise setup.SetupError('Start your local collector before importing highlights.')
+            token = (self.collector_data_dir() / 'token').read_text().strip()
+            # Restore deletion history first, before a replay could reintroduce a quote.
+            for offset in range(0, len(tombstones), 128):
+                batch = tombstones[offset:offset + 128]
+                try:
+                    result = json.loads(setup.http(f'http://127.0.0.1:{self.collector_port()}/v1/tombstones',
+                        json.dumps({'tombstones': batch}).encode(), headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}, maximum=16384, timeout=15))
+                except HTTPError as exc:
+                    if exc.code == 404:
+                        raise setup.SetupError('Update your collector before restoring this archive’s deletion history. No highlights were imported.') from exc
+                    raise
+                if result.get('accepted') != batch:
+                    raise setup.SetupError('Deletion-history import was interrupted. Retry safely before importing more highlights.')
+            # Bound payloads even when a record contains a long quote.
+            for entry in parsed:
+                row = entry['item']
+                payload = json.dumps({'source': entry['source'], 'device_id': 'reader-bridge-archive-import', 'highlights': [row]}).encode()
+                result = json.loads(setup.http(f'http://127.0.0.1:{self.collector_port()}/v1/highlights', payload,
+                    headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}, maximum=4096, timeout=15))
+                if result.get('accepted') != [row['id']]:
+                    raise setup.SetupError('Import was interrupted. Retry safely; duplicates are ignored.')
+            live, _ = self.live_rows()
+            live_ids = {row['id'] for row in live}
+            cover_rows = [entry['cover'] for entry in parsed if entry['item']['id'] in live_ids]
+            try:
+                saved, failed = CoverLibrary(self.app).import_rows(cover_rows)
+            except (OSError, ValueError, setup.SetupError):
+                saved, failed = 0, len({book_key(r['title'], r['author']) for r in cover_rows})
+            extra['import_result'] = {'highlights': len({e['item']['id'] for e in parsed} & live_ids), 'covers': saved, 'unavailable': failed}
+        elif command == 'cache_covers':
+            rows = self.status()['books']
+            try:
+                saved, failed = CoverLibrary(self.app).import_rows(rows)
+            except (OSError, ValueError, setup.SetupError) as exc:
+                raise setup.SetupError('Covers could not be saved. Check the app folder permissions and retry.') from exc
+            extra['import_result'] = {'highlights': 0, 'covers': saved, 'unavailable': failed}
+        elif command == 'set_cover':
+            title = text_arg(args.get('title'), 'book title')
+            author = args.get('author', '')
+            if not isinstance(author, str) or len(author.encode()) > 4096:
+                raise setup.SetupError('Author must be text no longer than 4096 bytes.')
+            live, _ = self.live_rows()
+            if book_key(title, author) not in {row['book_id'] for row in live}:
+                raise setup.SetupError('Select a book from your highlight library first.')
+            path = setup.guarded(Path(text_arg(args.get('path'), 'cover file')).expanduser())
+            try:
+                if not path.is_file() or path.stat().st_size > (MAX_EPUB if path.suffix.lower() == '.epub' else MAX_IMAGE):
+                    raise ValueError('Choose a JPEG or PNG up to 5 MiB, or an EPUB up to 128 MiB.')
+                data = epub_cover(path) if path.suffix.lower() == '.epub' else path.read_bytes()
+                covers = CoverLibrary(self.app)
+                covers.put(title, author, data)
+                covers.save()
+            except Exception as exc:
+                # File details and EPUB contents do not belong in user-facing errors.
+                message = str(exc) if type(exc) is ValueError else 'Could not read this cover. Choose a valid JPEG, PNG or EPUB.'
+                raise setup.SetupError(message) from exc
         elif command == 'export':
             path = setup.guarded(Path(text_arg(args.get('path'), 'export file')).expanduser())
             if path == self.app or self.app in path.parents or (self.app.parent / 'Reading Highlights') in path.parents or path.exists():
                 raise setup.SetupError('Choose a new export filename outside the private app directory.')
             rows, _ = self.live_rows()
-            data = (json.dumps(rows, ensure_ascii=False, indent=2) + '\n').encode()
+            try:
+                covers = CoverLibrary(self.app)
+                for row in rows:
+                    metadata = covers.metadata(row['title'], row['author'])
+                    row['cover_path'] = metadata['cover_path'] or row['cover_path']
+                    row['cover_url'] = metadata['cover_url'] or row['cover_url']
+                exported_rows = covers.export_rows(rows)
+            except (OSError, ValueError, setup.SetupError):
+                # Artwork is optional: it must never block the archive recovery path.
+                exported_rows = [{k: v for k, v in row.items() if k != 'cover_path'} for row in rows]
+                extra['export_warning'] = 'Highlights and deletion history exported. Cached covers could not be read and were omitted.'
+            database = self.collector_data_dir() / 'inbox.sqlite3'
+            tombstones = []
+            if database.exists():
+                with self.inbox_connection(database) as con:
+                    tombstones = sorted(row[0] for row in con.execute('SELECT quote_key FROM tombstones'))
+            archive = {'format': 'reader-bridge', 'version': 1, 'highlights': exported_rows, 'tombstones': tombstones}
+            data = (json.dumps(archive, ensure_ascii=False, indent=2) + '\n').encode()
             if len(data) > MAX_EXPORT:
                 raise setup.SetupError('Export exceeds 64 MiB. Preserve the inbox and use a database export tool.')
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -528,6 +699,32 @@ class Desktop(setup.Bridge):
         elif command == 'verify_progress':
             self.state['progress'] = {'verified': bool_arg(args.get('verified'), 'verified'), 'server': 'https://sync.crosspointreader.com'}
             self.save()
+        elif command == 'configure_cloud_backup':
+            self.configure_cloud_backup(args.get('provider', 'icloud'), args.get('folder'))
+        elif command == 'backup_now':
+            if not self.state.get('cloud_backup', {}).get('enabled'):
+                raise setup.SetupError('Choose a backup destination first.')
+            config = json.loads((self.app / 'cloud_backup/config.json').read_text())
+            try:
+                archive_backup.snapshot(self.collector_data_dir() / 'inbox.sqlite3', self.app, config['destination'], self.app / 'cloud_backup')
+            except (OSError, ValueError) as exc:
+                raise setup.SetupError('Backup could not finish. Check the destination and available space; previous backups are retained.') from exc
+        elif command == 'disable_cloud_backup':
+            self.stop_owned('cloud_backup')
+            path = self.agent_path('cloud_backup')
+            if self.owned('cloud_backup'):
+                self.backup(path)
+                path.unlink()
+            self.state.setdefault('cloud_backup', {})['enabled'] = False
+            self.state['cloud_backup'].pop('agent', None)
+            self.save()
+        elif command == 'restore_backup':
+            if not self.authenticated(self.collector_port()):
+                raise setup.SetupError('Start your local bridge before restoring a backup.')
+            try:
+                archive_backup.restore(text_arg(args.get('path'), 'backup file'), self.collector_data_dir() / 'inbox.sqlite3', self.app)
+            except (ValueError, OSError, KeyError, TypeError) as exc:
+                raise setup.SetupError('Backup could not be restored. Choose a downloaded Reader Bridge backup; existing data and recovery snapshots are retained.') from exc
         elif command == 'configure_backup':
             archive = text_arg(args.get('archive'), 'personal archive OWNER/REPO')
             create = bool_arg(args.get('create', False), 'create')
@@ -544,7 +741,7 @@ class Desktop(setup.Bridge):
             self.library(text_arg(args.get('books'), 'Calibre library folder'), port_arg(args.get('port', 8083)))
         else:
             raise setup.SetupError('Unknown desktop command.')
-        return {**self.status(), **extra}
+        return {**self.status(args.get('query', ''), args.get('book_id', '')), **extra}
 
 
 @contextlib.contextmanager
@@ -568,7 +765,7 @@ def execute(request, app=setup.DEFAULT_APP, agent_dir=None):
     if not isinstance(request, dict):
         raise setup.SetupError('Request must be a JSON object.')
     command = text_arg(request.get('command'), 'command')
-    commands = {'connect_existing', 'status', 'start_collector', 'stop_collector', 'pair_kindle', 'pair_xteink', 'import_clippings', 'export', 'verify_progress', 'configure_backup', 'disable_backup', 'install_library'}
+    commands = {'connect_existing', 'status', 'start_collector', 'stop_collector', 'pair_kindle', 'pair_xteink', 'import_clippings', 'import_archive', 'set_cover', 'cache_covers', 'export', 'verify_progress', 'configure_backup', 'disable_backup', 'install_library', 'configure_cloud_backup', 'disable_cloud_backup', 'backup_now', 'restore_backup'}
     if command not in commands:
         raise setup.SetupError('Unknown desktop command.')
     app = setup.guarded(Path(app).expanduser())
@@ -576,7 +773,10 @@ def execute(request, app=setup.DEFAULT_APP, agent_dir=None):
         query = request.get('query', '')
         if not isinstance(query, str) or len(query) > 1000 or '\x00' in query:
             raise setup.SetupError('Search must be text no longer than 1000 characters.')
-        return Desktop(app, agent_dir=agent_dir).status(query)
+        book_id = request.get('book_id', '')
+        if not isinstance(book_id, str) or (book_id and not re.fullmatch(r'[a-f0-9]{64}', book_id)):
+            raise setup.SetupError('Select a valid book.')
+        return Desktop(app, agent_dir=agent_dir).status(query, book_id)
     with mutation_lock(app):
         return Desktop(app, agent_dir=agent_dir).mutate(command, request)
 

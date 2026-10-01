@@ -248,7 +248,10 @@ struct OverviewView: View {
                     Text(status.highlightCount.formatted()).font(.system(size: 50, weight: .regular, design: .serif)).monospacedDigit()
                     Text(status.highlightCount == 1 ? "line worth keeping" : "lines worth keeping").font(.system(size: 16, design: .serif)).foregroundStyle(.secondary)
                 }
-                Label(status.service.mode == "github" ? "On this Mac · GitHub backup enabled" : "Stored on this Mac", systemImage: "internaldrive").font(.system(size: 12)).foregroundStyle(.secondary)
+                Label(status.cloudBackup?.enabled == true ? "On this Mac · Automatic snapshots enabled" : status.service.mode == "github" ? "On this Mac · GitHub backup enabled" : "Stored on this Mac", systemImage: "internaldrive").font(.system(size: 12)).foregroundStyle(.secondary)
+                if status.service.installed && status.cloudBackup?.enabled != true && status.service.mode != "github" {
+                    Button("Set up iCloud backup") { model.selection = .settings }.font(.callout)
+                }
                 if status.service.pendingBackup > 0, status.service.mode == "github" {
                     Text("\(status.service.pendingBackup) awaiting backup").font(.caption).foregroundStyle(.secondary)
                 }

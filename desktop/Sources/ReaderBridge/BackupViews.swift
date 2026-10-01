@@ -1,0 +1,86 @@
+import AppKit
+import SwiftUI
+
+struct CloudBackupView: View {
+    @EnvironmentObject var model: AppModel
+    let status: BridgeStatus
+    @State private var provider = "icloud"
+    private var backup: BridgeStatus.CloudBackup? { status.cloudBackup }
+
+    var body: some View {
+        Card(title: "Backup") {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "icloud").font(.system(size: 27, weight: .light)).foregroundStyle(teal)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(backup?.enabled == true ? "Automatic backups are on" : "Keep your reading safe")
+                        .font(.headline)
+                    Text("Highlights, dates and covers. No GitHub account needed.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            if backup?.enabled == true {
+                if let backup {
+                    Text(backup.provider == "icloud" ? "iCloud Drive" : "Backup folder").font(.callout.weight(.medium))
+                    if !backup.savedAt.isEmpty {
+                        Text("Saved \(HighlightPresentation.date(backup.savedAt))")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text(backup.provider == "icloud" ? "iCloud uploads your saved snapshots when online. Check Finder for upload status." : "Your folder’s sync app handles cloud uploads, if enabled.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    if !backup.error.isEmpty { Text(backup.error).font(.callout).foregroundStyle(.orange) }
+                    HStack {
+                        Button("Back up now") { Task { await model.perform("backup_now", activity: "Saving backup…", success: "Snapshot saved to your backup folder.") } }
+                        Button("Show backups") { NSWorkspace.shared.open(URL(fileURLWithPath: backup.folder)) }
+                        Menu("More") {
+                            Button("Use iCloud Drive…") { provider = "icloud"; chooseDestination() }
+                            Button("Use another folder…") { provider = "folder"; chooseDestination() }
+                            Button("Turn off automatic backup") { Task { await model.perform("disable_cloud_backup", activity: "Stopping backups…", success: "Automatic backup is off. Existing snapshots are kept.") } }
+                        }
+                    }
+                }
+            } else {
+                Picker("Save backups to", selection: $provider) {
+                    Text("iCloud Drive · Recommended").tag("icloud")
+                    Text("Another folder").tag("folder")
+                }.pickerStyle(.menu).frame(maxWidth: 360, alignment: .leading)
+                Button(provider == "icloud" ? "Set up iCloud backup…" : "Choose backup folder…", action: chooseDestination)
+                    .buttonStyle(.borderedProminent).tint(teal).disabled(!status.service.installed)
+                Text("Runs automatically, even after you quit the app. Earlier snapshots are kept.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Divider()
+            HStack {
+                Button("Restore a backup…", action: restore).disabled(!status.service.healthy)
+                Text("Adds missing highlights; keeps your current edits and deletions.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .disabled(model.busy)
+        .onAppear { provider = backup?.provider ?? "icloud" }
+    }
+
+    private func chooseDestination() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true; panel.canChooseFiles = false
+        panel.canCreateDirectories = true; panel.allowsMultipleSelection = false
+        panel.prompt = "Use for backups"
+        panel.message = provider == "icloud" ? "Choose iCloud Drive or a folder inside it." : "Choose a folder, external drive, or cloud-synced folder."
+        if provider == "icloud" {
+            panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs")
+        }
+        if panel.runModal() == .OK, let url = panel.url {
+            Task { await model.perform("configure_cloud_backup", ["provider": provider, "folder": url.path], activity: "Setting up backup…", success: "Automatic backup is on. Your first snapshot is saved.") }
+        }
+    }
+
+    private func restore() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false; panel.canChooseFiles = true; panel.allowsMultipleSelection = false
+        panel.prompt = "Restore highlights"
+        panel.message = "Choose a .readerbridge snapshot. A recovery copy is saved before restoring."
+        if let folder = backup?.folder, !folder.isEmpty { panel.directoryURL = URL(fileURLWithPath: folder) }
+        if panel.runModal() == .OK, let url = panel.url {
+            Task { await model.perform("restore_backup", ["path": url.path], activity: "Restoring archive…", success: "Backup restored. Your current edits and deletions were kept.") }
+        }
+    }
+}

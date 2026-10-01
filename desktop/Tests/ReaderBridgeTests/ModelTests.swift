@@ -26,6 +26,18 @@ final class ModelTests: XCTestCase {
         let highlight = try XCTUnwrap(Backend.decode(fixture()).highlights.first)
         XCTAssertTrue(highlight.matches("BOOK")); XCTAssertTrue(highlight.matches("ursula")); XCTAssertTrue(highlight.matches("worth")); XCTAssertFalse(highlight.matches("unrelated"))
     }
+    func testFolderBackupDecodesIndependentlyOfGitHubMode() throws {
+        var response = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture()) as? [String: Any])
+        var data = try XCTUnwrap(response["data"] as? [String: Any])
+        data["cloud_backup"] = ["enabled": true, "provider": "icloud", "folder": "/fixture/backups", "saved_at": "2026-10-01T12:39:00Z", "error": "", "cloud_upload_verified": false] as [String: Any]
+        response["data"] = data
+        let status = try Backend.decode(JSONSerialization.data(withJSONObject: response))
+        XCTAssertEqual(status.service.mode, "local")
+        XCTAssertEqual(status.cloudBackup?.provider, "icloud")
+        XCTAssertEqual(status.cloudBackup?.enabled, true)
+        XCTAssertEqual(status.cloudBackup?.cloudUploadVerified, false)
+        XCTAssertNil(try Backend.decode(fixture()).cloudBackup)
+    }
     func testFailureResponseCannotBecomeSuccess() {
         XCTAssertThrowsError(try Backend.decode(Data(#"{"ok":false,"error":"Connect your reader first."}"#.utf8))) { error in XCTAssertEqual(error.localizedDescription, "Connect your reader first.") }
         XCTAssertThrowsError(try Backend.decode(Data(#"{"ok":true}"#.utf8)))
@@ -47,4 +59,22 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(connected.setupStep, 4)
         XCTAssertNil(try Backend.decode(fixture()).existingSetup)
     }
+    func testCoverAndBookMetadataDecodeWithoutBreakingOlderArchives() throws {
+        var response = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture()) as? [String: Any])
+        var data = try XCTUnwrap(response["data"] as? [String: Any])
+        var highlights = try XCTUnwrap(data["highlights"] as? [[String: Any]])
+        highlights[0]["cover_path"] = "/private/tmp/cover.png"
+        highlights[0]["cover_url"] = "https://m.media-amazon.com/images/I/cover.jpg"
+        highlights[0]["book_id"] = "book-key"
+        data["highlights"] = highlights
+        data["books"] = [["id": "book-key", "title": "Book", "author": "Writer", "count": 8, "cover_path": "/private/tmp/cover.png"]]
+        response["data"] = data
+        let decoded = try Backend.decode(JSONSerialization.data(withJSONObject: response))
+        XCTAssertEqual(decoded.highlights[0].coverPath, "/private/tmp/cover.png")
+        XCTAssertEqual(decoded.highlights[0].bookId, "book-key")
+        XCTAssertEqual(decoded.books?.first?.count, 8)
+        XCTAssertEqual(decoded.books?.first?.matches("writer"), true)
+        XCTAssertNil(try Backend.decode(fixture()).highlights[0].coverPath)
+    }
+
 }

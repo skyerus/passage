@@ -21,7 +21,7 @@ from urllib import request, parse, error
 
 SOURCE = Path(__file__).resolve().parent
 DEFAULT_APP = Path.home() / 'Library/Application Support/Reader Bridge'
-LABELS = {'collector': 'com.readerbridge.collector', 'library': 'com.readerbridge.library'}
+LABELS = {'collector': 'com.readerbridge.collector', 'library': 'com.readerbridge.library', 'cloud_backup': 'com.readerbridge.backup'}
 CALIBRE_WEB = '0.6.27'
 BUILD_OVERRIDE = b'[env:x4pro]\nlib_deps =\n  ${base.lib_deps}\n  greiman/SdFat @ 2.3.1\n'
 
@@ -238,7 +238,7 @@ class Bridge:
             raise SetupError('Archive highlights.json has an incompatible schema; no service installed.')
         self.save()
         target = self.app / 'collector'
-        for filename in ('collector.py', 'db.py'):
+        for filename in ('collector.py', 'db.py', 'device_covers.py'):
             self.install_file(target / filename, (SOURCE / filename).read_bytes())
         run([sys.executable, '-B', str(target / 'collector.py'), 'init', '--state-dir', str(target / 'data')])
         self.state['collector'] = {**self.state.get('collector', {}), 'archive': archive, 'branch': branch, 'port': port}

@@ -53,6 +53,24 @@ Only IDs explicitly acknowledged by the collector are marked as stored. “Store
 on the collector” means saved durably on the Mac, not yet published to GitHub.
 Your configured collector handles GitHub publication separately.
 
+## Automatic book covers
+
+The first connected sync also queues a cover for each highlighted book that is
+still available. Its background child process extracts the original embedded
+JPEG or PNG (up to 5 MiB) through KOReader's document engine, preserving colour
+and resolution even on a monochrome Kindle. It sends those bytes to the same
+collector using the same token. Only a successful durable acknowledgement completes the cover job.
+Transient failures retry independently and cannot block other books or quotes.
+No-artwork results are remembered only for that source file revision. Changing
+the collector requeues artwork for that destination. Cover transfers stop with
+the same suspend, close and Wi-Fi rules as highlights.
+
+Install an updated collector that supports `/v1/covers`; an older collector
+returns 404 and the artwork stays queued. The Mac retains its first automatic
+cover for a book, while a user-selected cover takes precedence. Staged images
+are temporary; book files and their existing covers are never modified. Books
+whose engine does not expose an embedded JPEG/PNG retain a placeholder.
+
 ## Upgrade and deletion tracking
 
 Queue migration preserves all old `sent` and `pending` revisions and adds a
@@ -92,3 +110,11 @@ revision is accepted. Confirm the reader remains interactive with the Mac
 unreachable and the quote remains queued. Back up KOReader settings before
 installing; remove the plugin folder and restart to uninstall. Keep its queue
 file until all pending highlights are safely imported.
+
+Cover acceptance: use a book absent from the Mac archive, save its first
+highlight without importing artwork, and verify both quote and cover arrive.
+Create another highlight and confirm the cover job stays acknowledged. Repeat
+with the Mac offline, restart KOReader, then reconnect; verify queued artwork
+arrives without a manual Sync action. The cover queue and mocked plugin-boundary
+suites run with `lua tests/covers_test.lua` and `lua tests/covers_lifecycle_test.lua`
+from this plugin directory. Physical Kindle acceptance remains a release gate.

@@ -77,7 +77,7 @@ def main():
         (resources / 'python').rename(resources / 'runtime')
         bridge = resources / 'bridge'
         bridge.mkdir()
-        for filename in ('desktop.py', 'setup.py', 'collector.py', 'db.py', 'import_clippings.py', 'firmware.json', 'LICENSE'):
+        for filename in ('desktop.py', 'setup.py', 'collector.py', 'db.py', 'archive_backup.py', 'import_clippings.py', 'import_archive.py', 'covers.py', 'device_covers.py', 'firmware.json', 'LICENSE'):
             shutil.copy2(ROOT / filename, bridge / filename)
         shutil.copytree(ROOT / 'koreader', bridge / 'koreader', ignore=shutil.ignore_patterns('__pycache__', '*.pyc', 'tests'))
         shutil.copytree(ROOT / 'docs', resources / 'docs')
@@ -88,8 +88,8 @@ def main():
         info = {
             'CFBundleName': 'Reader Bridge', 'CFBundleDisplayName': 'Reader Bridge',
             'CFBundleIdentifier': 'com.readerbridge.desktop', 'CFBundleExecutable': 'ReaderBridge',
-            'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.3.2',
-            'CFBundleVersion': '6', 'LSMinimumSystemVersion': '13.0',
+            'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.5.0',
+            'CFBundleVersion': '11', 'LSMinimumSystemVersion': '13.0',
             'CFBundleIconFile': 'ReaderBridge', 'NSHighResolutionCapable': True,
             'NSLocalNetworkUsageDescription': 'Reader Bridge pairs your readers and receives their highlights on your home network.',
             'NSRemovableVolumesUsageDescription': 'Reader Bridge installs its plugin and pairing settings on the reader you choose.',
@@ -117,9 +117,10 @@ def main():
         response = json.loads(smoke.stdout)
         if not response.get('ok') or isolated_data.exists():
             raise RuntimeError('Bundled status smoke failed or created data during read-only startup')
+        run('codesign', '--verify', '--deep', '--strict', staging)
         staging.rename(app)
     if args.dmg:
-        dmg = output / f'Reader-Bridge-0.3.2-{architecture}.dmg'
+        dmg = output / f'Reader-Bridge-{info["CFBundleShortVersionString"]}-{architecture}.dmg'
         if dmg.exists():
             parser.error('DMG destination exists; choose a fresh output directory')
         with tempfile.TemporaryDirectory(prefix='reader-bridge-dmg-') as directory:

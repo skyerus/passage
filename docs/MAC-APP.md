@@ -32,7 +32,7 @@ Setup resumes from saved service and pairing state. A saved pairing is not proof
 
 The app recognizes an earlier installation in `~/Library/Application Support/Reading Highlights` after checking its LaunchAgent, listening process, and authenticated collector response. Choose **Use existing setup** in Overview or Setup. There is no need to change the port or pair your readers again.
 
-This saves a connection in the app's own settings. The original service, credentials, archive, and device settings stay where they are. Highlights, search, import, and export use the existing collector. Its original LaunchAgent continues to manage startup and GitHub backup; the app does not offer stop or backup-reconfiguration controls for that service. Previously configured reading-progress sync and book-library services remain separate.
+This saves a connection in the app's own settings. The original service, credentials, archive, and device settings stay where they are. Highlights, search, import, and export use the existing collector. Its original LaunchAgent continues to manage startup and GitHub backup; the app does not offer stop or GitHub-reconfiguration controls for that service. You can add iCloud Drive or folder backups independently. Previously configured reading-progress sync and book-library services remain separate.
 
 The archive shows live highlights held in the collector's local inbox. Older quotes that exist only in a GitHub archive are not downloaded automatically. “Highlights received” indicates upload records from a reader, not that the reader is currently online or that reading-progress sync has been tested.
 
@@ -44,7 +44,7 @@ The menu-bar item reports the collector's status and opens the main window. The 
 
 Highlights with recorded creation dates appear newest first. Undated highlights follow alphabetically by book, author and passage; an entirely undated archive is labeled **By book · dates unavailable**. Importing old quotes does not make them recent, and the app does not invent their original dates. Equivalent passages retain the earliest known recorded date across sources. Timezone offsets are normalized; dates without a timezone use their recorded wall time as UTC for deterministic ordering.
 
-In **Highlights**, select a quote to read or copy it. Search covers book titles, authors, and quote text. The archive menu beside search contains Kindle-clippings import and JSON export. Use **⌘F** to search, **⌘1–4** to move between sections, and **⌘R** to refresh. Routine status checks run quietly in the background.
+In **Highlights**, select a quote to read or copy it. Search covers book titles, authors, and quote text. The archive menu beside search contains highlight import, missing-cover downloads, and portable export. Switch between **Books** and **Highlights** with the control beside search. Click a book to see only its quotes; choose **All books** to return. Use **⌘F** to search, **⌘1–4** to move between sections, and **⌘R** to refresh. Routine status checks run quietly in the background.
 
 ![Reader Bridge highlight archive with public-domain sample quotes](images/mac-highlights-dark.jpg)
 
@@ -52,11 +52,43 @@ Sample archive shown; these screenshots contain no personal highlights or connec
 
 The interface follows the Mac's light or dark appearance and accessibility preferences. Builds made with a current Apple SDK use native Liquid Glass controls on macOS 26 and later; older systems use standard materials. Quote-reading surfaces stay opaque for readability.
 
-Highlights remain local by default under `~/Library/Application Support/Reader Bridge`. The app never creates a GitHub repository automatically. GitHub backup is optional under Settings and currently requires the GitHub CLI signed into your account; you must explicitly select your archive and choose whether to create it. Local records remain available when backup is disabled or GitHub is unavailable. Export JSON for a portable copy.
+Highlights remain local under `~/Library/Application Support/Reader Bridge`. In **Settings → Backup**, choose **Set up iCloud backup**, select iCloud Drive, and confirm the folder. No GitHub account or Terminal is needed. If iCloud Drive is unavailable, enable it in System Settings or choose **Another folder**, including a folder managed by your preferred cloud service.
+
+The background service checks for changes every minute and saves a new `.readerbridge` snapshot only when the archive changes. It starts at login and continues after you quit the app. Backups contain highlights, original recorded dates, notes, deletion history and locally available covers. Credentials, pairing tokens, EPUB books and reading-progress service settings are excluded. Covers held only as remote URLs must be downloaded before they can be included as images.
+
+Each Mac uses its own backup subfolder. Snapshots are immutable and earlier versions are retained; they consume storage until you remove old snapshots yourself. A missing drive, full destination or offline cloud service does not block uploads from your readers. The app reports **saved to the folder**, not confirmed cloud delivery. [macOS manages iCloud Drive uploads](https://support.apple.com/guide/mac-help/store-files-in-icloud-drive-mchle5a61431/mac); use Finder to check upload status. A local save can succeed while cloud quota or connectivity delays the upload.
+
+To recover on another Mac, start the local bridge, then choose **Settings → Backup → Restore a backup** and select a downloaded snapshot. Restore merges missing records and covers, preserves existing edits and deletions, and first saves a local recovery snapshot. Pair the readers again on a new installation. Restore does not bring back intentionally deleted highlights or reinstall firmware. Limits are 256 MiB per uncompressed snapshot, 64 MiB of archive metadata and 5 MiB per cover. Keep a separate copy of large book libraries.
+
+**GitHub remains optional**, alongside folder backups. Under Optional extras, sign in through the GitHub CLI and explicitly choose your private repository. The app never creates a repository without your selection. Existing collector installations keep their GitHub configuration while using folder backups. GitHub currently archives highlight text, dates and cover URLs; the folder snapshot also includes local cover image bytes. The native app is macOS-only; these changes do not introduce a Windows or Linux app.
 
 The optional Calibre-Web library uses a Calibre library folder containing `metadata.db`. This advanced step installs Calibre-Web and downloads its dependencies. See [library setup](SETUP.md#5-add-the-home-book-library) for its generated administrator credentials and reader account setup.
 
 The Mac can sleep normally; it will not receive uploads while asleep. Readers keep their offline queues. The app does not change device Wi-Fi or sleep policies. KOReader uploads when already connected; the Xteink firmware manages its own brief upload attempts. Highlight text is collected into one archive; underlines are not mirrored into the other device's book.
+
+## Book covers and importing highlights
+
+![Book library with labeled sample artwork](images/mac-books-dark.png)
+
+Sample artwork shown; screenshots contain no personal highlights.
+
+With the updated Shared Highlights plugin and Xteink firmware, the first highlight from a book also queues its cover automatically. Both readers send the original embedded JPEG/PNG, preserving colour even on a monochrome screen. No cover import is needed. The Mac stores the artwork locally and uses it for matching title/author entries. Reader highlights upload first; artwork failures retry separately. Books with no supported cover keep a placeholder, and you can choose custom artwork below.
+
+The transfer reuses the highlight connection and credentials. It does not keep Wi-Fi on or wake the Mac. Updating Reader Bridge alone does not update software already installed on readers: reinstall the bundled KOReader plugin and the matching firmware as part of the upgrade. Device-delivered covers are included in portable exports; GitHub quote backup does not contain local images.
+
+For older archives, in **Highlights → … → Import highlights**, choose one of:
+
+- **My Clippings.txt** from a Kindle. Text and recorded dates are imported; this file does not contain covers.
+- **Kindle highlights JSON** containing `book_title`, `author`, `highlight`, and optional `created_at` and `cover_url` fields. Existing `kindle-highlights` archives work directly.
+- **Reader Bridge export JSON**, including quotes, recorded dates, cached covers, and deletion history.
+
+For archives with cover links, Reader Bridge downloads a cover once per book during import, then displays it from the Mac’s local cache. Refreshing or browsing the archive does not contact image servers. Supported remote cover sources are Amazon’s public image CDNs and Open Library’s cover service, over HTTPS. Only the image URL is requested; quote text is not sent. Unsupported links and failed downloads do not prevent highlights from being imported. Choose **Download missing covers** to retry. Reader Wi-Fi and sleep behavior are unchanged.
+
+To add or replace a cover, right-click a book and choose **Change cover**, or use **Add cover / Change cover** above a quote. Choose a JPEG or PNG (up to 5 MiB), or that book’s DRM-free EPUB (up to 128 MiB). Reader Bridge reads its declared EPUB 2 or EPUB 3 cover without extracting the book onto disk. The image applies to all existing and future highlights with the same normalized book title and author. A book with no image gets a readable placeholder; Reader Bridge does not guess editions or silently search third-party catalogs by title.
+
+**Export highlights & covers** creates a versioned JSON archive. It embeds each cached cover once per book, includes deletion hashes, and omits local file paths. Importing it on another Mac does not need a cover download. It accepts older list-format Reader Bridge exports too. If the local cover cache is damaged, export still saves highlights and deletion history and reports that artwork was omitted. Deleted quotes stay deleted when a new-format archive is restored into an updated collector; an older collector must be updated before it can accept deletion history. Imports preserve recorded creation dates and do not invent dates for undated quotes.
+
+Covers you add manually are stored in the app’s local cover library and portable exports. GitHub quote backup preserves remote `cover_url` metadata; it does not upload local cover images. Keep a portable export if you want to move the complete library. The app does not scrape Amazon directly or import an unexamined Amazon personal-data ZIP; the supported JSON format is a separate input.
 
 ## Build the app
 
@@ -88,6 +120,10 @@ Build with `--sign-identity 'Developer ID Application: …'` on the matching arc
 Test both upgrade and fresh install, including Mac logout/login, service restart, port conflicts, unavailable network/GitHub, incomplete pairing, queued uploads after reconnecting, and deletion replay. Intel builds and the full physical first-run walkthrough must be independently verified before claiming support.
 
 The app package bundles third-party runtime notices under Resources. Firmware remains a source build until its separate dependency redistribution review is complete.
+
+## Cover-library development build 0.4.0
+
+The cover library adds a book grid, thumbnails in the quote list, a cover in the reading pane, explicit cover replacement, and offline portable archives. The development build passed 92 Python tests and 25 Swift tests. Automated coverage includes safe image URLs/redirects, EPUB 2/3 covers, per-book deduplication, malformed imports, failed-download retry, recorded dates, deletion-history transfer, book filtering before the 500-quote display limit, and stale selection responses. Public distribution still requires the signing, notarization and clean-install checks above.
 
 ## Ordering correction in 0.3.1
 
