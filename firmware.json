@@ -3,7 +3,7 @@
   "devices": {
     "xteink_x4_pro": {
       "repository": "https://github.com/skyerus/crosspoint-reader.git",
-      "commit": "77b30d58e260ce5405234f84fe240833b726df9d",
+      "commit": "d03f6e6a2afbdbdf99d35fcb91d35a847166f514",
       "platformio": "6.2.0",
       "environment": "x4pro",
       "filename": "reader-bridge-x4-pro.bin"

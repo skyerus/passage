@@ -15,7 +15,7 @@ import threading
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from db import merge, quote_key, validate_tombstones
+from db import merge, preserve_creation_date, quote_key, validate_tombstones
 
 MAX_BODY = 1024 * 1024
 LOG = logging.getLogger("collector")
@@ -114,6 +114,9 @@ class Store:
                             if record.get("deleted") else ([key] if key else []))
                     con.executemany("INSERT OR IGNORE INTO tombstones(quote_key) VALUES(?)", [(k,) for k in keys])
                     record = {"id": record["id"], "deleted": True}
+                elif previous and not was_deleted:
+                    # Older clients may replay an undated copy after enrichment.
+                    preserve_creation_date(record, json.loads(previous[0]))
                 data = json.dumps(record, ensure_ascii=False, sort_keys=True)
                 revision = hashlib.sha256(data.encode()).hexdigest()
                 con.execute("INSERT INTO inbox(source,device,id,payload,revision) VALUES(?,?,?,?,?) ON CONFLICT(source,device,id) DO UPDATE SET payload=excluded.payload,revision=excluded.revision", identity + (data, revision))
@@ -167,7 +170,9 @@ def archive_rows(rows):
         item = json.loads(payload)
         if item.get("deleted"):
             continue
-        quotes.append({"highlight": item["text"], "book_title": item["book_title"], "author": item["author"], "cover_url": ""})
+        quote = {"highlight": item["text"], "book_title": item["book_title"], "author": item["author"], "cover_url": ""}
+        preserve_creation_date(quote, item)
+        quotes.append(quote)
     return quotes
 
 

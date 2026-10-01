@@ -24,4 +24,11 @@ final class ArchivePresentationTests: XCTestCase {
         XCTAssertEqual(HighlightPresentation.source(""), "Source not recorded")
         XCTAssertEqual(HighlightPresentation.date("saved offline"), "saved offline")
     }
+    func testRecordedWallDatesFormatWithoutInventingTimezone() {
+        let day = HighlightPresentation.date("2024-04-07")
+        XCTAssertNotEqual(day, "2024-04-07")
+        XCTAssertEqual(HighlightPresentation.date("2024-04-07T00:01:00"), day)
+        XCTAssertEqual(HighlightPresentation.date("2024-04-07 23:59:59"), day)
+        XCTAssertEqual(HighlightPresentation.date("2024-02-31 12:00:00"), "2024-02-31 12:00:00")
+    }
 }

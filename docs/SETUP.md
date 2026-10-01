@@ -124,7 +124,7 @@ Run the wizard's progress step (`python3 setup.py progress`) for its device chec
 4. Open the identical EPUB in KOReader with Wi-Fi connected; sync if needed. Confirm the paragraph matches, allowing for a different page layout.
 5. Read onward in KOReader and close the book so auto sync can send its position. On CrossPoint choose **More → Sync Progress → Apply Remote**. Confirm the new passage.
 
-**Checkpoint:** Both directions work on the same EPUB. Do not use percentage equality as the only test. **Upload Local** sends the Xteink position; **Apply Remote** takes the server's position. CrossPoint Smart sync prefers the furthest completion, which can be wrong when you intentionally reread earlier text. [CrossPoint progress instructions](https://github.com/skyerus/crosspoint-reader/blob/77b30d58e260ce5405234f84fe240833b726df9d/USER_GUIDE.md#367-koreader-sync-quick-setup).
+**Checkpoint:** Both directions work on the same EPUB. Do not use percentage equality as the only test. **Upload Local** sends the Xteink position; **Apply Remote** takes the server's position. CrossPoint Smart sync prefers the furthest completion, which can be wrong when you intentionally reread earlier text. [CrossPoint progress instructions](https://github.com/skyerus/crosspoint-reader/blob/d03f6e6a2afbdbdf99d35fcb91d35a847166f514/USER_GUIDE.md#367-koreader-sync-quick-setup).
 
 ## Daily use and limits
 
@@ -133,6 +133,7 @@ Run the wizard's progress step (`python3 setup.py progress`) for its device chec
 - **Delete deliberately:** A deletion sends a permanent archive tombstone for the matching title, author, and passage after normalization. Stale uploads and later Amazon refreshes cannot resurrect that quote; highlighting exactly the same passage again does not restore it. There is no restore command in this version. It does not remove an annotation from the other device or erase Git history, backups, or previously sent messages.
 - **Progress:** Manually Upload Local when leaving Xteink and Apply Remote when returning. The Mac does not host the default progress server; internet access is still needed for that service.
 - **Existing Amazon highlights:** The optional `import-clippings` command imports English-format highlights from a `My Clippings.txt` file you supply. It is separate from KOReader capture. Keep Amazon account data and purchased book files out of the public repository.
+- **Creation dates:** Kindle Clippings imports retain “Added on”, and KOReader sends the original annotation date. The pinned X4 Pro firmware records its existing clock when you save a clipping, including offline; it does not connect to Wi-Fi to obtain a date. Uploads, retries, and GitHub backups preserve these dates. Set the Xteink clock correctly before highlighting. Older Xteink clippings and archives whose source omitted dates remain undated unless you recover them from an original export. Upload time is never substituted for creation time; exports without timezone information keep their recorded wall time.
 
 ## If something does not connect
 
@@ -147,6 +148,6 @@ Do not reset the Kindle, erase the Xteink SD card, or delete `.crosspoint` to fi
 These additions are separate from sync; install them after the basic setup works.
 
 - **KOReader fonts:** copy licensed `.ttf`/`.otf` font files into `koreader/fonts/` on the mounted Kindle, preferably in a named subfolder, then restart KOReader and select the font in a book. [Lexica Ultralegible](https://github.com/jacobxperez/lexica-ultralegible/tree/release) is one optional font family. Preserve its license and keep existing fonts.
-- **Dictionaries:** use KOReader's dictionary downloader or its [dictionary documentation](https://github.com/koreader/koreader/wiki/Dictionary-support). For the pinned CrossPoint build, supported StarDict dictionaries belong in `/dictionaries/<Dictionary Name>/` on the SD card. Follow the [pinned CrossPoint dictionary guide](https://github.com/skyerus/crosspoint-reader/blob/77b30d58e260ce5405234f84fe240833b726df9d/docs/dictionary.md); keep the `.ifo`, index and dictionary data files together and choose the dictionary on the device. Check a lookup before relying on it.
+- **Dictionaries:** use KOReader's dictionary downloader or its [dictionary documentation](https://github.com/koreader/koreader/wiki/Dictionary-support). For the pinned CrossPoint build, supported StarDict dictionaries belong in `/dictionaries/<Dictionary Name>/` on the SD card. Follow the [pinned CrossPoint dictionary guide](https://github.com/skyerus/crosspoint-reader/blob/d03f6e6a2afbdbdf99d35fcb91d35a847166f514/docs/dictionary.md); keep the `.ifo`, index and dictionary data files together and choose the dictionary on the device. Check a lookup before relying on it.
 
 Reader Bridge does not bundle fonts, dictionaries, Kindle system files or books.

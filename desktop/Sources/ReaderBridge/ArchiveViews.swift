@@ -184,6 +184,22 @@ enum HighlightPresentation {
         }
     }
     static func date(_ raw: String) -> String {
+        // Kindle exports and KOReader record wall time without a timezone.
+        // Format that calendar date without shifting it to the Mac's timezone.
+        for format in ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd"] {
+            let reader = DateFormatter()
+            reader.locale = Locale(identifier: "en_US_POSIX")
+            reader.calendar = Calendar(identifier: .gregorian)
+            reader.timeZone = TimeZone(secondsFromGMT: 0)
+            reader.dateFormat = format
+            reader.isLenient = false
+            if let parsed = reader.date(from: raw), reader.string(from: parsed) == raw {
+                let display = DateFormatter()
+                display.timeZone = reader.timeZone
+                display.dateStyle = .medium
+                return display.string(from: parsed)
+            }
+        }
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let fractional = iso.date(from: raw)

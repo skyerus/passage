@@ -152,12 +152,18 @@ struct BridgeSidebar: View {
             VStack(spacing: 5) {
                 ForEach(AppModel.Section.allCases) { section in
                     Button { model.selection = section } label: {
-                        HStack(spacing: 11) {
-                            Image(systemName: section.icon).font(.system(size: 15, weight: .medium)).frame(width: 19)
-                            Text(section.rawValue).font(.system(size: 13, weight: model.selection == section ? .semibold : .medium))
-                            Spacer(minLength: 0)
+                        HStack(spacing: 0) {
+                            HStack(spacing: 8) {
+                                Image(systemName: section.icon).font(.system(size: 15, weight: .medium)).frame(width: 19)
+                                Text(section.rawValue).font(.system(size: 13, weight: model.selection == section ? .semibold : .medium))
+                                    .lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                            }
+                            Spacer(minLength: 8)
                             if section == .highlights, let count = model.status?.highlightCount, count > 0 {
-                                Text(count.formatted()).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary).lineLimit(1)
+                                Text(count.formatted(.number.notation(.compactName)))
+                                    .font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                                    .lineLimit(1).minimumScaleFactor(0.8)
+                                    .help("\(count.formatted()) highlights").accessibilityLabel(count.formatted())
                             }
                         }.padding(.horizontal, 12).padding(.vertical, 11)
                             .background(model.selection == section ? teal.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 11))
