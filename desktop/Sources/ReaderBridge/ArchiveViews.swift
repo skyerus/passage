@@ -45,8 +45,8 @@ struct HighlightsView: View {
         HStack(spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(.secondary).accessibilityHidden(true)
-                TextField("Search books, authors, or words", text: $model.highlightQuery)
-                    .textFieldStyle(.plain).font(.system(size: 13)).focused($searchFocused)
+                TextField("Search highlights", text: $model.highlightQuery, prompt: Text("Search books, authors, or words").foregroundColor(.secondary))
+                    .textFieldStyle(.plain).foregroundStyle(.primary).font(.system(size: 13)).focused($searchFocused)
                     .onChange(of: model.highlightQuery) { _ in model.searchHighlights() }
                     .accessibilityLabel("Search highlights")
                 if !query.isEmpty {
