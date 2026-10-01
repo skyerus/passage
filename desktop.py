@@ -4,6 +4,8 @@ import argparse
 import contextlib
 import fcntl
 import io
+import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -47,6 +49,132 @@ def bool_arg(value, name):
 
 
 class Desktop(setup.Bridge):
+    def legacy_spec(self, path, descriptor=None):
+        """Only the known sibling layout and a fully pinned launch job qualify."""
+        legacy = setup.guarded(self.app.parent / 'Reading Highlights')
+        path = setup.guarded(path)
+        if path.parent != self.agent_dir or path.suffix != '.plist':
+            raise setup.SetupError('Existing collector descriptor is invalid.')
+        raw = path.read_bytes()
+        spec = plistlib.loads(raw)
+        args = spec.get('ProgramArguments')
+        label = spec.get('Label')
+        if (not isinstance(label, str) or not re.fullmatch(r'[A-Za-z0-9_.-]+', label)
+                or spec.get('WorkingDirectory') != str(legacy)
+                or not isinstance(args, list) or len(args) != 15
+                or not all(isinstance(a, str) for a in args)
+                or not Path(args[0]).is_absolute()
+                or args[1:8] != [str(legacy / 'collector.py'), 'serve', '--state-dir', str(legacy / 'data'), '--host', '0.0.0.0', '--port']
+                or not args[8].isdigit() or not 1024 <= int(args[8]) <= 65535
+                or args[9] != '--repo' or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', args[10])
+                or args[11] != '--branch' or not args[12].strip() or args[13] != '--publish-interval'
+                or not args[14].isdigit() or int(args[14]) <= 0):
+            raise setup.SetupError('Existing collector launch configuration is not recognized.')
+        for relative in ('collector.py', 'db.py', 'data/token', 'data/inbox.sqlite3'):
+            if not setup.guarded(legacy / relative).is_file():
+                raise setup.SetupError('Existing collector files are missing.')
+        token = (legacy / 'data/token').read_bytes()
+        if not token.strip() or len(token) > 4096:
+            raise setup.SetupError('Existing collector token is invalid.')
+        pinned = {'agent': str(path), 'plist_sha256': hashlib.sha256(raw).hexdigest(), 'token_sha256': hashlib.sha256(token).hexdigest()}
+        if descriptor is not None and descriptor != pinned:
+            raise setup.SetupError('Existing collector configuration changed. Recheck its original setup before reconnecting.')
+        return spec, pinned
+
+    def legacy_loaded(self, spec, path):
+        if sys.platform != 'darwin':
+            return False
+        loaded = subprocess.run(['launchctl', 'print', f'gui/{os.getuid()}/{spec["Label"]}'], capture_output=True, text=True, timeout=5)
+        def field(name):
+            match = re.search(r'^\s*' + re.escape(name) + r' = (.+?)\s*$', loaded.stdout, re.MULTILINE)
+            return match.group(1) if match else None
+        if (loaded.returncode != 0 or field('path') != str(path)
+                or field('program') != spec['ProgramArguments'][0]
+                or field('working directory') != spec['WorkingDirectory']
+                or not re.fullmatch(r'\d+', field('pid') or '')):
+            return False
+        listener = subprocess.run(['/usr/sbin/lsof', '-nP', f'-iTCP:{spec["ProgramArguments"][8]}', '-sTCP:LISTEN', '-Fp'], capture_output=True, text=True, timeout=5)
+        pids = {line[1:] for line in listener.stdout.splitlines() if re.fullmatch(r'p\d+', line)}
+        return listener.returncode == 0 and pids == {field('pid')}
+
+    def legacy_auth(self, port, endpoint=None):
+        token_path = setup.guarded(self.app.parent / 'Reading Highlights/data/token')
+        return self.authenticate_at(endpoint or f'http://127.0.0.1:{port}', token_path, legacy=True)
+
+    def existing(self):
+        connected = 'existing_collector' in self.state
+        descriptor = self.state.get('existing_collector')
+        unavailable = {'available': False, 'connected': connected, 'healthy': False, 'port': 8084, 'archive': ''}
+        if connected:
+            if not isinstance(descriptor, dict) or set(descriptor) != {'agent', 'plist_sha256', 'token_sha256'} or not all(isinstance(v, str) for v in descriptor.values()):
+                return unavailable, None
+            paths = [Path(descriptor['agent'])]
+        elif self.state.get('collector') or (self.app / 'collector/data').exists():
+            return unavailable, None
+        else:
+            paths = sorted(self.agent_dir.glob('*.plist'))
+        candidates = []
+        for path in paths:
+            try:
+                spec, pinned = self.legacy_spec(path, descriptor if connected else None)
+                healthy = self.legacy_loaded(spec, path) and self.legacy_auth(int(spec['ProgramArguments'][8]))
+                if connected or healthy:
+                    candidates.append(({'available': healthy, 'connected': connected, 'healthy': healthy, 'port': int(spec['ProgramArguments'][8]), 'archive': spec['ProgramArguments'][10]}, pinned))
+            except (OSError, ValueError, TypeError, setup.SetupError, subprocess.TimeoutExpired, plistlib.InvalidFileException):
+                continue
+        return candidates[0] if len(candidates) == 1 else (unavailable, None)
+
+    def collector_data_dir(self):
+        if 'existing_collector' not in self.state:
+            return super().collector_data_dir()
+        descriptor = self.state['existing_collector']
+        if not isinstance(descriptor, dict) or set(descriptor) != {'agent', 'plist_sha256', 'token_sha256'} or not all(isinstance(v, str) for v in descriptor.values()):
+            raise setup.SetupError('Existing collector descriptor is invalid.')
+        self.legacy_spec(Path(descriptor['agent']), descriptor)
+        return setup.guarded(self.app.parent / 'Reading Highlights/data')
+
+    def collector_port(self):
+        if 'existing_collector' in self.state:
+            self.collector_data_dir()
+            spec, _ = self.legacy_spec(Path(self.state['existing_collector']['agent']), self.state['existing_collector'])
+            return int(spec['ProgramArguments'][8])
+        return self.state.get('collector', {}).get('port', 8084)
+
+    def assert_managed_collector(self):
+        if 'existing_collector' in self.state:
+            raise setup.SetupError('This collector is managed by your existing Reading Highlights setup. Use that setup to start, stop, or change its backup settings.')
+
+    def existing_pairing(self):
+        try:
+            data = self.collector_data_dir()
+            pairing = setup.guarded(data.parent / 'pairing/xteink-highlight-sync.json')
+            settings = json.loads(pairing.read_text())
+            if hmac.compare_digest(settings.get('token', ''), (data / 'token').read_text().strip()):
+                from urllib.parse import urlsplit
+                value = settings.get('endpoint', settings.get('url', ''))
+                endpoint = setup.private_url(value.removesuffix('/v1/highlights'))
+                if urlsplit(endpoint).port == self.collector_port() and self.authenticated(self.collector_port(), endpoint):
+                    return endpoint
+        except (OSError, ValueError, TypeError, setup.SetupError):
+            pass
+        return ''
+
+    @contextlib.contextmanager
+    def inbox_connection(self, path):
+        # Read-only SQL still permits SQLite's own WAL shared-memory housekeeping.
+        # Never initialize, checkpoint, migrate, or change external archive rows.
+        con = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=5)
+        try:
+            con.execute('PRAGMA query_only=ON')
+            yield con
+        finally:
+            con.close()
+
+    def existing_sources(self):
+        path = self.collector_data_dir() / 'inbox.sqlite3'
+        with self.inbox_connection(path) as con:
+            return {row[0] for row in con.execute("SELECT DISTINCT source FROM inbox WHERE device != 'kindle-clippings-import'")}
+
     def owned(self, kind):
         path = self.agent_path(kind)
         if not path.exists() or self.state.get(kind, {}).get('agent') != str(path):
@@ -84,13 +212,17 @@ class Desktop(setup.Bridge):
             raise setup.SetupError('The loaded service differs from this app’s saved service. Existing services were left alone; resolve the conflicting job first.')
 
     def authenticated(self, port, endpoint=None):
-        token_path = self.app / 'collector/data/token'
+        if 'existing_collector' in self.state:
+            existing, descriptor = self.existing()
+            return bool(descriptor and existing['healthy'] and (not endpoint or self.legacy_auth(existing['port'], endpoint)))
+        return self.authenticate_at(endpoint or f'http://127.0.0.1:{port}', self.collector_data_dir() / 'token')
+
+    def authenticate_at(self, base, token_path, legacy=False):
         if not token_path.is_file():
             return False
         try:
-            base = endpoint or f'http://127.0.0.1:{port}'
             health = json.loads(setup.http(base + '/healthz', timeout=2, maximum=4096))
-            if health.get('service') != 'reader-bridge' or health.get('status') != 'ok':
+            if (not legacy and health.get('service') != 'reader-bridge') or health.get('status') != 'ok':
                 return False
             # Invalid empty batch authenticates but cannot insert or delete data.
             try:
@@ -146,10 +278,12 @@ class Desktop(setup.Bridge):
             raise setup.SetupError('Move Reader Bridge to Applications and reopen it before installing background services.')
 
     def collector(self, *args, **kwargs):
+        self.assert_managed_collector()
         self.stable_installation()
         super().collector(*args, **kwargs)
 
     def start_local(self, port, disable=False):
+        self.assert_managed_collector()
         self.stable_installation()
         if sys.platform != 'darwin':
             raise setup.SetupError('Background collector installation requires macOS.')
@@ -181,14 +315,12 @@ class Desktop(setup.Bridge):
         raise setup.SetupError('Collector could not start. Check the private service logs and retry; your inbox is retained.')
 
     def live_rows(self):
-        path = self.app / 'collector/data/inbox.sqlite3'
+        path = self.collector_data_dir() / 'inbox.sqlite3'
         if not path.exists():
             return [], 0
         setup.guarded(path)
         # Store's constructor initializes storage: status must never call it.
-        con = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=5)
-        try:
-            con.execute('PRAGMA query_only=ON')
+        with self.inbox_connection(path) as con:
             con.execute('BEGIN')
             deleted = {r[0] for r in con.execute('SELECT quote_key FROM tombstones')}
             pending = con.execute('SELECT count(*) FROM inbox WHERE published IS NULL OR published!=revision').fetchone()[0]
@@ -202,21 +334,31 @@ class Desktop(setup.Bridge):
                 if key not in deleted and key not in rows:
                     rows[key] = {'id': key, 'title': item['book_title'], 'author': item['author'], 'text': item['text'], 'source': source, 'created_at': item.get('created_at', '')}
             return sorted(rows.values(), key=lambda row: (row['created_at'], row['id']), reverse=True), pending
-        finally:
-            con.close()
 
     def status(self, query=''):
-        service = self.state.get('collector', {})
+        existing, descriptor = self.existing()
+        service = {'port': existing['port'], 'archive': existing['archive']} if existing['connected'] else self.state.get('collector', {})
         kindle = self.state.get('kindle', {})
         xteink = self.state.get('xteink', {})
         library = self.state.get('library', {})
         port = port_arg(service.get('port', 8084))
         warnings = []
+        if existing['connected'] and descriptor is None:
+            warnings.append('The existing collector configuration or files changed. Recheck the original Reading Highlights setup; this app has left it unchanged.')
         try:
             rows, pending = self.live_rows()
-        except (OSError, ValueError, KeyError, sqlite3.Error):
+        except (OSError, ValueError, KeyError, sqlite3.Error, setup.SetupError):
             rows, pending = [], 0
             warnings.append('The local inbox could not be read. Data was left unchanged; retry or inspect the private app directory.')
+        endpoint = self.state.get('url')
+        if existing['connected'] and descriptor:
+            endpoint = endpoint or self.existing_pairing()
+            try:
+                sources = self.existing_sources()
+                kindle = {**kindle, 'installed': kindle.get('installed') or 'koreader' in sources}
+                xteink = {**xteink, 'paired': xteink.get('paired') or 'crosspoint' in sources}
+            except (OSError, ValueError, sqlite3.Error, setup.SetupError):
+                pass
         count = len(rows)
         if query:
             needle = query.casefold()
@@ -259,26 +401,36 @@ class Desktop(setup.Bridge):
                     addresses.append(candidate)
         except OSError:
             pass
-        healthy = self.authenticated(port) if service else False
+        healthy = existing['healthy'] if existing['connected'] else self.authenticated(port) if service else False
         if service and not healthy:
             warnings.append('Collector is stopped or unreachable. Readers retain pending uploads until it is available.')
         mode = 'github' if service.get('archive') and not service.get('backup_disabled') else 'local'
-        return {'service': {'installed': self.owned('collector'), 'healthy': healthy, 'port': port, 'mode': mode, 'archive': service.get('archive', '') if mode == 'github' else '', 'pending_backup': pending if mode == 'github' else 0},
+        return {'existing_setup': existing, 'service': {'installed': existing['connected'] or self.owned('collector'), 'healthy': healthy, 'port': port, 'mode': mode, 'archive': service.get('archive', '') if mode == 'github' else '', 'pending_backup': pending if mode == 'github' else 0},
                 'kindle': {'paired': bool(kindle.get('installed')), 'connected': bool(kindle.get('mount') and any((Path(kindle['mount']) / p / 'reader.lua').is_file() for p in ('koreader', '.adds/koreader'))), 'mount': kindle.get('mount', '')},
                 'xteink': {'paired': bool(xteink.get('paired')), 'firmware_staged': bool(xteink.get('firmware_staged')), 'url': xteink.get('device_url') or ''},
                 'mounts': mounts, 'highlights': rows[:HIGHLIGHTS_LIMIT], 'highlight_count': count, 'highlights_matches': len(rows), 'highlights_limit': HIGHLIGHTS_LIMIT,
-                'progress_verified': bool(self.state.get('progress', {}).get('verified')), 'endpoint': self.state.get('url') or (addresses[0] if addresses else ''), 'addresses': addresses, 'warnings': warnings,
+                'progress_verified': bool(self.state.get('progress', {}).get('verified')), 'endpoint': endpoint or (addresses[0] if addresses else ''), 'addresses': addresses, 'warnings': warnings,
                 'library': {'installed': self.owned('library'), 'port': library.get('port', 8083), 'books': library.get('books', '')}}
 
     def endpoint(self, value):
         endpoint = setup.private_url(text_arg(value, 'collector LAN address'))
-        if not self.authenticated(self.state.get('collector', {}).get('port', 8084), endpoint):
+        if not self.authenticated(self.collector_port(), endpoint):
             raise setup.SetupError('That LAN address does not reach this collector. Start it and check your address, firewall and Wi-Fi before pairing.')
         return endpoint
 
     def mutate(self, command, args):
         extra = {}
-        if command == 'start_collector':
+        if command in {'start_collector', 'stop_collector', 'configure_backup', 'disable_backup', 'install_library'}:
+            self.assert_managed_collector()
+        if command == 'connect_existing':
+            if self.state.get('collector') or (self.app / 'collector/data').exists():
+                raise setup.SetupError('This app already has collector configuration or data. Existing setups were left unchanged.')
+            existing, descriptor = self.existing()
+            if not descriptor or not existing['healthy']:
+                raise setup.SetupError('No verified running Reading Highlights collector was found. Check the existing setup and retry.')
+            self.state['existing_collector'] = descriptor
+            self.save()
+        elif command == 'start_collector':
             self.start_local(port_arg(args.get('port', 8084)))
         elif command == 'stop_collector':
             if sys.platform != 'darwin':
@@ -288,7 +440,7 @@ class Desktop(setup.Bridge):
             if self.owned('collector'):
                 path = self.agent_path('collector')
                 result = subprocess.run(['launchctl', 'bootout', f'gui/{os.getuid()}/{setup.LABELS["collector"]}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                if result.returncode and self.authenticated(self.state.get('collector', {}).get('port', 8084)):
+                if result.returncode and self.authenticated(self.collector_port()):
                     raise setup.SetupError('The collector could not stop. Retry after checking macOS background service permissions.')
                 self.backup(path)
                 path.unlink()
@@ -308,7 +460,7 @@ class Desktop(setup.Bridge):
             path = setup.guarded(Path(text_arg(args.get('path'), 'clippings file')).expanduser())
             if not path.is_file() or path.stat().st_size > MAX_IMPORT:
                 raise setup.SetupError('Select a My Clippings.txt file no larger than 16 MiB.')
-            if not self.authenticated(self.state.get('collector', {}).get('port', 8084)):
+            if not self.authenticated(self.collector_port()):
                 raise setup.SetupError('Start your local collector before importing clippings.')
             from import_clippings import parse_clippings
             with path.open('rb') as source:
@@ -316,8 +468,8 @@ class Desktop(setup.Bridge):
             if len(content) > MAX_IMPORT:
                 raise setup.SetupError('Select a My Clippings.txt file no larger than 16 MiB.')
             rows = parse_clippings(content.decode('utf-8-sig'))
-            port = self.state['collector']['port']
-            token = (self.app / 'collector/data/token').read_text().strip()
+            port = self.collector_port()
+            token = (self.collector_data_dir() / 'token').read_text().strip()
             for row in rows:
                 payload = json.dumps({'source': 'koreader', 'device_id': 'kindle-clippings-import', 'highlights': [row]}).encode()
                 result = json.loads(setup.http(f'http://127.0.0.1:{port}/v1/highlights', payload, headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}, maximum=4096, timeout=15))
@@ -325,7 +477,7 @@ class Desktop(setup.Bridge):
                     raise setup.SetupError('Collector did not acknowledge every import. Retry safely; duplicates are ignored.')
         elif command == 'export':
             path = setup.guarded(Path(text_arg(args.get('path'), 'export file')).expanduser())
-            if path == self.app or self.app in path.parents or path.exists():
+            if path == self.app or self.app in path.parents or (self.app.parent / 'Reading Highlights') in path.parents or path.exists():
                 raise setup.SetupError('Choose a new export filename outside the private app directory.')
             rows, _ = self.live_rows()
             data = (json.dumps(rows, ensure_ascii=False, indent=2) + '\n').encode()
@@ -384,7 +536,7 @@ def execute(request, app=setup.DEFAULT_APP, agent_dir=None):
     if not isinstance(request, dict):
         raise setup.SetupError('Request must be a JSON object.')
     command = text_arg(request.get('command'), 'command')
-    commands = {'status', 'start_collector', 'stop_collector', 'pair_kindle', 'pair_xteink', 'import_clippings', 'export', 'verify_progress', 'configure_backup', 'disable_backup', 'install_library'}
+    commands = {'connect_existing', 'status', 'start_collector', 'stop_collector', 'pair_kindle', 'pair_xteink', 'import_clippings', 'export', 'verify_progress', 'configure_backup', 'disable_backup', 'install_library'}
     if command not in commands:
         raise setup.SetupError('Unknown desktop command.')
     app = setup.guarded(Path(app).expanduser())

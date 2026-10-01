@@ -123,6 +123,9 @@ class Bridge:
         self.state_path = self.app / 'state.json'
         self.state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
 
+    def collector_data_dir(self):
+        return guarded(self.app / "collector/data")
+
     def save(self):
         if self.dry_run:
             return
@@ -257,7 +260,7 @@ class Bridge:
 
     def pairing(self, kind, url, previous=None):
         url = private_url(url or self.state.get('url', ''))
-        token_path = self.app / 'collector/data/token'
+        token_path = self.collector_data_dir() / 'token'
         if not token_path.exists():
             raise SetupError('Install the collector before pairing a device.')
         token = token_path.read_text().strip()
@@ -458,7 +461,7 @@ class Bridge:
         collector = self.state.get('collector', {})
         if not collector:
             raise SetupError('Install the collector first.')
-        token = (self.app / 'collector/data/token').read_text().strip()
+        token = (self.collector_data_dir() / 'token').read_text().strip()
         # One record also keeps escaped, near-limit Unicode excerpts below the
         # collector's request limit. Imports remain idempotent across retries.
         for row in rows:
