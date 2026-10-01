@@ -23,6 +23,7 @@ from urllib.error import HTTPError
 sys.dont_write_bytecode = True
 
 import setup
+import archive_backup
 from collector import Store, initialize, item_key
 
 MAX_REQUEST = 64 * 1024
@@ -208,7 +209,8 @@ class Desktop(setup.Bridge):
             return (spec.get('Label') == setup.LABELS[kind]
                     and spec.get('WorkingDirectory') == str(directory)
                     and isinstance(args, list) and len(args) >= 2
-                    and (str(directory / 'collector.py') in args if kind == 'collector'
+                    and (args == [sys.executable, str(directory / 'archive_backup.py'), '--state-dir', str(directory)] if kind == 'cloud_backup'
+                         else str(directory / 'collector.py') in args if kind == 'collector'
                          else args[0] == str(directory / 'venv/bin/cps')))
         except (OSError, ValueError, plistlib.InvalidFileException):
             return False
@@ -365,6 +367,56 @@ class Desktop(setup.Bridge):
                         rows[key]['created_at'] = item['created_at']
             return sorted(rows.values(), key=highlight_sort_key), pending
 
+    def cloud_backup_status(self):
+        config = self.state.get('cloud_backup', {})
+        receipt_path = setup.guarded(self.app / 'cloud_backup/receipt.json')
+        receipt = {}
+        try:
+            if receipt_path.is_file():
+                receipt = json.loads(receipt_path.read_text())
+        except (OSError, ValueError):
+            pass
+        checked = highlight_date(receipt.get('checked_at', ''))
+        if config.get('enabled') and (checked is None or (datetime.now(timezone.utc) - checked).total_seconds() > 180):
+            receipt.setdefault('error', 'Waiting for the background backup service. If this persists, set up the backup folder again.')
+        return {'enabled': bool(config.get('enabled')), 'provider': config.get('provider', 'icloud'),
+                'folder': config.get('destination', ''), 'saved_at': receipt.get('saved_at', ''),
+                'error': receipt.get('error', ''), 'cloud_upload_verified': False}
+
+    def configure_cloud_backup(self, provider, folder):
+        if sys.platform != 'darwin':
+            raise setup.SetupError('Use archive_backup.py with your scheduler on this platform.')
+        self.stable_installation()
+        if provider not in ('icloud', 'folder'):
+            raise setup.SetupError('Choose iCloud Drive or a backup folder.')
+        folder = setup.guarded(Path(text_arg(folder, 'backup folder')).expanduser())
+        if not folder.is_dir():
+            raise setup.SetupError('Choose an available folder first.')
+        if provider == 'icloud':
+            cloud = setup.guarded(Path.home() / 'Library/Mobile Documents/com~apple~CloudDocs')
+            if not cloud.is_dir() or not (folder == cloud or cloud in folder.parents):
+                raise setup.SetupError('Choose a folder in iCloud Drive. Enable iCloud Drive in System Settings if it is unavailable.')
+        if folder == self.app or self.app in folder.parents or self.collector_data_dir() == folder or self.collector_data_dir() in folder.parents:
+            raise setup.SetupError('Choose a backup folder outside the live app data.')
+        self.assert_ownership('cloud_backup')
+        self.assert_loaded_ownership('cloud_backup')
+        target = setup.guarded(self.app / 'cloud_backup')
+        install_id = self.state.get('backup_installation') or __import__('uuid').uuid4().hex
+        destination = setup.guarded(folder / 'Reader Bridge Backups' / install_id)
+        destination.mkdir(mode=0o700, parents=True, exist_ok=True)
+        config = {'database': str(self.collector_data_dir() / 'inbox.sqlite3'), 'app':str(self.app), 'destination':str(destination)}
+        if not Path(config['database']).is_file():
+            raise setup.SetupError('Start your local bridge before enabling backup.')
+        # First prove the selected destination works, then enable background work.
+        archive_backup.snapshot(config['database'], self.app, destination, target)
+        self.stop_owned('cloud_backup')
+        self.install_file(target / 'archive_backup.py', (setup.SOURCE / 'archive_backup.py').read_bytes())
+        setup.atomic_write(target / 'config.json', archive_backup.encode(config))
+        self.state['backup_installation'] = install_id
+        self.state['cloud_backup'] = {**self.state.get('cloud_backup', {}), 'enabled':True, 'provider':provider, 'destination':str(destination)}
+        self.save()
+        self.launch('cloud_backup', [sys.executable, target / 'archive_backup.py', '--state-dir', target], target)
+
     def status(self, query=''):
         existing, descriptor = self.existing()
         service = {'port': existing['port'], 'archive': existing['archive']} if existing['connected'] else self.state.get('collector', {})
@@ -436,7 +488,7 @@ class Desktop(setup.Bridge):
         if service and not healthy:
             warnings.append('Collector is stopped or unreachable. Readers retain pending uploads until it is available.')
         mode = 'github' if service.get('archive') and not service.get('backup_disabled') else 'local'
-        return {'existing_setup': existing, 'service': {'installed': existing['connected'] or self.owned('collector'), 'healthy': healthy, 'port': port, 'mode': mode, 'archive': service.get('archive', '') if mode == 'github' else '', 'pending_backup': pending if mode == 'github' else 0},
+        return {'cloud_backup': self.cloud_backup_status(), 'existing_setup': existing, 'service': {'installed': existing['connected'] or self.owned('collector'), 'healthy': healthy, 'port': port, 'mode': mode, 'archive': service.get('archive', '') if mode == 'github' else '', 'pending_backup': pending if mode == 'github' else 0},
                 'kindle': {'paired': bool(kindle.get('installed')), 'connected': bool(kindle.get('mount') and any((Path(kindle['mount']) / p / 'reader.lua').is_file() for p in ('koreader', '.adds/koreader'))), 'mount': kindle.get('mount', '')},
                 'xteink': {'paired': bool(xteink.get('paired')), 'firmware_staged': bool(xteink.get('firmware_staged')), 'url': xteink.get('device_url') or ''},
                 'mounts': mounts, 'highlights': rows[:HIGHLIGHTS_LIMIT], 'highlight_count': count, 'highlights_matches': len(rows), 'highlights_limit': HIGHLIGHTS_LIMIT,
@@ -528,6 +580,32 @@ class Desktop(setup.Bridge):
         elif command == 'verify_progress':
             self.state['progress'] = {'verified': bool_arg(args.get('verified'), 'verified'), 'server': 'https://sync.crosspointreader.com'}
             self.save()
+        elif command == 'configure_cloud_backup':
+            self.configure_cloud_backup(args.get('provider', 'icloud'), args.get('folder'))
+        elif command == 'backup_now':
+            if not self.state.get('cloud_backup', {}).get('enabled'):
+                raise setup.SetupError('Choose a backup destination first.')
+            config = json.loads((self.app / 'cloud_backup/config.json').read_text())
+            try:
+                archive_backup.snapshot(self.collector_data_dir() / 'inbox.sqlite3', self.app, config['destination'], self.app / 'cloud_backup')
+            except (OSError, ValueError) as exc:
+                raise setup.SetupError('Backup could not finish. Check the destination and available space; previous backups are retained.') from exc
+        elif command == 'disable_cloud_backup':
+            self.stop_owned('cloud_backup')
+            path = self.agent_path('cloud_backup')
+            if self.owned('cloud_backup'):
+                self.backup(path)
+                path.unlink()
+            self.state.setdefault('cloud_backup', {})['enabled'] = False
+            self.state['cloud_backup'].pop('agent', None)
+            self.save()
+        elif command == 'restore_backup':
+            if not self.authenticated(self.collector_port()):
+                raise setup.SetupError('Start your local bridge before restoring a backup.')
+            try:
+                archive_backup.restore(text_arg(args.get('path'), 'backup file'), self.collector_data_dir() / 'inbox.sqlite3', self.app)
+            except (ValueError, OSError, KeyError, TypeError) as exc:
+                raise setup.SetupError('Backup could not be restored. Choose a downloaded Reader Bridge backup; existing data and recovery snapshots are retained.') from exc
         elif command == 'configure_backup':
             archive = text_arg(args.get('archive'), 'personal archive OWNER/REPO')
             create = bool_arg(args.get('create', False), 'create')
@@ -568,7 +646,7 @@ def execute(request, app=setup.DEFAULT_APP, agent_dir=None):
     if not isinstance(request, dict):
         raise setup.SetupError('Request must be a JSON object.')
     command = text_arg(request.get('command'), 'command')
-    commands = {'connect_existing', 'status', 'start_collector', 'stop_collector', 'pair_kindle', 'pair_xteink', 'import_clippings', 'export', 'verify_progress', 'configure_backup', 'disable_backup', 'install_library'}
+    commands = {'connect_existing', 'status', 'start_collector', 'stop_collector', 'pair_kindle', 'pair_xteink', 'import_clippings', 'export', 'verify_progress', 'configure_backup', 'disable_backup', 'install_library', 'configure_cloud_backup', 'disable_cloud_backup', 'backup_now', 'restore_backup'}
     if command not in commands:
         raise setup.SetupError('Unknown desktop command.')
     app = setup.guarded(Path(app).expanduser())

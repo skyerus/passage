@@ -62,10 +62,32 @@ def main():
             export = root / 'quotes.json'
             assert invoke('export', path=str(export))['exported'] == 1
             assert json.loads(export.read_text())[0]['title'] == 'Acceptance Fixture'
+            backup_folder = root / 'backup-folder'
+            backup_folder.mkdir()
+            backed_up = invoke('configure_cloud_backup', provider='folder', folder=str(backup_folder))
+            assert backed_up['cloud_backup']['enabled'] and backed_up['cloud_backup']['saved_at']
+            assert not backed_up['cloud_backup']['cloud_upload_verified']
+            first_receipt = json.loads((data / 'cloud_backup/receipt.json').read_text())
+            backup_spec = __import__('plistlib').loads((agents / (labels['cloud_backup'] + '.plist')).read_bytes())
+            assert backup_spec['RunAtLoad'] and backup_spec['KeepAlive']
             assert upload('crosspoint', {'id': 'one', 'deleted': True})['accepted'] == ['one']
             assert invoke('status')['highlight_count'] == 0
             upload('koreader', sample)
             assert invoke('status')['highlight_count'] == 0
+            subprocess.run(['launchctl', 'kickstart', '-k', f'gui/{os.getuid()}/{labels["cloud_backup"]}'], check=True)
+            for _ in range(40):
+                receipt = json.loads((data / 'cloud_backup/receipt.json').read_text())
+                if receipt.get('digest') != first_receipt['digest']:
+                    break
+                time.sleep(.25)
+            assert receipt['digest'] != first_receipt['digest']
+            assert Path(first_receipt['path']).is_file()
+            invoke('restore_backup', path=first_receipt['path'])
+            assert invoke('status')['highlight_count'] == 0, 'Old backups must not resurrect deleted quotes'
+            invoke('disable_cloud_backup')
+            assert not invoke('status')['cloud_backup']['enabled']
+            assert not (agents / (labels['cloud_backup'] + '.plist')).exists()
+            assert Path(receipt['path']).is_file()
             # Pair only disposable volumes; verify an offline queue is retained.
             verifier = desktop.Desktop(data, agent_dir=agents)
             endpoint = next((url for url in status['addresses'] if verifier.authenticated(port, url)), None)
@@ -84,7 +106,7 @@ def main():
             invoke('stop_collector')
             assert not invoke('status')['service']['healthy']
             assert not (agents / (labels['collector'] + '.plist')).exists()
-            print('PASS: bundled runtime, launchd start/restart/stop, authenticated uploads, deduplication, full-archive search, export, deletion replay, and fixture pairing.')
+            print('PASS: bundled runtime, launchd recovery, uploads, search, export, automatic folder backup, backup-worker restart, safe restore, deletion replay, and fixture pairing.')
         finally:
             for label in labels.values():
                 subprocess.run(['launchctl', 'bootout', f'gui/{os.getuid()}/{label}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

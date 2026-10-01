@@ -224,6 +224,7 @@ struct SettingsView: View {
     @State private var loginNeedsApproval = SMAppService.mainApp.status == .requiresApproval
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            CloudBackupView(status: status)
             Card(title: "Everyday") {
                 BridgeSettingRow(title: "Open at login", detail: "Show this app when you sign in to your Mac.") {
                     Toggle("Open at login", isOn: Binding(get: { loginEnabled }, set: updateLogin)).labelsHidden().toggleStyle(.switch)
@@ -240,7 +241,7 @@ struct SettingsView: View {
             }
             if status.usesExistingSetup {
                 Card(title: "Your existing bridge") {
-                    Text("Your original installation manages startup, backup, and reader settings.").font(.callout).foregroundStyle(.secondary)
+                    Text("Your original installation manages the collector and its GitHub backup. Folder backups above work alongside it.").font(.callout).foregroundStyle(.secondary)
                     LabeledContent("Collector port", value: String(status.service.port)).font(.callout)
                     LabeledContent("Archive backup", value: status.service.archive.isEmpty ? "Local only" : status.service.archive).font(.callout).textSelection(.enabled)
                 }
@@ -282,7 +283,7 @@ struct SettingsView: View {
                     Task { await model.perform("configure_backup", ["archive": archive.trimmingCharacters(in: .whitespacesAndNewlines), "create": createPrivate], activity: "Configuring GitHub backup…", success: "GitHub backup configured.") }
                 }.disabled(model.busy || !validArchive)
                 if status.service.mode == "github" {
-                    Button("Use local archive only") { Task { await model.perform("disable_backup", activity: "Disabling GitHub backup…") } }.disabled(model.busy)
+                    Button("Turn off GitHub backup") { Task { await model.perform("disable_backup", activity: "Disabling GitHub backup…") } }.disabled(model.busy)
                 }
             }
             if status.service.pendingBackup > 0, status.service.mode == "github" {

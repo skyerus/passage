@@ -26,6 +26,18 @@ final class ModelTests: XCTestCase {
         let highlight = try XCTUnwrap(Backend.decode(fixture()).highlights.first)
         XCTAssertTrue(highlight.matches("BOOK")); XCTAssertTrue(highlight.matches("ursula")); XCTAssertTrue(highlight.matches("worth")); XCTAssertFalse(highlight.matches("unrelated"))
     }
+    func testFolderBackupDecodesIndependentlyOfGitHubMode() throws {
+        var response = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture()) as? [String: Any])
+        var data = try XCTUnwrap(response["data"] as? [String: Any])
+        data["cloud_backup"] = ["enabled": true, "provider": "icloud", "folder": "/fixture/backups", "saved_at": "2026-10-01T12:39:00Z", "error": "", "cloud_upload_verified": false] as [String: Any]
+        response["data"] = data
+        let status = try Backend.decode(JSONSerialization.data(withJSONObject: response))
+        XCTAssertEqual(status.service.mode, "local")
+        XCTAssertEqual(status.cloudBackup?.provider, "icloud")
+        XCTAssertEqual(status.cloudBackup?.enabled, true)
+        XCTAssertEqual(status.cloudBackup?.cloudUploadVerified, false)
+        XCTAssertNil(try Backend.decode(fixture()).cloudBackup)
+    }
     func testFailureResponseCannotBecomeSuccess() {
         XCTAssertThrowsError(try Backend.decode(Data(#"{"ok":false,"error":"Connect your reader first."}"#.utf8))) { error in XCTAssertEqual(error.localizedDescription, "Connect your reader first.") }
         XCTAssertThrowsError(try Backend.decode(Data(#"{"ok":true}"#.utf8)))

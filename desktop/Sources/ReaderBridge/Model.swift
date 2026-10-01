@@ -8,12 +8,14 @@ struct BridgeStatus: Decodable {
     struct Mount: Decodable, Identifiable { var name: String; var path: String; var kind: String; var id: String { path } }
     struct Library: Decodable { var installed: Bool; var port: Int; var books: String }
     struct ExistingSetup: Decodable { var available: Bool; var connected: Bool; var healthy: Bool; var port: Int; var archive: String }
+    struct CloudBackup: Decodable { var enabled: Bool; var provider: String; var folder: String; var savedAt: String; var error: String; var cloudUploadVerified: Bool }
     var service: Service; var kindle: Kindle; var xteink: Xteink
     var mounts: [Mount]; var highlights: [Highlight]; var highlightCount: Int
     var progressVerified: Bool; var endpoint: String; var addresses: [String]; var warnings: [String]; var library: Library
     var highlightsLimit: Int?; var highlightsMatches: Int?
     var highlightsOrder: String?; var highlightsUndated: Int?
     var existingSetup: ExistingSetup?
+    var cloudBackup: CloudBackup?
     var usesExistingSetup: Bool { existingSetup?.connected == true }
     var offersExistingSetup: Bool { existingSetup?.available == true && !usesExistingSetup }
     var setupStep: Int { !service.healthy ? 1 : !kindle.paired ? 2 : !xteink.paired ? 3 : !progressVerified ? 4 : 5 }
