@@ -72,13 +72,17 @@ The Mac can sleep normally; it will not receive uploads while asleep. Readers ke
 
 Sample artwork shown; screenshots contain no personal highlights.
 
-In **Highlights → … → Import highlights**, choose one of:
+With the updated Shared Highlights plugin and Xteink firmware, the first highlight from a book also queues its cover automatically. Both readers send the original embedded JPEG/PNG, preserving colour even on a monochrome screen. No cover import is needed. The Mac stores the artwork locally and uses it for matching title/author entries. Reader highlights upload first; artwork failures retry separately. Books with no supported cover keep a placeholder, and you can choose custom artwork below.
+
+The transfer reuses the highlight connection and credentials. It does not keep Wi-Fi on or wake the Mac. Updating Reader Bridge alone does not update software already installed on readers: reinstall the bundled KOReader plugin and the matching firmware as part of the upgrade. Device-delivered covers are included in portable exports; GitHub quote backup does not contain local images.
+
+For older archives, in **Highlights → … → Import highlights**, choose one of:
 
 - **My Clippings.txt** from a Kindle. Text and recorded dates are imported; this file does not contain covers.
 - **Kindle highlights JSON** containing `book_title`, `author`, `highlight`, and optional `created_at` and `cover_url` fields. Existing `kindle-highlights` archives work directly.
 - **Reader Bridge export JSON**, including quotes, recorded dates, cached covers, and deletion history.
 
-Reader Bridge downloads a cover once per book during import, then displays it from the Mac’s local cache. Refreshing or browsing the archive does not contact image servers. Supported remote cover sources are Amazon’s public image CDNs and Open Library’s cover service, over HTTPS. Only the image URL is requested; quote text is not sent. Unsupported links and failed downloads do not prevent highlights from being imported. Choose **Download missing covers** to retry. Reader Wi-Fi and sleep behavior are unchanged.
+For archives with cover links, Reader Bridge downloads a cover once per book during import, then displays it from the Mac’s local cache. Refreshing or browsing the archive does not contact image servers. Supported remote cover sources are Amazon’s public image CDNs and Open Library’s cover service, over HTTPS. Only the image URL is requested; quote text is not sent. Unsupported links and failed downloads do not prevent highlights from being imported. Choose **Download missing covers** to retry. Reader Wi-Fi and sleep behavior are unchanged.
 
 To add or replace a cover, right-click a book and choose **Change cover**, or use **Add cover / Change cover** above a quote. Choose a JPEG or PNG (up to 5 MiB), or that book’s DRM-free EPUB (up to 128 MiB). Reader Bridge reads its declared EPUB 2 or EPUB 3 cover without extracting the book onto disk. The image applies to all existing and future highlights with the same normalized book title and author. A book with no image gets a readable placeholder; Reader Bridge does not guess editions or silently search third-party catalogs by title.
 

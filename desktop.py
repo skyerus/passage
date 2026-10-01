@@ -25,6 +25,7 @@ sys.dont_write_bytecode = True
 import setup
 import archive_backup
 from collector import Store, initialize, item_key
+from device_covers import stored_path
 from covers import CoverLibrary, book_key, epub_cover, MAX_EPUB, MAX_IMAGE
 from db import clean_cover_url
 
@@ -326,7 +327,7 @@ class Desktop(setup.Bridge):
             return
         target = self.app / 'collector'
         self.save()
-        for filename in ('collector.py', 'db.py'):
+        for filename in ('collector.py', 'db.py', 'device_covers.py'):
             self.install_file(target / filename, (setup.SOURCE / filename).read_bytes())
         directory, _ = initialize(target / 'data')
         Store(directory / 'inbox.sqlite3')
@@ -369,9 +370,14 @@ class Desktop(setup.Bridge):
                     # Keep the earliest known creation date of the same passage.
                     if recorded and (previous is None or recorded < previous):
                         rows[key]['created_at'] = item['created_at']
+            device_covers = {}
+            if con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='book_covers'").fetchone():
+                device_covers = {key: stored_path(path.parent, digest, extension)
+                                 for key, digest, extension in con.execute('SELECT book_key,sha256,extension FROM book_covers')}
             by_book = {row['book_id']: row['cover_url'] for row in rows.values() if row['cover_url']}
             for row in rows.values():
                 row['cover_url'] = by_book.get(row['book_id'], '')
+                row['cover_path'] = device_covers.get(row['book_id'], '')
             return sorted(rows.values(), key=highlight_sort_key), pending
 
     def cloud_backup_status(self):
@@ -453,7 +459,7 @@ class Desktop(setup.Bridge):
             covers = CoverLibrary(self.app)
             for row in rows:
                 metadata = covers.metadata(row['title'], row['author'])
-                row['cover_path'] = metadata['cover_path']
+                row['cover_path'] = metadata['cover_path'] or row['cover_path']
                 row['cover_url'] = metadata['cover_url'] or row['cover_url']
         except (OSError, ValueError, setup.SetupError):
             warnings.append('Covers could not be read. Your highlights are still available.')
@@ -664,7 +670,7 @@ class Desktop(setup.Bridge):
                 covers = CoverLibrary(self.app)
                 for row in rows:
                     metadata = covers.metadata(row['title'], row['author'])
-                    row['cover_path'] = metadata['cover_path']
+                    row['cover_path'] = metadata['cover_path'] or row['cover_path']
                     row['cover_url'] = metadata['cover_url'] or row['cover_url']
                 exported_rows = covers.export_rows(rows)
             except (OSError, ValueError, setup.SetupError):

@@ -238,7 +238,7 @@ class Bridge:
             raise SetupError('Archive highlights.json has an incompatible schema; no service installed.')
         self.save()
         target = self.app / 'collector'
-        for filename in ('collector.py', 'db.py'):
+        for filename in ('collector.py', 'db.py', 'device_covers.py'):
             self.install_file(target / filename, (SOURCE / filename).read_bytes())
         run([sys.executable, '-B', str(target / 'collector.py'), 'init', '--state-dir', str(target / 'data')])
         self.state['collector'] = {**self.state.get('collector', {}), 'archive': archive, 'branch': branch, 'port': port}

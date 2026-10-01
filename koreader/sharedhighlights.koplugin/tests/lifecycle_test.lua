@@ -10,6 +10,7 @@ local modules={
     ["ui/uimanager"]=manager,["ui/widget/inputdialog"]={},
     ["ui/widget/infomessage"]={},["ui/network/manager"]={},
     ["datastorage"]={},["json"]={},["ffi/util"]={},["ffi/sha2"]={md5=function(s) return s end},
+    ["libs/libkoreader-lfs"]={attributes=function() end},
 }
 for name,module in pairs(modules) do package.preload[name]=function() return module end end
 local Plugin=dofile(arg[0]:match("(.*/)").."../main.lua")

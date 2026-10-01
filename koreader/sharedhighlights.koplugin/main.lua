@@ -6,13 +6,20 @@ local NetworkMgr = require("ui/network/manager")
 local DataStorage = require("datastorage")
 local json = require("json")
 local ffiUtil = require("ffi/util")
+local lfs = require("libs/libkoreader-lfs")
 local hash = require("ffi/sha2").md5
 local plugin_dir = debug.getinfo(1, "S").source:sub(2):match("(.*/)")
 local Q = dofile(plugin_dir .. "queue.lua")
+local Cover = dofile(plugin_dir .. "cover.lua")
 local Process = dofile(plugin_dir .. "process.lua")
 local validURL = dofile(plugin_dir .. "url.lua")
 local active_owner
 local Plugin = WidgetContainer:extend{name="sharedhighlights"}
+local function target(url, token) return hash(url.."\0"..token) end
+local function revision(file)
+    local a=lfs.attributes(file)
+    return a and tostring(a.modification or "")..":"..tostring(a.size or "")
+end
 local function read(path)
     local f = io.open(path,"rb")
     if not f then return end
@@ -52,6 +59,8 @@ function Plugin:capture(keep_loaded)
     if not keep_loaded then self.state = read(self.path_state) or self.state end
     if self.ui.annotation and self.ui.document then
         Q.capture(self.state,self.ui.annotation.annotations,self.ui.doc_props or {},self.ui.document.file,hash,json.encode,true)
+        Q.coverCapture(self.state,self.ui.annotation.annotations,self.ui.doc_props or {},self.ui.document.file,
+            self.config.url and self.config.token and target(self.config.url,self.config.token),revision(self.ui.document.file),hash)
     end
     write(self.path_state,self.state)
 end
@@ -62,7 +71,10 @@ function Plugin:history()
         if not item.dim and not (self.ui.document and self.ui.document.file==item.file)
             and BookList.hasBookBeenOpened(item.file) then
             local settings = BookList.getDocSettings(item.file)
-            Q.capture(self.state,settings:readSetting("annotations"),require("apps/filemanager/filemanagerbookinfo").extendProps(settings:readSetting("doc_props",{}),item.file),item.file,hash,json.encode)
+            local props=require("apps/filemanager/filemanagerbookinfo").extendProps(settings:readSetting("doc_props",{}),item.file)
+            local annotations=settings:readSetting("annotations")
+            Q.capture(self.state,annotations,props,item.file,hash,json.encode)
+            Q.coverCapture(self.state,annotations,props,item.file,self.config.url and self.config.token and target(self.config.url,self.config.token),revision(item.file),hash)
         end
     end
     self:capture(true) -- Live annotations override older sidecar content.
@@ -88,7 +100,10 @@ function Plugin:sync(manual)
     end
     if not self.scanned then self:history(); self.scanned=true end
     local rows, versions = Q.batch(self.state,json.encode)
+    local cover, cover_wait = Q.coverBatch(self.state,target(self.config.url,self.config.token),os.time())
     if #rows == 0 then
+        if cover then return self:syncCover(cover,manual) end
+        if cover_wait then self:scheduleSync(math.max(1,cover_wait)); return end
         self.retry_delay=nil
         if manual then self:message("All highlights are stored on the collector.") end
         return
@@ -137,8 +152,70 @@ function Plugin:sync(manual)
         end
         if progress then
             self.retry_delay=nil
-            if next(self.state.pending) then self:scheduleSync(1) end
+            self:scheduleWork()
         elseif next(self.state.pending) then self:retry() end
+    end)
+end
+function Plugin:scheduleWork()
+    if next(self.state.pending) then self:scheduleSync(1); return end
+    local cover, wait=Q.coverBatch(self.state,target(self.config.url,self.config.token),os.time())
+    if cover then self:scheduleSync(1)
+    elseif wait then self:scheduleSync(math.max(1,wait)) end
+end
+function Plugin:syncCover(cover,manual)
+    local response_path=self.path_state..".cover-result-"..tostring(os.time()).."-"..hash(tostring({}))
+    local image_path=response_path..".image"
+    local url,token=self.config.url,self.config.token
+    local live_document=(self.ui.document and self.ui.document.file==cover.file) and self.ui.document or nil
+    local pid=ffiUtil.runInSubProcess(function()
+        -- Extraction and network I/O are confined to the child. Screen rendering
+        -- would discard the original colour on a monochrome Kindle.
+        pcall(function()
+            if lfs.attributes(cover.file,"mode")~="file" then return end -- removable storage may be temporarily absent
+            local mime,size=Cover.write(live_document,cover.file,image_path)
+            if not mime then write(response_path,{unavailable=true}); return end
+            if lfs.attributes(image_path,"size")~=size then return end
+            local http,ltn12=require("socket.http"),require("ltn12")
+            http.TIMEOUT=8
+            local function pct(s) return (s:gsub("[^%w%-%.%_~]",function(c) return string.format("%%%02X",string.byte(c)) end)) end
+            local chunks,received={},0
+            local request_ok,_,code=pcall(http.request,{url=url.."/v1/covers",method="POST",redirect=false,
+                headers={Authorization="Bearer "..token,["Content-Type"]=mime,["Content-Length"]=tostring(size),
+                    ["X-Book-Title"]=pct(cover.title),["X-Book-Author"]=pct(cover.author)},
+                source=ltn12.source.file(assert(io.open(image_path,"rb"))),sink=function(chunk)
+                    if chunk then received=received+#chunk; if received>65536 then return nil,"response too large" end; chunks[#chunks+1]=chunk end
+                    return 1
+                end})
+            local decoded,reply=pcall(json.decode,table.concat(chunks))
+            if request_ok and tonumber(code)==200 and decoded and type(reply)=="table" and reply.status=="stored"
+                and type(reply.sha256)=="string" and reply.sha256:match("^[0-9a-f]+$") and #reply.sha256==64 then
+                write(response_path,{sha256=reply.sha256})
+            end
+        end)
+        os.remove(image_path); os.remove(image_path..".tmp")
+    end)
+    if not pid then
+        Q.coverFail(self.state,cover.id,cover.revision,os.time())
+        write(self.path_state,self.state)
+        self:scheduleWork()
+        return
+    end
+    self.process=Process.watch(pid,{time=os.time,schedule=function(delay,callback) UIManager:scheduleIn(delay,callback) end,
+        unschedule=function(callback) UIManager:unschedule(callback) end,done=ffiUtil.isSubProcessDone,kill=ffiUtil.terminateSubProcess,
+        cleanup=function() os.remove(response_path); os.remove(response_path..".tmp"); os.remove(image_path) end},function(completed)
+        local result=completed and read(response_path)
+        if result then
+            self.state=read(self.path_state) or self.state
+            Q.coverAck(self.state,cover.id,cover.revision,result.sha256,result.unavailable)
+            write(self.path_state,self.state)
+        end
+        if result then self.retry_delay=nil; self:scheduleWork()
+        else
+            self.state=read(self.path_state) or self.state
+            Q.coverFail(self.state,cover.id,cover.revision,os.time())
+            write(self.path_state,self.state)
+            self:scheduleWork()
+        end
     end)
 end
 function Plugin:configure(key,title)

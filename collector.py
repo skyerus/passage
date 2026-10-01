@@ -17,6 +17,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from db import clean_cover_url, merge, preserve_creation_date, quote_key, validate_tombstones
 
+from device_covers import MAX_IMAGE, book_key, decode_metadata, image_kind, store_image, stored_path
+
 MAX_BODY = 1024 * 1024
 LOG = logging.getLogger("collector")
 
@@ -71,6 +73,7 @@ class Store:
             con.execute("PRAGMA journal_mode=WAL")
             con.execute("CREATE TABLE IF NOT EXISTS inbox (source TEXT, device TEXT, id TEXT, payload TEXT NOT NULL, revision TEXT NOT NULL, published TEXT, PRIMARY KEY(source,device,id))")
             con.execute("CREATE TABLE IF NOT EXISTS quote_history (source TEXT, device TEXT, id TEXT, quote_key TEXT, PRIMARY KEY(source,device,id,quote_key))")
+            con.execute("CREATE TABLE IF NOT EXISTS book_covers (book_key TEXT PRIMARY KEY, sha256 TEXT NOT NULL, extension TEXT NOT NULL)")
             con.execute("CREATE TABLE IF NOT EXISTS tombstones (quote_key TEXT PRIMARY KEY, published INTEGER NOT NULL DEFAULT 0)")
             # Existing inboxes acquire key history without losing or requeuing quotes.
             for source, device, ident, payload in con.execute("SELECT source,device,id,payload FROM inbox"):
@@ -127,6 +130,23 @@ class Store:
                 con.execute("INSERT INTO inbox(source,device,id,payload,revision) VALUES(?,?,?,?,?) ON CONFLICT(source,device,id) DO UPDATE SET payload=excluded.payload,revision=excluded.revision", identity + (data, revision))
             self._scrub_deleted(con)
         return [record["id"] for record in records]
+
+    def accept_cover(self, title, author, data, content_type):
+        extension = image_kind(data)
+        if content_type != {'jpg': 'image/jpeg', 'png': 'image/png'}[extension]:
+            raise ValueError('Cover content type does not match image')
+        key = book_key(title, author)
+        with self.connect() as con:
+            con.execute('BEGIN IMMEDIATE')
+            existing = con.execute('SELECT sha256,extension FROM book_covers WHERE book_key=?', (key,)).fetchone()
+            # Keep the first usable automatic cover. A delayed retry from another
+            # reader must not replace it; users can always choose a manual cover.
+            if existing and stored_path(Path(self.path).parent, *existing):
+                return existing[0]
+            digest, extension = store_image(Path(self.path).parent, data)
+            con.execute('INSERT INTO book_covers VALUES(?,?,?) ON CONFLICT(book_key) DO UPDATE SET sha256=excluded.sha256,extension=excluded.extension',
+                        (key, digest, extension))
+        return digest
 
     def pending(self):
         with self.connect() as con:
@@ -289,7 +309,7 @@ def server(store, token, host, port):
             self.reply(200 if self.path == "/healthz" else 404, {"status": "ok", "service": "reader-bridge"} if self.path == "/healthz" else {"error": "not found"})
 
         def do_POST(self):
-            if self.path not in ("/v1/highlights", "/v1/tombstones"):
+            if self.path not in ("/v1/highlights", "/v1/tombstones", "/v1/covers"):
                 return self.reply(404, {"error": "not found"})
             if not hmac.compare_digest(self.headers.get("Authorization", "").encode(), ("Bearer " + token).encode()):
                 return self.reply(401, {"error": "unauthorized"})
@@ -297,8 +317,20 @@ def server(store, token, host, port):
                 if self.headers.get("Transfer-Encoding") or len(self.headers.get_all("Content-Length", [])) != 1:
                     raise ValueError("Content-Length required")
                 length = int(self.headers["Content-Length"])
-                if not 0 < length <= MAX_BODY:
+                if not 0 < length <= (MAX_IMAGE if self.path == '/v1/covers' else MAX_BODY):
                     return self.reply(413, {"error": "body exceeds limit"})
+                if self.path == '/v1/covers':
+                    if self.headers.get_content_type() not in ('image/jpeg', 'image/png'):
+                        return self.reply(415, {'error': 'JPEG or PNG required'})
+                    if len(self.headers.get_all('X-Book-Title', [])) != 1 or len(self.headers.get_all('X-Book-Author', [])) != 1:
+                        raise ValueError('Cover metadata headers required')
+                    title = decode_metadata(self.headers['X-Book-Title'], required=True)
+                    author = decode_metadata(self.headers['X-Book-Author'])
+                    data = self.rfile.read(length)
+                    if len(data) != length:
+                        raise ValueError('Incomplete cover')
+                    digest = store.accept_cover(title, author, data, self.headers.get_content_type())
+                    return self.reply(200, {'status': 'stored', 'sha256': digest})
                 if self.headers.get_content_type() != "application/json":
                     return self.reply(415, {"error": "application/json required"})
                 body = self.rfile.read(length)
@@ -313,7 +345,7 @@ def server(store, token, host, port):
                     accepted = store.accept(payload)
             except (ValueError, UnicodeError):
                 return self.reply(400, {"error": "invalid highlight batch"})
-            except sqlite3.Error:
+            except (sqlite3.Error, OSError):
                 LOG.exception("Local storage failure")
                 return self.reply(503, {"error": "storage unavailable; retry"})
             self.reply(200, {"accepted": accepted, "status": "stored"})

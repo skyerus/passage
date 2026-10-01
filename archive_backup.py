@@ -149,6 +149,7 @@ def read_snapshot(path):
     """Validate the entire bundle before a restore can mutate anything."""
     from collector import validate
     from db import validate_tombstones
+    from device_covers import image_kind
     path = guarded(path)
     if not path.is_file() or path.stat().st_size > MAX_ARCHIVE:
         raise ValueError('Choose a downloaded Reader Bridge backup under 256 MiB.')
@@ -197,6 +198,8 @@ def read_snapshot(path):
             header = b'\x89PNG\r\n\x1a\n' if name.endswith('.png') else b'\xff\xd8\xff'
             if not data.startswith(header):
                 raise ValueError('Invalid cover format.')
+            if image_kind(data) != name[-3:]:
+                raise ValueError('Cover image does not match its format.')
             images[name] = data
     return manifest, images
 

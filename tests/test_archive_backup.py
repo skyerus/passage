@@ -85,13 +85,13 @@ class BackupTests(unittest.TestCase):
         self.assertTrue(all(json.loads(r[3]).get('deleted') for r in self.store.pending()))
 
     def test_cover_bytes_and_mapping_survive_restore(self):
-        image = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jXioAAAAASUVORK5CYII=')
+        image = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=')
         digest = hashlib.sha256(image).hexdigest()
         key = 'a' * 64
         (self.data / 'covers').mkdir()
         (self.data / 'covers' / (digest + '.png')).write_bytes(image)
         with self.store.connect() as con:
-            con.execute('CREATE TABLE book_covers(book_key TEXT PRIMARY KEY, sha256 TEXT, extension TEXT)')
+            con.execute('CREATE TABLE IF NOT EXISTS book_covers(book_key TEXT PRIMARY KEY, sha256 TEXT, extension TEXT)')
             con.execute('INSERT INTO book_covers VALUES(?,?,?)', (key,digest,'png'))
         saved = self.save()
         new_app = self.root / 'new'
@@ -101,6 +101,26 @@ class BackupTests(unittest.TestCase):
         self.assertEqual((data / 'covers' / (digest + '.png')).read_bytes(), image)
         with store.connect() as con:
             self.assertEqual(con.execute('SELECT * FROM book_covers').fetchone(), (key,digest,'png'))
+
+    def test_restored_original_cover_and_date_are_visible_in_app_and_export(self):
+        from covers import CoverLibrary
+        image = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=')
+        library = CoverLibrary(self.app)
+        library.put(self.item['book_title'], self.item['author'], image)
+        library.save()
+        saved = self.save()
+        new_app = self.root / 'new'
+        data, _ = initialize(new_app / 'collector/data')
+        store = Store(data / 'inbox.sqlite3')
+        backup.restore(saved['path'], store.path, new_app)
+        bridge = desktop.Desktop(new_app, agent_dir=self.root / 'agents')
+        status = bridge.status()
+        self.assertEqual(status['highlight_count'], 1)
+        self.assertEqual(status['highlights'][0]['created_at'], self.item['created_at'])
+        self.assertEqual(Path(status['books'][0]['cover_path']).read_bytes(), image)
+        exported = self.root / 'recovered.json'
+        bridge.mutate('export', {'path':str(exported)})
+        self.assertEqual(base64.b64decode(json.loads(exported.read_text())['highlights'][0]['cover_image']), image)
 
     def test_missing_folder_keeps_previous_snapshot_and_worker_retries(self):
         saved = self.save()

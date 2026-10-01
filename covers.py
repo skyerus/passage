@@ -6,7 +6,6 @@ import json
 from pathlib import Path, PurePosixPath
 import posixpath
 import ssl
-import struct
 import sys
 from urllib.parse import unquote, urlsplit
 from urllib.request import build_opener, HTTPRedirectHandler, HTTPSHandler, Request
@@ -14,49 +13,13 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 import setup
-from db import _normalized, clean_cover_url
+from db import clean_cover_url
+from device_covers import MAX_IMAGE, book_key, image_kind
 
-MAX_IMAGE = 5 * 1024 * 1024
 MAX_EPUB = 128 * 1024 * 1024
 MAX_CATALOG = 4 * 1024 * 1024
 
 
-def book_key(title, author):
-    raw = json.dumps([_normalized(title), _normalized(author)], ensure_ascii=False, separators=(',', ':'))
-    return hashlib.sha256(raw.encode()).hexdigest()
-
-
-def image_kind(data):
-    if not data or len(data) > MAX_IMAGE:
-        raise ValueError('Choose a JPEG or PNG cover no larger than 5 MiB.')
-    if data.startswith(b'\x89PNG\r\n\x1a\n') and len(data) >= 24:
-        width, height = struct.unpack('>II', data[16:24])
-        if not 0 < width <= 8000 or not 0 < height <= 8000 or width * height > 24_000_000:
-            raise ValueError('Cover dimensions are too large.')
-        return 'png'
-    if data.startswith(b'\xff\xd8\xff') and data.endswith(b'\xff\xd9'):
-        # Bound JPEG dimensions before it reaches the native image decoder.
-        offset = 2
-        while offset + 4 <= len(data):
-            if data[offset] != 0xff:
-                break
-            marker = data[offset + 1]
-            if marker == 0xff:
-                offset += 1
-                continue
-            if marker in (0xd8, 0x01) or 0xd0 <= marker <= 0xd7:
-                offset += 2
-                continue
-            size = int.from_bytes(data[offset + 2:offset + 4], 'big')
-            if size < 2 or offset + 2 + size > len(data):
-                break
-            if marker in (0xc0, 0xc1, 0xc2) and size >= 8:
-                height, width = struct.unpack('>HH', data[offset + 5:offset + 9])
-                if 0 < width <= 8000 and 0 < height <= 8000 and width * height <= 24_000_000:
-                    return 'jpg'
-                raise ValueError('Cover dimensions are too large.')
-            offset += size + 2
-    raise ValueError('Choose a valid JPEG or PNG cover.')
 
 
 class CoverRedirect(HTTPRedirectHandler):

@@ -6,7 +6,7 @@ Reader Bridge is an open-source macOS setup wizard for this workflow. It brings 
 
 [Setup guide](docs/SETUP.md) · [Download the release](https://github.com/skyerus/reader-bridge/releases/latest) · [Common questions](#common-questions) · [Compatibility](#compatibility)
 
-**Native Mac app in development:** Reader Bridge includes a SwiftUI app with guided device pairing and a searchable local highlight archive with book covers. Browse by book or add artwork from an EPUB or image. **iCloud Drive is the recommended backup option on Mac**; another folder or optional GitHub backup also works. The build bundles Python, so basic setup needs no Terminal, Python installation or GitHub account. See [build and use the Mac app](docs/MAC-APP.md). The existing v0.1.0 release is the command-line setup; a notarized public app installer is not available yet.
+**Native Mac app in development:** Reader Bridge includes a SwiftUI app with guided device pairing and a searchable local highlight archive with book covers. Browse by book with covers sent automatically by the updated readers, or choose artwork from an EPUB or image. **iCloud Drive is the recommended backup option on Mac**; another folder or optional GitHub backup also works. The build bundles Python, so basic setup needs no Terminal, Python installation or GitHub account. See [build and use the Mac app](docs/MAC-APP.md). The existing v0.1.0 release is the command-line setup; a notarized public app installer is not available yet.
 
 ![Reader Bridge book library with offline covers and highlights](docs/images/mac-books-dark.png)
 
@@ -27,7 +27,7 @@ Reader Bridge packages that setup into a guided, resumable workflow. The wizard 
 | Keep Kindle and Xteink highlights together | KOReader highlights and CrossPoint clippings upload automatically to a local collector. Add iCloud Drive, a backup folder or GitHub for another copy. Offline changes wait for a connection. |
 | Continue reading on the other device | Uses the existing KOReader-compatible CrossPoint Sync service. KOReader can sync automatically; Xteink uses manual **Upload Local** and **Apply Remote** actions. |
 | Bring your existing Kindle highlights | Import `My Clippings.txt` or Kindle highlights JSON in the Mac app, preserving recorded dates and cover links without an Amazon login in Reader Bridge. |
-| Browse the books behind your quotes | A visual book library with offline covers; add a cover from an EPUB or image and export it with your highlights. |
+| Browse the books behind your quotes | A visual book library with offline covers automatically sent by updated readers; portable exports include the artwork. |
 | Highlight across pages on the X4 Pro | Custom CrossPoint firmware keeps a selection active when you drag to a page edge, within the current chapter. |
 | Download the same EPUB to both readers | Optional Calibre-Web setup provides a local OPDS book catalog, preserving the downloaded EPUB bytes needed for binary progress matching. |
 | Run it from your Mac | A local collector and optional library run after login. Your Mac needs to be awake and reachable for those services; downloaded books remain readable offline. |
