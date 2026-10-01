@@ -185,13 +185,17 @@ struct BridgeSidebar: View {
 
 struct OverviewView: View {
     @EnvironmentObject var model: AppModel
+    @AppStorage("setup.firmwareConfirmedReference") private var firmwareConfirmedReference = ""
     let status: BridgeStatus
+    private var readiness: SetupReadiness {
+        SetupReadiness(status: status, firmwareConfirmedByUser: !firmwareConfirmedReference.isEmpty && firmwareConfirmedReference == SetupInput.firmwareConfirmationReference(status))
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             archiveSummary
             if status.usesExistingSetup || status.offersExistingSetup {
                 ExistingSetupView(status: status)
-            } else if status.setupStep < 5 {
+            } else if readiness.recommendedStep != .complete {
                 HStack(alignment: .center, spacing: 18) {
                     Image(systemName: "link").font(.system(size: 23, weight: .light)).foregroundStyle(teal).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 5) {
@@ -258,18 +262,18 @@ struct OverviewView: View {
         return status.xteink.paired ? "Paired" : "Not paired"
     }
     private var nextStepTitle: String {
-        switch status.setupStep {
-        case 1: return "Start your local collector"
-        case 2: return "Connect your Kindle"
-        case 3: return "Connect your X4 Pro"
+        switch readiness.recommendedStep {
+        case .bridge: return "Start your local collector"
+        case .kindle: return "Connect your Kindle"
+        case .xteink: return readiness.firmwareNeedsConfirmation ? "Finish your X4 Pro setup" : "Connect your X4 Pro"
         default: return "Check reading-position sync"
         }
     }
     private var nextStepDetail: String {
-        switch status.setupStep {
-        case 1: return "Your Mac collects highlights while it is awake."
-        case 2: return "Install the KOReader plugin over USB."
-        case 3: return "Pair CrossPoint using its SD card or local network."
+        switch readiness.recommendedStep {
+        case .bridge: return "Your Mac collects highlights while it is awake."
+        case .kindle: return "Install the KOReader plugin over USB."
+        case .xteink: return readiness.firmwareNeedsConfirmation ? "Confirm Reader Bridge firmware is installed on your reader." : "Pair CrossPoint using its SD card or local network."
         default: return "Test the same EPUB in both directions."
         }
     }

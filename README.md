@@ -8,6 +8,10 @@ Reader Bridge is an open-source macOS setup wizard for this workflow. It brings 
 
 **Native Mac app in development:** Reader Bridge now includes a SwiftUI app with guided device pairing, a menu-bar status view, and a searchable local highlight archive. GitHub backup is optional in the app. The build bundles Python, so basic highlight setup needs no Terminal or Python installation. See [build and use the Mac app](docs/MAC-APP.md). The existing v0.1.0 release is the command-line setup; a notarized public app installer is not available yet.
 
+![Reader Bridge for Mac showing a shared archive of public-domain sample highlights](docs/images/mac-highlights-dark.jpg)
+
+The Mac app offers one-step-at-a-time setup, visual device guides, and a local archive. [See setup screenshots and instructions](docs/MAC-APP.md).
+
 ## The problem: switching readers without leaving your reading history behind
 
 You have a Kindle, a collection of highlighted passages, and a new Xteink X4 Pro. You want to read on whichever device suits the moment, pick up at the same passage, and keep the quotes you save in one place.
