@@ -104,7 +104,7 @@ class DesktopTests(unittest.TestCase):
         output = self.root / 'export.json'
         result = self.bridge.mutate('export', {'path': str(output)})
         self.assertEqual(result['exported'], 501)
-        self.assertEqual(len(json.loads(output.read_text())), 501)
+        self.assertEqual(len(json.loads(output.read_text())['highlights']), 501)
         self.assertEqual(output.stat().st_mode & 0o777, 0o600)
         with self.assertRaises(setup.SetupError):
             self.bridge.mutate('export', {'path': str(output)})
@@ -494,7 +494,7 @@ class ExistingCollectorTests(unittest.TestCase):
                 self.bridge.mutate(command, {})
         output = self.root / 'export.json'
         self.bridge.mutate('export', {'path': str(output)})
-        self.assertEqual(json.loads(output.read_text()), [])
+        self.assertEqual(json.loads(output.read_text())['highlights'], [])
         with self.assertRaises(setup.SetupError):
             self.bridge.mutate('export', {'path': str(self.legacy / 'export.json')})
         self.assertEqual(before, self.snapshot())

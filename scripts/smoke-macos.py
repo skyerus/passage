@@ -61,7 +61,7 @@ def main():
             assert (data / 'collector/data/token').read_text().strip() == token
             export = root / 'quotes.json'
             assert invoke('export', path=str(export))['exported'] == 1
-            assert json.loads(export.read_text())[0]['title'] == 'Acceptance Fixture'
+            assert json.loads(export.read_text())['highlights'][0]['title'] == 'Acceptance Fixture'
             backup_folder = root / 'backup-folder'
             backup_folder.mkdir()
             backed_up = invoke('configure_cloud_backup', provider='folder', folder=str(backup_folder))

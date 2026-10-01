@@ -73,4 +73,25 @@ final class RefreshTests: XCTestCase {
         await refresh.value
         XCTAssertEqual(model.status?.service.healthy, true)
     }
+    @MainActor func testOldBookReadDoesNotReplaceNewBookSelection() async throws {
+        let online = try fixture(healthy: true), offline = try fixture(healthy: false)
+        let pending = PendingRead()
+        let started = expectation(description: "Book read started")
+        pending.didStart = { started.fulfill() }
+        var requestedBook = ""
+        let model = AppModel { _, parameters in
+            requestedBook = parameters["book_id"] as? String ?? ""
+            return try await pending.read()
+        }
+        model.status = online
+        model.highlightBookID = "first"
+        let refresh = Task { await model.refreshStatus() }
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertEqual(requestedBook, "first")
+        model.highlightBookID = "second"
+        pending.continuation?.resume(returning: offline)
+        await refresh.value
+        XCTAssertEqual(model.status?.service.healthy, true)
+    }
+
 }

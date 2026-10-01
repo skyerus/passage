@@ -6,75 +6,134 @@ import UniformTypeIdentifiers
 struct HighlightsView: View {
     @EnvironmentObject var model: AppModel
     let status: BridgeStatus
+    @AppStorage("archive.layout") private var layout = "books"
     @State private var selectedID: String?
     @FocusState private var searchFocused: Bool
     private var query: String { model.highlightQuery }
-    private var filtered: [Highlight] { status.highlights.filter { $0.matches(query) } }
+    private var filtered: [Highlight] { status.highlights.filter { $0.matches(query) && (model.highlightBookID.isEmpty || $0.bookId == model.highlightBookID) } }
+    private var books: [BookSummary] { (status.books ?? []).filter { $0.matches(query) } }
+    private var selectedBook: BookSummary? { status.books?.first { $0.id == model.highlightBookID } }
     private var selectedHighlight: Highlight? { filtered.first { $0.id == selectedID } }
+    private var showingBooks: Bool { layout == "books" && model.highlightBookID.isEmpty }
     var body: some View {
-        VStack(alignment: .leading, spacing: 17) {
+        VStack(alignment: .leading, spacing: 15) {
             archiveToolbar
-            if filtered.isEmpty {
+            if let book = selectedBook {
+                HStack(spacing: 8) {
+                    Button { showAllBooks() } label: { Label("All books", systemImage: "chevron.left") }.buttonStyle(.plain).foregroundStyle(teal)
+                    Text("/").foregroundStyle(.tertiary)
+                    Text(book.title).lineLimit(1)
+                    Spacer()
+                    Text("\(book.count) \(book.count == 1 ? "highlight" : "highlights")").foregroundStyle(.secondary).monospacedDigit()
+                }.font(.system(size: 12)).padding(.horizontal, 4)
+            }
+            if status.highlightCount == 0 {
                 VStack(spacing: 0) {
-                    BridgeEmptyState(symbol: query.isEmpty ? "text.quote" : "magnifyingglass", title: query.isEmpty ? "A good line stays with you" : "No matching highlights", detail: query.isEmpty ? "Save a highlight on either reader, or import your Kindle clippings to begin." : "Try another book, author, or phrase.")
-                    Button(query.isEmpty ? "Connect your readers" : "Clear search") {
-                        if query.isEmpty { model.selection = .setup } else { model.highlightQuery = ""; model.searchHighlights() }
-                    }.buttonStyle(.bordered).padding(.bottom, 40)
-                }.frame(maxWidth: .infinity, maxHeight: .infinity).bridgeSurface()
+                    BridgeEmptyState(symbol: "books.vertical", title: "Your reading, collected", detail: "Import your Kindle highlights, or save your first quote on either reader.")
+                    Button("Import highlights…", action: importHighlights).buttonStyle(.borderedProminent).disabled(model.busy || !status.service.healthy).padding(.bottom, 40)
+                }.bridgeSurface()
+            } else if showingBooks {
+                bookLibrary
+            } else if filtered.isEmpty {
+                VStack(spacing: 0) {
+                    BridgeEmptyState(symbol: "magnifyingglass", title: model.refreshing ? "Opening highlights…" : "No matching highlights", detail: model.refreshing ? "" : "Try another book, author, or phrase.")
+                    if !query.isEmpty {
+                        Button("Clear search") { model.highlightQuery = ""; model.searchHighlights() }.buttonStyle(.bordered).padding(.bottom, 30)
+                    }
+                }.bridgeSurface()
             } else {
                 GeometryReader { geometry in
                     HStack(spacing: 16) {
-                        archiveList.frame(width: geometry.size.width < 740 ? 210 : 260)
+                        archiveList.frame(width: geometry.size.width < 740 ? 225 : 275)
                         if let highlight = selectedHighlight {
                             HighlightReadingView(highlight: highlight).frame(maxWidth: .infinity, maxHeight: .infinity)
-                        } else {
-                            BridgeEmptyState(symbol: "text.quote", title: "Choose a highlight", detail: "Select a line from your archive to read it here.").bridgeSurface()
                         }
                     }
                 }
             }
-            Text("Quotes are shared here. Underlines stay in their original book.").font(.system(size: 11)).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .center)
+            Text("Quotes are shared here. Underlines stay in their original book.")
+                .font(.system(size: 11)).foregroundStyle(.secondary).frame(maxWidth: .infinity)
         }
         .onAppear { reconcileSelection() }
         .onChange(of: filtered.map(\.id)) { _ in reconcileSelection() }
-        .onReceive(NotificationCenter.default.publisher(for: .bridgeFindHighlights)) { _ in searchFocused = true }
+        .onChange(of: status.books?.map(\.id)) { _ in
+            if !model.highlightBookID.isEmpty, selectedBook == nil { showAllBooks() }
+        }
+        .onChange(of: layout) { _ in
+            if !model.highlightBookID.isEmpty { model.highlightBookID = ""; model.searchHighlights() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bridgeFindHighlights)) { _ in
+            layout = "quotes"; model.highlightBookID = ""; model.searchHighlights(); searchFocused = true
+        }
     }
-
     private var archiveToolbar: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(.secondary).accessibilityHidden(true)
-                TextField("Search highlights", text: $model.highlightQuery, prompt: Text("Search books, authors, or words").foregroundColor(.secondary))
-                    .textFieldStyle(.plain).foregroundStyle(.primary).font(.system(size: 13)).focused($searchFocused)
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+                TextField("Search", text: $model.highlightQuery, prompt: Text(showingBooks ? "Search books or authors" : "Search highlights").foregroundColor(.secondary))
+                    .textFieldStyle(.plain).foregroundStyle(.primary).focused($searchFocused)
                     .onChange(of: model.highlightQuery) { _ in model.searchHighlights() }
-                    .accessibilityLabel("Search highlights")
+                    .accessibilityLabel(showingBooks ? "Search books or authors" : "Search highlights")
                 if !query.isEmpty {
-                    Button { model.highlightQuery = ""; model.searchHighlights(); searchFocused = true } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                    }.buttonStyle(.plain).help("Clear search").accessibilityLabel("Clear search")
+                    Button { model.highlightQuery = ""; model.searchHighlights() } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                        .buttonStyle(.plain).accessibilityLabel("Clear search")
                 }
-            }.padding(.horizontal, 15).padding(.vertical, 12).bridgeGlass(cornerRadius: 15)
+            }.font(.system(size: 13)).padding(.horizontal, 14).padding(.vertical, 11).bridgeGlass(cornerRadius: 14)
+            Picker("Archive view", selection: $layout) {
+                Image(systemName: "books.vertical").tag("books").help("Books")
+                Image(systemName: "text.quote").tag("quotes").help("All highlights")
+            }.pickerStyle(.segmented).labelsHidden().frame(width: 80).accessibilityLabel("Archive view: books or highlights")
             Menu {
-                Button("Import Kindle clippings…", action: importClippings).disabled(model.busy || !status.service.healthy)
-                Button("Export archive as JSON…", action: exportArchive).disabled(model.busy || status.highlightCount == 0)
-            } label: {
-                Image(systemName: "ellipsis").font(.system(size: 17, weight: .medium)).frame(width: 26, height: 30)
-            }.menuStyle(.borderlessButton).fixedSize().padding(.horizontal, 9).padding(.vertical, 3)
-                .bridgeGlass(cornerRadius: 15, interactive: true).help("Import and export your archive").accessibilityLabel("Archive actions")
+                Button("Import highlights…", action: importHighlights).disabled(model.busy || !status.service.healthy)
+                Button("Download missing covers") { Task { await model.perform("cache_covers", activity: "Downloading covers…") } }.disabled(model.busy || status.highlightCount == 0)
+                Divider()
+                Button("Export highlights & covers…", action: exportArchive).disabled(model.busy || status.highlightCount == 0)
+            } label: { Image(systemName: "ellipsis").font(.system(size: 17, weight: .medium)).frame(width: 26, height: 30) }
+                .menuStyle(.borderlessButton).fixedSize().padding(.horizontal, 7).padding(.vertical, 3)
+                .bridgeGlass(cornerRadius: 14, interactive: true).help("Import highlights, download covers, or export archive").accessibilityLabel("Archive actions")
+        }
+    }
+    private var bookLibrary: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(query.isEmpty ? "YOUR BOOKS" : "MATCHING BOOKS").font(.system(size: 10, weight: .semibold)).tracking(1.2)
+                Spacer()
+                Text("\(books.count) books · A–Z").font(.system(size: 11))
+            }.foregroundStyle(.secondary).padding(.horizontal, 6)
+            if books.isEmpty {
+                BridgeEmptyState(symbol: "magnifyingglass", title: "No matching books", detail: "Try another title or author, or switch to highlights to search inside quotes.").bridgeSurface()
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 148, maximum: 205), spacing: 16, alignment: .top)], alignment: .leading, spacing: 18) {
+                        ForEach(books) { book in
+                            Button { openBook(book) } label: {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    BookCoverView(title: book.title, path: book.coverPath, width: 96, height: 144)
+                                        .frame(maxWidth: .infinity).padding(.top, 7).padding(.bottom, 5)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(book.title).font(.system(size: 15, weight: .medium, design: .serif)).lineLimit(2).frame(height: 38, alignment: .top)
+                                        Text(book.author.isEmpty ? "Unknown author" : book.author).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                                        Text("\(book.count) \(book.count == 1 ? "highlight" : "highlights")").font(.system(size: 10, weight: .medium)).foregroundStyle(teal).padding(.top, 3)
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                }.padding(15).frame(maxWidth: .infinity, alignment: .leading).bridgeSurface(cornerRadius: 17).contentShape(RoundedRectangle(cornerRadius: 17))
+                            }.buttonStyle(.plain)
+                                .accessibilityLabel("\(book.title), \(book.author), \(book.count) \(book.count == 1 ? "highlight" : "highlights")")
+                                .contextMenu { Button("Change cover…") { chooseBookCover(title: book.title, author: book.author, model: model) }.disabled(model.busy) }
+                        }
+                    }.padding(3)
+                }
+            }
         }
     }
     private var archiveList: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(query.isEmpty ? "HIGHLIGHTS" : "SEARCH RESULTS").font(.system(size: 9, weight: .semibold)).tracking(1)
+                Text("HIGHLIGHTS").font(.system(size: 9, weight: .semibold)).tracking(1)
                 Spacer()
                 Text(filtered.count.formatted()).font(.system(size: 10)).monospacedDigit()
-            }.foregroundStyle(.secondary).padding(.horizontal, 17).padding(.top, 18).padding(.bottom, 12)
+            }.foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 18).padding(.bottom, 10)
             if let order = HighlightPresentation.orderDescription(status.highlightsOrder, undated: status.highlightsUndated) {
-                Text(order).font(.system(size: 10)).foregroundStyle(.secondary)
-                    .padding(.horizontal, 17).padding(.bottom, 8)
-                    .help("Recorded dates sort newest first. Highlights without a recorded date follow, ordered by book and author. Importing a highlight does not give it a new creation date.")
+                Text(order).font(.system(size: 10)).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.bottom, 8)
             }
             List(selection: $selectedID) {
                 ForEach(filtered) { highlight in
@@ -83,29 +142,31 @@ struct HighlightsView: View {
                 }
             }.listStyle(.plain).scrollContentBackground(.hidden)
             if let matches = status.highlightsMatches, matches > status.highlights.count {
-                Text("Showing \(status.highlights.count) of \(matches). Search covers the full archive.")
-                    .font(.system(size: 10)).foregroundStyle(.secondary).lineSpacing(3)
-                    .padding(.horizontal, 16).padding(.vertical, 12)
+                Text("Showing \(status.highlights.count) of \(matches). Search covers the full archive.").font(.system(size: 10)).foregroundStyle(.secondary).padding(12)
             }
-        }.bridgeSurface().clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }.bridgeSurface().clipShape(RoundedRectangle(cornerRadius: 20))
     }
+    private func openBook(_ book: BookSummary) {
+        model.highlightBookID = book.id; model.highlightQuery = ""; selectedID = nil; model.searchHighlights()
+    }
+    private func showAllBooks() { model.highlightBookID = ""; model.highlightQuery = ""; layout = "books"; model.searchHighlights() }
     private func reconcileSelection() { selectedID = HighlightPresentation.selection(current: selectedID, visibleIDs: filtered.map(\.id)) }
-    private func importClippings() {
+    private func importHighlights() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false; panel.canChooseFiles = true; panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.plainText]
-        panel.message = "Choose My Clippings.txt from your Kindle."
-        panel.prompt = "Import clippings"
-        if panel.runModal() == .OK, let path = panel.url?.path {
-            Task { await model.perform("import_clippings", ["path": path], activity: "Importing clippings…", success: "Clippings imported into your archive.") }
+        panel.allowedContentTypes = [.plainText, .json]
+        panel.message = "Choose My Clippings.txt, a Kindle highlights JSON archive, or a Reader Bridge export. Covers in JSON are imported too."
+        panel.prompt = "Import"
+        if panel.runModal() == .OK, let url = panel.url {
+            let command = url.pathExtension.lowercased() == "json" ? "import_archive" : "import_clippings"
+            Task { await model.perform(command, ["path": url.path], activity: "Importing highlights and covers…", success: "Clippings saved on this Mac. Covers can be added from the book’s menu.") }
         }
     }
     private func exportArchive() {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "reader-bridge-highlights.json"; panel.allowedContentTypes = [.json]
-        panel.prompt = "Export archive"
+        panel.nameFieldStringValue = "reader-bridge-highlights.json"; panel.allowedContentTypes = [.json]; panel.prompt = "Export"
         if panel.runModal() == .OK, let path = panel.url?.path {
-            Task { await model.perform("export", ["path": path], activity: "Exporting highlights…", success: "Your highlight archive was exported.") }
+            Task { await model.perform("export", ["path": path], activity: "Exporting highlights and covers…", success: "Highlights and cached covers exported together.") }
         }
     }
 }
@@ -113,48 +174,57 @@ struct HighlightsView: View {
 struct HighlightArchiveRow: View {
     let highlight: Highlight
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(highlight.title.isEmpty ? "Untitled book" : highlight.title).font(.system(size: 15, weight: .medium, design: .serif)).lineLimit(2)
-            if !highlight.author.isEmpty { Text(highlight.author).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1) }
-            Text(highlight.text).font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(2).lineLimit(3)
-            Text(HighlightPresentation.source(highlight.source)).font(.system(size: 9, weight: .medium)).foregroundStyle(.secondary).padding(.top, 2)
-        }.padding(.vertical, 2).frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
+        HStack(alignment: .top, spacing: 10) {
+            BookCoverView(title: highlight.title, path: highlight.coverPath, width: 32, height: 48).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(highlight.title.isEmpty ? "Untitled book" : highlight.title).font(.system(size: 14, weight: .medium, design: .serif)).lineLimit(2)
+                Text(highlight.text).font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(2).lineLimit(3)
+                Text(highlight.createdAt.isEmpty ? "Date not recorded" : HighlightPresentation.date(highlight.createdAt)).font(.system(size: 9)).foregroundStyle(.secondary)
+            }
+        }.padding(.vertical, 2).frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
             .contextMenu { Button("Copy highlight") { copyHighlight(highlight) } }
     }
 }
 
 struct HighlightReadingView: View {
+    @EnvironmentObject var model: AppModel
     let highlight: Highlight
     @State private var copiedID: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Label(HighlightPresentation.source(highlight.source), systemImage: "book.closed").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                Text(HighlightPresentation.source(highlight.source)).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
                 Spacer(minLength: 8)
-                Button {
-                    copyHighlight(highlight); copiedID = highlight.id
-                } label: {
+                Button { copyHighlight(highlight); copiedID = highlight.id } label: {
                     Label(copiedID == highlight.id ? "Copied" : "Copy", systemImage: copiedID == highlight.id ? "checkmark" : "doc.on.doc")
-                }.buttonStyle(.bordered).controlSize(.small).help("Copy this highlight")
-            }.padding(.horizontal, 25).padding(.top, 21).padding(.bottom, 16)
-            Divider().padding(.horizontal, 25)
+                }.buttonStyle(.bordered).controlSize(.small)
+            }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 16)
+            Divider().padding(.horizontal, 24)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(highlight.title.isEmpty ? "Untitled book" : highlight.title)
-                        .font(.system(size: 27, weight: .medium, design: .serif)).lineSpacing(3).textSelection(.enabled)
-                    if !highlight.author.isEmpty {
-                        Text(highlight.author).font(.system(size: 13)).foregroundStyle(.secondary).padding(.top, 9).textSelection(.enabled)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 20) {
+                            cover
+                            bookHeading.frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
+                        }
+                        VStack(alignment: .leading, spacing: 16) { cover; bookHeading }
                     }
-                    Image(systemName: "quote.opening").font(.system(size: 24, weight: .light)).foregroundStyle(teal.opacity(0.7)).padding(.top, 30).padding(.bottom, 14).accessibilityHidden(true)
-                    Text(highlight.text).font(.system(size: 20, weight: .regular, design: .serif)).lineSpacing(8)
-                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                    Text(highlight.createdAt.isEmpty ? "Date not recorded" : HighlightPresentation.date(highlight.createdAt))
-                        .font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 27)
-                }.padding(25).padding(.bottom, 20)
+                    Image(systemName: "quote.opening").font(.system(size: 24, weight: .light)).foregroundStyle(teal.opacity(0.7)).padding(.top, 28).padding(.bottom, 14).accessibilityHidden(true)
+                    Text(highlight.text).font(.system(size: 20, design: .serif)).lineSpacing(8).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                    Text(highlight.createdAt.isEmpty ? "Date not recorded" : HighlightPresentation.date(highlight.createdAt)).font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 27)
+                }.padding(24).padding(.bottom, 20)
             }
-        }.bridgeSurface().clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .onChange(of: highlight.id) { _ in copiedID = nil }
+        }.bridgeSurface().clipShape(RoundedRectangle(cornerRadius: 20)).onChange(of: highlight.id) { _ in copiedID = nil }
+    }
+    private var cover: some View { BookCoverView(title: highlight.title, path: highlight.coverPath, width: 80, height: 120) }
+    private var bookHeading: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(highlight.title.isEmpty ? "Untitled book" : highlight.title).font(.system(size: 23, weight: .medium, design: .serif)).lineSpacing(3).textSelection(.enabled)
+            if !highlight.author.isEmpty { Text(highlight.author).font(.system(size: 12)).foregroundStyle(.secondary).textSelection(.enabled) }
+            Button(highlight.coverPath?.isEmpty != false ? "Add cover…" : "Change cover…") {
+                chooseBookCover(title: highlight.title, author: highlight.author, model: model)
+            }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(teal).disabled(model.busy).padding(.top, 3)
+        }
     }
 }
 
@@ -263,7 +333,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: "books.vertical").foregroundStyle(teal)
-                    Text("Reader Bridge").font(.system(size: 14, weight: .medium, design: .serif))
+                    Text("Reader Bridge \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")").font(.system(size: 14, weight: .medium, design: .serif))
                     Spacer()
                     Link("Documentation & source ↗", destination: URL(string: "https://github.com/skyerus/reader-bridge")!).font(.system(size: 12))
                 }

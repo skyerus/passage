@@ -5,6 +5,7 @@ import json
 import re
 import unicodedata
 from pathlib import Path
+from urllib.parse import urlsplit
 
 DB_PATH = Path(__file__).parent / "highlights.json"
 TOMBSTONES_PATH = Path(__file__).parent / "highlight-tombstones.json"
@@ -65,6 +66,21 @@ def preserve_creation_date(target, incoming):
         target['created_at'] = incoming['created_at']
 
 
+def clean_cover_url(value):
+    """Only known public book-image hosts; never credentials, local URLs or ports."""
+    if not isinstance(value, str) or len(value) > 4096 or any(ord(c) < 33 for c in value):
+        return ''
+    try:
+        url = urlsplit(value)
+        hosts = {'m.media-amazon.com', 'images-na.ssl-images-amazon.com',
+                 'images-eu.ssl-images-amazon.com', 'images.amazon.com', 'covers.openlibrary.org'}
+        if url.scheme == 'https' and url.hostname in hosts and not url.username and not url.password and url.port in (None, 443) and not url.fragment:
+            return value
+    except ValueError:
+        pass
+    return ''
+
+
 def merge(existing: list[dict], scraped: list[dict], tombstones=()) -> list[dict]:
     """Union without truncating text or dropping legacy entries; preserve legacy metadata."""
     deleted = set(tombstones)
@@ -86,4 +102,8 @@ def merge(existing: list[dict], scraped: list[dict], tombstones=()) -> list[dict
             preserve_creation_date(target, q)
             if not target.get("cover_url") and q.get("cover_url"):
                 target["cover_url"] = q["cover_url"]
+    covers = {(_normalized(q.get("book_title", "")), _normalized(q.get("author", ""))): q["cover_url"] for q in merged if q.get("cover_url")}
+    for q in merged:
+        if not q.get("cover_url"):
+            q["cover_url"] = covers.get(_key(q)[:2], "")
     return merged

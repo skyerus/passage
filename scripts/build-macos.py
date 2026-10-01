@@ -77,7 +77,7 @@ def main():
         (resources / 'python').rename(resources / 'runtime')
         bridge = resources / 'bridge'
         bridge.mkdir()
-        for filename in ('desktop.py', 'setup.py', 'collector.py', 'db.py', 'archive_backup.py', 'import_clippings.py', 'firmware.json', 'LICENSE'):
+        for filename in ('desktop.py', 'setup.py', 'collector.py', 'db.py', 'archive_backup.py', 'import_clippings.py', 'import_archive.py', 'covers.py', 'firmware.json', 'LICENSE'):
             shutil.copy2(ROOT / filename, bridge / filename)
         shutil.copytree(ROOT / 'koreader', bridge / 'koreader', ignore=shutil.ignore_patterns('__pycache__', '*.pyc', 'tests'))
         shutil.copytree(ROOT / 'docs', resources / 'docs')
