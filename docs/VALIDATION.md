@@ -66,3 +66,23 @@ its dedicated cloud folder were removed afterward. The app reports a successful
 folder save separately from cloud upload, which is managed by macOS. This is a
 local development build, not a notarized public release; the remaining firmware
 acceptance checks above still apply to a fresh-device installer release.
+
+## App-hosted reading positions (2026-10-02)
+
+The 0.6.0 development app includes a single-account KOSync-compatible service,
+reversible reader pairing, and reading positions in version 2 iCloud/folder
+snapshots. The suite passes 125 Python tests and 28 Swift tests. Tests exercise
+authenticated HTTP exchange in both directions, intentional rereading, durable
+storage, old-server and offline-queue migration, filename-to-binary matching,
+different-account rejection, credential exclusion and restoration that retains
+current positions. Migration records do not count as device upload receipts.
+
+The packaged runtime passed the macOS acceptance script with disposable launchd
+jobs and reader fixtures: real HTTP upload/download, service restart with the
+same account and positions, startup configuration, fixture pairing with retained
+highlight queues, version 2 snapshots, safe restore and shutdown with retained
+data. Native Settings layout and the new position controls were inspected in
+the development build. These tests do not establish a physical Kindle/Xteink
+round trip, an actual Mac reboot, or measured battery usage. The physical
+two-reader checkpoint in `PROGRESS-SYNC.md` remains required before confirming
+setup. The firmware and notarization release gates above remain unchanged.

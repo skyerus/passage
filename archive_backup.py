@@ -74,7 +74,7 @@ def image_file(path):
 
 
 def capture(database, app):
-    """One read transaction; only allowlisted archive data, never app settings."""
+    """Consistent reads per database; allowlisted archive data, never settings."""
     database, app = guarded(database), guarded(app)
     with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True)) as con:
         con.execute('PRAGMA query_only=ON')
