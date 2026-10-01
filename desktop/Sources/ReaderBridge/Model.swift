@@ -65,27 +65,55 @@ enum Backend {
 @MainActor final class AppModel: ObservableObject {
     @Published var status: BridgeStatus?
     @Published var busy = false
+    @Published private(set) var refreshing = false
     @Published var activity = ""
     @Published var error: String?
     @Published var notice: String?
     @Published var lastUpdated: Date?
     @Published var highlightQuery = ""
     @Published var selection: Section = .overview
+    private var requestGeneration = 0
+    private let runBackend: (String, [String: Any]) async throws -> BridgeStatus
+    init(runBackend: @escaping (String, [String: Any]) async throws -> BridgeStatus = { command, parameters in
+        try await Task.detached(priority: .userInitiated) { try Backend.run(command: command, parameters: parameters) }.value
+    }) { self.runBackend = runBackend }
     enum Section: String, CaseIterable, Identifiable { case overview = "Overview", setup = "Setup", highlights = "Highlights", settings = "Settings"; var id: String { rawValue }
         var icon: String { switch self { case .overview: return "square.grid.2x2"; case .setup: return "link"; case .highlights: return "text.quote"; case .settings: return "slider.horizontal.3" } }
     }
     var serviceLabel: String { guard error == nil else { return "Status needs attention" }; guard let status else { return "Checking collector…" }; return status.service.healthy ? "Collector online" : "Collector offline" }
     func perform(_ command: String, _ parameters: [String: Any] = [:], activity: String = "Checking status…", success: String? = nil) async {
+        if command == "status" { await refreshStatus(interactive: true); return }
         guard !busy else { return }
+        requestGeneration += 1
         busy = true; self.activity = activity
         defer { busy = false; self.activity = "" }
         do {
-            var request = parameters
-            if command == "status" { request["query"] = highlightQuery }
-            let newStatus = try await Task.detached(priority: .userInitiated) { try Backend.run(command: command, parameters: request) }.value
+            let newStatus = try await runBackend(command, parameters)
             status = newStatus; lastUpdated = Date(); error = nil
             if let success { notice = success }
         } catch { self.error = error.localizedDescription }
+    }
+    func refreshStatus(interactive: Bool = false) async {
+        guard !busy, !refreshing else { return }
+        let generation = requestGeneration
+        let query = highlightQuery
+        let firstLoad = status == nil
+        refreshing = true
+        if firstLoad { busy = true; activity = "Opening your bridge…" }
+        defer {
+            refreshing = false
+            if firstLoad { busy = false; activity = "" }
+        }
+        do {
+            let newStatus = try await runBackend("status", ["query": query])
+            // A background read must never undo a user action or newer search.
+            guard generation == requestGeneration, query == highlightQuery else { return }
+            status = newStatus; lastUpdated = Date()
+            if interactive { error = nil }
+        } catch {
+            guard generation == requestGeneration else { return }
+            if interactive || self.error == nil { self.error = error.localizedDescription }
+        }
     }
     private var pollingTask: Task<Void, Never>?
     private var searchTask: Task<Void, Never>?
@@ -94,11 +122,11 @@ enum Backend {
         searchTask = Task {
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
-            while busy && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }
+            while (busy || refreshing) && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }
             guard !Task.isCancelled else { return }
             await perform("status")
         }
     }
     func startPolling() { guard pollingTask == nil else { return }; pollingTask = Task { await poll() } }
-    func poll() async { while !Task.isCancelled { if !busy { await perform("status") }; try? await Task.sleep(nanoseconds: 15_000_000_000) } }
+    func poll() async { while !Task.isCancelled { await refreshStatus(); try? await Task.sleep(nanoseconds: 15_000_000_000) } }
 }

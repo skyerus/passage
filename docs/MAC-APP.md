@@ -2,22 +2,28 @@
 
 The native Mac app brings setup, connection status, and the shared highlight archive into one window. It includes its own Python runtime. Basic highlight collection does not require Terminal, Python, Git, GitHub, or a subscription.
 
+Setup shows one step at a time, with device illustrations and extra connection settings under **Connection settings**. Already using Reading Highlights? Choose **Use existing setup** to keep your current reader connections.
+
 This is a **development build**, not a notarized public download. Source builds are available now. A public installer still needs Developer ID signing, Apple notarization, and a clean-Mac/device acceptance pass. Do not describe the development disk image as a finished consumer release.
+
+![Guided first setup in Reader Bridge](images/mac-setup.jpg)
+
+The app shows one next action. Device guides are labeled illustrations.
 
 ## What you need
 
 - macOS 13 or later. Build on Apple Silicon for Apple Silicon; build on Intel for Intel. The first local acceptance run is on Apple Silicon.
 - A jailbroken Kindle with working KOReader. Start with the [KindleModding guide](https://kindlemodding.org/jailbreaking/), check your exact model and firmware in [Find My Jailbreak](https://kindlemodding.org/kindle-models), then follow the [KOReader installation guide](https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices). The Mac app does not jailbreak or downgrade a Kindle.
-- An Xteink **X4 Pro** running CrossPoint. Our shared-highlights firmware is still built locally from pinned source; Git and the downloaded build tools are needed for this optional firmware step. Installing an application firmware update still requires a confirmation on the reader.
+- An Xteink **X4 Pro** running CrossPoint. Our shared-highlights firmware is required and is built locally from pinned source; Git and the downloaded build tools are needed unless that firmware is already installed. Installing an application firmware update still requires a confirmation on the reader.
 - Your readers and awake Mac on the same trusted local network.
 
 ## First setup
 
 1. Put **Reader Bridge.app** in Applications before starting its collector. Leave it at that location: the background service runs the interpreter inside the app.
-2. Open **Setup**. If it offers **Use existing setup**, select that to connect to your earlier Reading Highlights installation; your readers keep their existing settings. Otherwise start the local collector. The app checks for a conflicting port instead of replacing another service. An existing command-line Reader Bridge configuration is preserved.
+2. Open **Setup**. If it offers **Use existing setup**, select that to connect to your earlier Reading Highlights installation; your readers keep their existing settings. Otherwise follow the Mac step to start the local collector. Ports and the reader address are under **Connection settings**. The app checks for a conflicting port instead of replacing another service. An existing command-line Reader Bridge configuration is preserved.
 3. Exit KOReader and connect the Kindle in USB storage mode. Select the detected Kindle or its mounted folder, then install the plugin. Eject and reopen KOReader when prompted.
-4. On the X4 Pro, open File Transfer or connect its SD card. Confirm the device model in the app and pair it. If it needs the custom firmware, choose the firmware build/staging option, wait for verification, then complete **Settings → System → SD Card Firmware Update** on the reader.
-5. Follow the progress setup instructions using the same progress account and identical EPUB on both readers. Confirm a round trip only after testing the actual devices. Progress still requires **Upload Local** and **Apply Remote** on Xteink; this app does not change that firmware behavior.
+4. On the X4 Pro, open File Transfer or connect its SD card. Confirm the device model in the app and pair it. The firmware build/staging option is selected by default. Keep it selected unless the Reader Bridge build is already installed, wait for verification, then complete **Settings → System → SD Card Firmware Update** on the reader.
+5. Follow the position-sync guide using the same progress account and identical EPUB on both readers. You can choose **Later** and return to Setup when ready. Confirm a round trip only after testing the actual devices. Progress still requires **Upload Local** and **Apply Remote** on Xteink; this app does not change that firmware behavior.
 6. Make one highlight on each reader with Wi-Fi connected. Check both appear in **Highlights**. Import an English `My Clippings.txt` to bring your previous Kindle quotes into the same archive.
 
 Setup resumes from saved service and pairing state. A saved pairing is not proof that a disconnected or sleeping reader is currently reachable. The interface distinguishes these conditions.
@@ -35,6 +41,14 @@ If the original service is offline, the app retains its saved connection and rep
 ## Everyday use
 
 The menu-bar item reports the collector's status and opens the main window. The collector starts after Mac login once installed and keeps running when you close the window or quit the app. The app's **Open at login** setting controls whether its interface also starts at login. Use the collector's stop action to stop accepting uploads.
+
+In **Highlights**, select a quote to read or copy it. Search covers book titles, authors, and quote text. The archive menu beside search contains Kindle-clippings import and JSON export. Use **⌘F** to search, **⌘1–4** to move between sections, and **⌘R** to refresh. Routine status checks run quietly in the background.
+
+![Reader Bridge highlight archive with public-domain sample quotes](images/mac-highlights-dark.jpg)
+
+Sample archive shown; these screenshots contain no personal highlights or connection details.
+
+The interface follows the Mac's light or dark appearance and accessibility preferences. Builds made with a current Apple SDK use native Liquid Glass controls on macOS 26 and later; older systems use standard materials. Quote-reading surfaces stay opaque for readability.
 
 Highlights remain local by default under `~/Library/Application Support/Reader Bridge`. The app never creates a GitHub repository automatically. GitHub backup is optional under Settings and currently requires the GitHub CLI signed into your account; you must explicitly select your archive and choose whether to create it. Local records remain available when backup is disabled or GitHub is unavailable. Export JSON for a portable copy.
 
@@ -75,7 +89,9 @@ The app package bundles third-party runtime notices under Resources. Firmware re
 
 ## Development acceptance on 1 October 2026
 
-The Apple Silicon build passed 59 Python tests and four native Swift tests. Its bundled runtime was exercised with a disposable launchd service: authenticated uploads from both source types, duplicate merging, full-archive search, JSON export, deletion replay, collector restart, stable credentials, and pairing into fake Kindle/SD volumes all passed. The first-run, setup and highlight screens were inspected in the running packaged app, including search using disposable sample highlights. The existing personal readers, archive and services were not changed.
+The 0.3.0 Apple Silicon development build passed 71 Python tests and 20 native Swift tests, covering pairing prerequisites, staged-firmware acknowledgement, setup recovery, archive selection and background refresh races. Its bundled runtime was exercised with a disposable launchd service: authenticated uploads from both source types, duplicate merging, full-archive search, JSON export, deletion replay, collector restart, stable credentials, and pairing into fake Kindle/SD volumes all passed.
+
+Native visual checks used an isolated preview with sample data: fresh setup, an existing-service candidate, required X4 Pro firmware choices, failed-pairing recovery, staged firmware, optional position setup, keyboard navigation/search, dark-mode contrast and long-quote scrolling. The documented screenshots come from that preview. The full minimum-size, light-appearance, Reduce Transparency and Increase Contrast matrix remains to be checked on supported systems; those paths have code-level fallbacks. Personal reader settings and collector services were not changed by the UI work.
 
 Repeat the packaged acceptance check with the built runtime:
 
