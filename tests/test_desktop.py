@@ -124,6 +124,54 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('--no-publish', args)
         self.assertNotIn('--repo', args)
 
+    def test_undated_archive_has_readable_order_without_invented_dates(self):
+        self.initialize()
+        records = [dict(self.item(str(i), text), book_title=title, author=author, created_at='')
+                   for i, (title, author, text) in enumerate([
+                       ('Zulu', 'Author', 'Last'), ('alpha', 'Zed', 'Third'),
+                       ('Alpha', 'Anne', 'Second'), ('Alpha', 'Anne', 'First')])]
+        self.store.accept({'source': 'koreader', 'device_id': 'kindle-clippings-import', 'highlights': records})
+        status = self.bridge.status()
+        self.assertEqual([row['text'] for row in status['highlights']], ['First', 'Second', 'Third', 'Last'])
+        self.assertEqual(status['highlights_order'], 'book_title')
+        self.assertEqual(status['highlights_undated'], 4)
+        self.assertTrue(all(row['created_at'] == '' for row in status['highlights']))
+
+    def test_date_order_normalizes_offsets_and_keeps_undated_at_end(self):
+        self.initialize()
+        records = [dict(self.item(str(i), text), book_title=title, created_at=date)
+                   for i, (text, title, date) in enumerate([
+                       ('offset', 'Dated', '2026-10-02T00:30:00+02:00'),
+                       ('utc', 'Dated', '2026-10-01T23:00:00Z'),
+                       ('fraction', 'Dated', '2026-10-01T23:00:00.500Z'),
+                       ('day', 'Dated', '2026-10-01'),
+                       ('naive', 'Dated', '2026-10-01 12:00:00'),
+                       ('missing', 'alpha', ''),
+                       ('invalid', 'Zulu', '2099-99-01')])]
+        self.store.accept({'source': 'koreader', 'device_id': 'fixture', 'highlights': records})
+        status = self.bridge.status()
+        self.assertEqual([row['text'] for row in status['highlights']], ['fraction', 'utc', 'offset', 'naive', 'day', 'missing', 'invalid'])
+        self.assertEqual(status['highlights_order'], 'newest_first')
+        self.assertEqual(status['highlights_undated'], 2)
+        result = self.bridge.status(query='Zulu')
+        self.assertEqual(result['highlights_order'], 'book_title')
+        self.assertEqual(result['highlights_undated'], 1)
+        self.assertEqual(result['highlight_count'], 7)
+
+    def test_deduplication_preserves_earliest_known_creation_date(self):
+        self.initialize()
+        # CrossPoint sorts before KOReader in the inbox; its missing date must
+        # not erase dates recorded by the other source for the same quote.
+        self.store.accept({'source': 'crosspoint', 'device_id': 'x4', 'highlights': [dict(self.item(), created_at='')]})
+        self.store.accept({'source': 'koreader', 'device_id': 'pw', 'highlights': [
+            dict(self.item('later'), created_at='2026-10-01T12:00:00Z'),
+            dict(self.item('earlier'), created_at='2026-09-01T12:00:00Z')]})
+        status = self.bridge.status()
+        self.assertEqual(status['highlight_count'], 1)
+        self.assertEqual(status['highlights_undated'], 0)
+        self.assertEqual(status['highlights'][0]['created_at'], '2026-09-01T12:00:00Z')
+        self.assertEqual(len(self.store.pending()), 3)
+
     @patch.object(desktop.sys, 'platform', 'darwin')
     def test_start_preserves_backup_and_disable_preserves_rows(self):
         self.initialize()

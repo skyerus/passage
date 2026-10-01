@@ -2,6 +2,7 @@
 """Native app JSON bridge. Status caps highlights at 500; count/export cover all live quotes."""
 import argparse
 import contextlib
+from datetime import datetime, timezone
 import fcntl
 import io
 import hashlib
@@ -46,6 +47,26 @@ def bool_arg(value, name):
     if type(value) is not bool:
         raise setup.SetupError(name + ' must be true or false.')
     return value
+
+
+def highlight_date(raw):
+    """Recognize recorded ISO dates, never infer a date from an import or ID."""
+    if not isinstance(raw, str) or not re.fullmatch(
+            r'\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?', raw):
+        return None
+    try:
+        value = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        # Date-only and timezone-free records keep their recorded wall time.
+        # Use UTC as a stable ordering convention, not the Mac's current zone.
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        return None
+
+
+def highlight_sort_key(row):
+    recorded = highlight_date(row['created_at'])
+    return (recorded is None, -recorded.timestamp() if recorded else 0,
+            row['title'].casefold(), row['author'].casefold(), row['text'].casefold(), row['id'])
 
 
 class Desktop(setup.Bridge):
@@ -331,9 +352,18 @@ class Desktop(setup.Bridge):
                 if item.get('deleted'):
                     continue
                 key = item_key(item)
-                if key not in deleted and key not in rows:
+                if key in deleted:
+                    continue
+                if key not in rows:
                     rows[key] = {'id': key, 'title': item['book_title'], 'author': item['author'], 'text': item['text'], 'source': source, 'created_at': item.get('created_at', '')}
-            return sorted(rows.values(), key=lambda row: (row['created_at'], row['id']), reverse=True), pending
+                else:
+                    recorded = highlight_date(item.get('created_at', ''))
+                    previous = highlight_date(rows[key]['created_at'])
+                    # A duplicate without a date must not hide a recorded one.
+                    # Keep the earliest known creation date of the same passage.
+                    if recorded and (previous is None or recorded < previous):
+                        rows[key]['created_at'] = item['created_at']
+            return sorted(rows.values(), key=highlight_sort_key), pending
 
     def status(self, query=''):
         existing, descriptor = self.existing()
@@ -363,6 +393,7 @@ class Desktop(setup.Bridge):
         if query:
             needle = query.casefold()
             rows = [row for row in rows if any(needle in row[key].casefold() for key in ('title', 'author', 'text'))]
+        undated = sum(highlight_date(row['created_at']) is None for row in rows)
         mounts = []
         try:
             for mount in Path('/Volumes').iterdir():
@@ -409,6 +440,7 @@ class Desktop(setup.Bridge):
                 'kindle': {'paired': bool(kindle.get('installed')), 'connected': bool(kindle.get('mount') and any((Path(kindle['mount']) / p / 'reader.lua').is_file() for p in ('koreader', '.adds/koreader'))), 'mount': kindle.get('mount', '')},
                 'xteink': {'paired': bool(xteink.get('paired')), 'firmware_staged': bool(xteink.get('firmware_staged')), 'url': xteink.get('device_url') or ''},
                 'mounts': mounts, 'highlights': rows[:HIGHLIGHTS_LIMIT], 'highlight_count': count, 'highlights_matches': len(rows), 'highlights_limit': HIGHLIGHTS_LIMIT,
+                'highlights_order': 'newest_first' if undated < len(rows) else 'book_title', 'highlights_undated': undated,
                 'progress_verified': bool(self.state.get('progress', {}).get('verified')), 'endpoint': endpoint or (addresses[0] if addresses else ''), 'addresses': addresses, 'warnings': warnings,
                 'library': {'installed': self.owned('library'), 'port': library.get('port', 8083), 'books': library.get('books', '')}}
 

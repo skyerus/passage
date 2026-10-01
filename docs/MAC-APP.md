@@ -42,6 +42,8 @@ If the original service is offline, the app retains its saved connection and rep
 
 The menu-bar item reports the collector's status and opens the main window. The collector starts after Mac login once installed and keeps running when you close the window or quit the app. The app's **Open at login** setting controls whether its interface also starts at login. Use the collector's stop action to stop accepting uploads.
 
+Highlights with recorded creation dates appear newest first. Undated highlights follow alphabetically by book, author and passage; an entirely undated archive is labeled **By book · dates unavailable**. Importing old quotes does not make them recent, and the app does not invent their original dates. Equivalent passages retain the earliest known recorded date across sources. Timezone offsets are normalized; dates without a timezone use their recorded wall time as UTC for deterministic ordering.
+
 In **Highlights**, select a quote to read or copy it. Search covers book titles, authors, and quote text. The archive menu beside search contains Kindle-clippings import and JSON export. Use **⌘F** to search, **⌘1–4** to move between sections, and **⌘R** to refresh. Routine status checks run quietly in the background.
 
 ![Reader Bridge highlight archive with public-domain sample quotes](images/mac-highlights-dark.jpg)
@@ -86,6 +88,10 @@ Build with `--sign-identity 'Developer ID Application: …'` on the matching arc
 Test both upgrade and fresh install, including Mac logout/login, service restart, port conflicts, unavailable network/GitHub, incomplete pairing, queued uploads after reconnecting, and deletion replay. Intel builds and the full physical first-run walkthrough must be independently verified before claiming support.
 
 The app package bundles third-party runtime notices under Resources. Firmware remains a source build until its separate dependency redistribution review is complete.
+
+## Ordering correction in 0.3.1
+
+The ordering fix passed 74 Python tests and 22 Swift tests. Regression coverage includes timezone offsets, fractional seconds, missing/invalid dates, date-preserving deduplication and labels for undated archives. Both dated and undated layouts were checked in an isolated native preview. No stored highlight or deletion data is rewritten by this change.
 
 ## Development acceptance on 1 October 2026
 

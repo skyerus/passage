@@ -12,6 +12,7 @@ struct BridgeStatus: Decodable {
     var mounts: [Mount]; var highlights: [Highlight]; var highlightCount: Int
     var progressVerified: Bool; var endpoint: String; var addresses: [String]; var warnings: [String]; var library: Library
     var highlightsLimit: Int?; var highlightsMatches: Int?
+    var highlightsOrder: String?; var highlightsUndated: Int?
     var existingSetup: ExistingSetup?
     var usesExistingSetup: Bool { existingSetup?.connected == true }
     var offersExistingSetup: Bool { existingSetup?.available == true && !usesExistingSetup }
