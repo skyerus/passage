@@ -17,7 +17,7 @@ struct ReadingProgressView: View {
         Card(title: "Reading positions") {
             if progress?.enabled == true {
                 HStack {
-                    Label(ready ? "Syncing through this Mac" : "Position sync needs attention", systemImage: "bookmark")
+                    Label(ready ? "Ready to sync through this Mac" : "Position sync needs attention", systemImage: "bookmark")
                         .font(.headline)
                     Spacer()
                     if !pairing {
