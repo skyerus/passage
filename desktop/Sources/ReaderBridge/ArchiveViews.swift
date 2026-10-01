@@ -195,7 +195,7 @@ struct HighlightArchiveRow: View {
                 Text(highlight.createdAt.isEmpty ? "Date not recorded" : HighlightPresentation.date(highlight.createdAt)).font(.system(size: 9)).foregroundStyle(.secondary)
             }
         }.padding(.vertical, 2).frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
-            .contextMenu { Button("Copy highlight") { copyHighlight(highlight) } }
+            .contextMenu { HighlightCopyActions(highlight: highlight) }
     }
 }
 
@@ -208,9 +208,12 @@ struct HighlightReadingView: View {
             HStack {
                 Text(HighlightPresentation.source(highlight.source)).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
                 Spacer(minLength: 8)
-                Button { copyHighlight(highlight); copiedID = highlight.id } label: {
+                Menu {
+                    HighlightCopyActions(highlight: highlight) { copiedID = highlight.id }
+                } label: {
                     Label(copiedID == highlight.id ? "Copied" : "Copy", systemImage: copiedID == highlight.id ? "checkmark" : "doc.on.doc")
-                }.buttonStyle(.bordered).controlSize(.small)
+                }.menuStyle(.borderlessButton).fixedSize().controlSize(.small)
+                    .help("Copy the quote alone or with its book and author")
             }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 16)
             Divider().padding(.horizontal, 24)
             ScrollView {
@@ -241,9 +244,26 @@ struct HighlightReadingView: View {
     }
 }
 
-func copyHighlight(_ highlight: Highlight) {
+struct HighlightCopyActions: View {
+    let highlight: Highlight
+    var onCopy: () -> Void = {}
+    var body: some View {
+        Button("Copy quote only") { copyHighlight(highlight); onCopy() }
+        Button("Copy quote with book & author") { copyHighlight(highlight, includeAttribution: true); onCopy() }
+    }
+}
+
+func copyHighlight(_ highlight: Highlight, includeAttribution: Bool = false) {
+    var text = highlight.text
+    if includeAttribution {
+        let attribution = [highlight.author, highlight.title]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+        if !attribution.isEmpty { text += "\n\n— \(attribution)" }
+    }
     NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(highlight.text, forType: .string)
+    NSPasteboard.general.setString(text, forType: .string)
 }
 
 enum HighlightPresentation {
