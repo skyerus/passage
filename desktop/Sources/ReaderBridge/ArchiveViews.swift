@@ -67,10 +67,15 @@ struct HighlightsView: View {
     private var archiveList: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(query.isEmpty ? "RECENT HIGHLIGHTS" : "SEARCH RESULTS").font(.system(size: 9, weight: .semibold)).tracking(1)
+                Text(query.isEmpty ? "HIGHLIGHTS" : "SEARCH RESULTS").font(.system(size: 9, weight: .semibold)).tracking(1)
                 Spacer()
                 Text(filtered.count.formatted()).font(.system(size: 10)).monospacedDigit()
             }.foregroundStyle(.secondary).padding(.horizontal, 17).padding(.top, 18).padding(.bottom, 12)
+            if let order = HighlightPresentation.orderDescription(status.highlightsOrder, undated: status.highlightsUndated) {
+                Text(order).font(.system(size: 10)).foregroundStyle(.secondary)
+                    .padding(.horizontal, 17).padding(.bottom, 8)
+                    .help("Recorded dates sort newest first. Highlights without a recorded date follow, ordered by book and author. Importing a highlight does not give it a new creation date.")
+            }
             List(selection: $selectedID) {
                 ForEach(filtered) { highlight in
                     HighlightArchiveRow(highlight: highlight).tag(highlight.id)
@@ -78,7 +83,7 @@ struct HighlightsView: View {
                 }
             }.listStyle(.plain).scrollContentBackground(.hidden)
             if let matches = status.highlightsMatches, matches > status.highlights.count {
-                Text("Newest \(status.highlights.count) of \(matches). Search covers the full archive.")
+                Text("Showing \(status.highlights.count) of \(matches). Search covers the full archive.")
                     .font(.system(size: 10)).foregroundStyle(.secondary).lineSpacing(3)
                     .padding(.horizontal, 16).padding(.vertical, 12)
             }
@@ -144,9 +149,8 @@ struct HighlightReadingView: View {
                     Image(systemName: "quote.opening").font(.system(size: 24, weight: .light)).foregroundStyle(teal.opacity(0.7)).padding(.top, 30).padding(.bottom, 14).accessibilityHidden(true)
                     Text(highlight.text).font(.system(size: 20, weight: .regular, design: .serif)).lineSpacing(8)
                         .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                    if !highlight.createdAt.isEmpty {
-                        Text(HighlightPresentation.date(highlight.createdAt)).font(.system(size: 11)).foregroundStyle(.tertiary).padding(.top, 27)
-                    }
+                    Text(highlight.createdAt.isEmpty ? "Date not recorded" : HighlightPresentation.date(highlight.createdAt))
+                        .font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 27)
                 }.padding(25).padding(.bottom, 20)
             }
         }.bridgeSurface().clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -160,6 +164,13 @@ func copyHighlight(_ highlight: Highlight) {
 }
 
 enum HighlightPresentation {
+    static func orderDescription(_ order: String?, undated: Int?) -> String? {
+        switch order {
+        case "book_title": return "By book · dates unavailable"
+        case "newest_first": return (undated ?? 0) > 0 ? "Newest first · undated by book" : "Newest first"
+        default: return nil
+        }
+    }
     static func selection(current: String?, visibleIDs: [String]) -> String? {
         if let current, visibleIDs.contains(current) { return current }
         return visibleIDs.first

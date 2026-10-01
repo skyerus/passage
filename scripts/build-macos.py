@@ -88,8 +88,8 @@ def main():
         info = {
             'CFBundleName': 'Reader Bridge', 'CFBundleDisplayName': 'Reader Bridge',
             'CFBundleIdentifier': 'com.readerbridge.desktop', 'CFBundleExecutable': 'ReaderBridge',
-            'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.3.0',
-            'CFBundleVersion': '4', 'LSMinimumSystemVersion': '13.0',
+            'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.3.1',
+            'CFBundleVersion': '5', 'LSMinimumSystemVersion': '13.0',
             'CFBundleIconFile': 'ReaderBridge', 'NSHighResolutionCapable': True,
             'NSLocalNetworkUsageDescription': 'Reader Bridge pairs your readers and receives their highlights on your home network.',
             'NSRemovableVolumesUsageDescription': 'Reader Bridge installs its plugin and pairing settings on the reader you choose.',
@@ -119,7 +119,7 @@ def main():
             raise RuntimeError('Bundled status smoke failed or created data during read-only startup')
         staging.rename(app)
     if args.dmg:
-        dmg = output / f'Reader-Bridge-0.3.0-{architecture}.dmg'
+        dmg = output / f'Reader-Bridge-0.3.1-{architecture}.dmg'
         if dmg.exists():
             parser.error('DMG destination exists; choose a fresh output directory')
         with tempfile.TemporaryDirectory(prefix='reader-bridge-dmg-') as directory:
