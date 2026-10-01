@@ -24,6 +24,7 @@ sys.dont_write_bytecode = True
 
 import setup
 import archive_backup
+from progress_setup import ProgressSetup
 from collector import Store, initialize, item_key
 from device_covers import stored_path
 from covers import CoverLibrary, book_key, epub_cover, MAX_EPUB, MAX_IMAGE
@@ -73,7 +74,7 @@ def highlight_sort_key(row):
             row['title'].casefold(), row['author'].casefold(), row['text'].casefold(), row['id'])
 
 
-class Desktop(setup.Bridge):
+class Desktop(ProgressSetup, setup.Bridge):
     def legacy_spec(self, path, descriptor=None):
         """Only the known sibling layout and a fully pinned launch job qualify."""
         legacy = setup.guarded(self.app.parent / 'Reading Highlights')
@@ -213,6 +214,7 @@ class Desktop(setup.Bridge):
                     and spec.get('WorkingDirectory') == str(directory)
                     and isinstance(args, list) and len(args) >= 2
                     and (args == [sys.executable, str(directory / 'archive_backup.py'), '--state-dir', str(directory)] if kind == 'cloud_backup'
+                         else args == [sys.executable, str(directory / 'progress_sync.py'), '--state-dir', str(directory), '--port', str(self.state[kind].get('port'))] if kind == 'progress_sync'
                          else str(directory / 'collector.py') in args if kind == 'collector'
                          else args[0] == str(directory / 'venv/bin/cps')))
         except (OSError, ValueError, plistlib.InvalidFileException):
@@ -266,6 +268,8 @@ class Desktop(setup.Bridge):
             return
         if self.owned(kind) and self.state.get(kind, {}).get('port') == port:
             if kind == 'collector' and self.authenticated(port):
+                return
+            if kind == 'progress_sync' and self.progress_authenticated():
                 return
             if kind == 'library' and self.library_listener_owned(port):
                 return
@@ -433,7 +437,8 @@ class Desktop(setup.Bridge):
         # First prove the selected destination works, then enable background work.
         archive_backup.snapshot(config['database'], self.app, destination, target)
         self.stop_owned('cloud_backup')
-        self.install_file(target / 'archive_backup.py', (setup.SOURCE / 'archive_backup.py').read_bytes())
+        for name in ('archive_backup.py','progress_sync.py'):
+            self.install_file(target / name, (setup.SOURCE / name).read_bytes())
         setup.atomic_write(target / 'config.json', archive_backup.encode(config))
         self.state['backup_installation'] = install_id
         self.state['cloud_backup'] = {**self.state.get('cloud_backup', {}), 'enabled':True, 'provider':provider, 'destination':str(destination)}
@@ -528,13 +533,13 @@ class Desktop(setup.Bridge):
         if service and not healthy:
             warnings.append('Collector is stopped or unreachable. Readers retain pending uploads until it is available.')
         mode = 'github' if service.get('archive') and not service.get('backup_disabled') else 'local'
-        return {'cloud_backup': self.cloud_backup_status(), 'existing_setup': existing, 'service': {'installed': existing['connected'] or self.owned('collector'), 'healthy': healthy, 'port': port, 'mode': mode, 'archive': service.get('archive', '') if mode == 'github' else '', 'pending_backup': pending if mode == 'github' else 0},
+        return {'local_progress': self.progress_status(), 'cloud_backup': self.cloud_backup_status(), 'existing_setup': existing, 'service': {'installed': existing['connected'] or self.owned('collector'), 'healthy': healthy, 'port': port, 'mode': mode, 'archive': service.get('archive', '') if mode == 'github' else '', 'pending_backup': pending if mode == 'github' else 0},
                 'kindle': {'paired': bool(kindle.get('installed')), 'connected': bool(kindle.get('mount') and any((Path(kindle['mount']) / p / 'reader.lua').is_file() for p in ('koreader', '.adds/koreader'))), 'mount': kindle.get('mount', '')},
                 'xteink': {'paired': bool(xteink.get('paired')), 'firmware_staged': bool(xteink.get('firmware_staged')), 'url': xteink.get('device_url') or ''},
                 'mounts': mounts, 'highlights': rows[:HIGHLIGHTS_LIMIT], 'highlight_count': count, 'highlights_matches': len(rows), 'highlights_limit': HIGHLIGHTS_LIMIT,
                 'books': sorted(books.values(), key=lambda b: (b['title'].casefold(), b['author'].casefold())),
                 'highlights_order': 'newest_first' if undated < len(rows) else 'book_title', 'highlights_undated': undated,
-                'progress_verified': bool(self.state.get('progress', {}).get('verified')), 'endpoint': endpoint or (addresses[0] if addresses else ''), 'addresses': addresses, 'warnings': warnings,
+                'progress_verified': bool(self.state.get('progress_sync', {}).get('verified') if self.state.get('progress_sync', {}).get('enabled') else self.state.get('progress', {}).get('verified')), 'endpoint': endpoint or (addresses[0] if addresses else ''), 'addresses': addresses, 'warnings': warnings,
                 'library': {'installed': self.owned('library'), 'port': library.get('port', 8083), 'books': library.get('books', '')}}
 
     def endpoint(self, value):
@@ -706,6 +711,19 @@ class Desktop(setup.Bridge):
                 path.unlink(missing_ok=True)
                 raise
             extra['exported'] = len(rows)
+        elif command == 'start_progress':
+            self.start_progress(args.get('endpoint'), port_arg(args['port']) if args.get('port') is not None else None)
+        elif command == 'stop_progress':
+            self.stop_progress()
+        elif command == 'pair_progress_kindle':
+            self.pair_progress_kindle(text_arg(args.get('mount'), 'Kindle volume'))
+        elif command == 'pair_progress_xteink':
+            self.pair_progress_xteink(args.get('mount'), args.get('device_url'))
+        elif command == 'verify_local_progress':
+            if not self.progress_status()['kindle_paired'] or not self.progress_status()['xteink_paired'] or not self.progress_authenticated():
+                raise setup.SetupError('Connect both readers to the running progress service before confirming the test.')
+            self.state['progress_sync']['verified'] = bool_arg(args.get('verified'), 'verified')
+            self.save()
         elif command == 'verify_progress':
             self.state['progress'] = {'verified': bool_arg(args.get('verified'), 'verified'), 'server': 'https://sync.crosspointreader.com'}
             self.save()
@@ -775,7 +793,7 @@ def execute(request, app=setup.DEFAULT_APP, agent_dir=None):
     if not isinstance(request, dict):
         raise setup.SetupError('Request must be a JSON object.')
     command = text_arg(request.get('command'), 'command')
-    commands = {'connect_existing', 'status', 'start_collector', 'stop_collector', 'pair_kindle', 'pair_xteink', 'import_clippings', 'import_archive', 'set_cover', 'cache_covers', 'export', 'verify_progress', 'configure_backup', 'disable_backup', 'install_library', 'configure_cloud_backup', 'disable_cloud_backup', 'backup_now', 'restore_backup'}
+    commands = {'start_progress', 'stop_progress', 'pair_progress_kindle', 'pair_progress_xteink', 'verify_local_progress', 'connect_existing', 'status', 'start_collector', 'stop_collector', 'pair_kindle', 'pair_xteink', 'import_clippings', 'import_archive', 'set_cover', 'cache_covers', 'export', 'verify_progress', 'configure_backup', 'disable_backup', 'install_library', 'configure_cloud_backup', 'disable_cloud_backup', 'backup_now', 'restore_backup'}
     if command not in commands:
         raise setup.SetupError('Unknown desktop command.')
     app = setup.guarded(Path(app).expanduser())

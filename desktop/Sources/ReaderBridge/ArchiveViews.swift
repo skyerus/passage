@@ -302,6 +302,7 @@ struct SettingsView: View {
     @State private var createPrivate = false
     @State private var books = ""
     @State private var libraryPort = "8083"
+    @State private var progressAddress = ""
     @State private var loginEnabled = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
     @State private var loginNeedsApproval = SMAppService.mainApp.status == .requiresApproval
@@ -322,12 +323,7 @@ struct SettingsView: View {
                 }
                 if let loginError { Text(loginError).foregroundStyle(.orange).font(.caption) }
             }
-            Card(title: "Reading positions") {
-                Label("Uses a separate sync service", systemImage: "bookmark").font(.headline)
-                Text("KOReader and CrossPoint send your place in each book to the sync server chosen on your readers. Reader Bridge currently receives highlights, not reading positions.")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Link("Reading-position setup guide ↗", destination: URL(string: "https://github.com/skyerus/reader-bridge/blob/main/docs/SETUP.md#6-connect-reading-progress")!).font(.callout)
-            }
+            ReadingProgressView(status: status)
             Card(title: "Advanced") {
                 DisclosureGroup("Connection details & optional services") {
                     VStack(alignment: .leading, spacing: 14) {
@@ -335,6 +331,14 @@ struct SettingsView: View {
                             .font(.caption).foregroundStyle(.secondary)
                         LabeledContent("Server address", value: status.endpoint).textSelection(.enabled)
                         LabeledContent("Port", value: String(status.service.port))
+                        if let progress = status.localProgress, progress.enabled {
+                            TextField("Position sync Mac address", text: $progressAddress).textFieldStyle(.roundedBorder)
+                            Button("Update position sync address") {
+                                Task { await model.perform("start_progress", ["endpoint": progressAddress, "port": progress.port], activity: "Updating position sync address…", success: "Address saved. Reconnect both readers in Setup if the address changed.") }
+                            }.disabled(model.busy || !SetupInput.validLANAddress(progressAddress))
+                            Text("Changing this address requires reconnecting each reader.").font(.caption).foregroundStyle(.secondary)
+                            Text("Uses the KOSync protocol on your trusted LAN. Account registration is disabled; pairing is managed by this app.").font(.caption).foregroundStyle(.secondary)
+                        }
                         if status.usesExistingSetup {
                             Text("Your original Reading Highlights installation manages this service.").font(.caption).foregroundStyle(.secondary)
                             LabeledContent("Additional GitHub backup", value: status.service.mode == "github" ? "Enabled" : "Off")
@@ -368,7 +372,8 @@ struct SettingsView: View {
                     .font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(3)
             }.padding(.horizontal, 4).padding(.top, 5)
         }
-        .onAppear { archive = status.service.archive; books = status.library.books; libraryPort = String(status.library.port) }
+        .onChange(of: status.localProgress?.endpoint) { progressAddress = $0 ?? "" }
+        .onAppear { archive = status.service.archive; books = status.library.books; libraryPort = String(status.library.port); progressAddress = status.localProgress?.endpoint ?? "" }
     }
     private var backupSettings: some View {
         VStack(alignment: .leading, spacing: 12) {

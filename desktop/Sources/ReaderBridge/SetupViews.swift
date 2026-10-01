@@ -52,7 +52,12 @@ struct SetupView: View {
 
     var body: some View {
         Group {
-            if status.usesExistingSetup || status.offersExistingSetup { ExistingSetupView(status: status) }
+            if status.usesExistingSetup || status.offersExistingSetup {
+                VStack(alignment: .leading, spacing: 20) {
+                    ExistingSetupView(status: status)
+                    if status.usesExistingSetup { ReadingProgressView(status: status, pairing: true) }
+                }
+            }
             else {
                 VStack(alignment: .leading, spacing: 20) {
                     stepNavigation
@@ -217,67 +222,9 @@ struct SetupView: View {
     }
 
     private var progressStep: some View {
-        Card(title: status.progressVerified ? "Reading positions confirmed" : flow.checkpoint.title) {
-            if status.progressVerified {
-                Label("Roundtrip confirmed by you", systemImage: "checkmark.circle.fill").foregroundStyle(teal)
-                Text("On X4 Pro, Upload Local sends your position and Apply Remote takes the saved position. These remain manual actions.").foregroundStyle(.secondary)
-                Button("View highlights") { model.selection = .highlights }.buttonStyle(.borderedProminent)
-                Button("Test the roundtrip again") { Task { await model.perform("verify_progress", ["verified": false], activity: "Resetting your confirmation…") } }.disabled(model.busy)
-            } else {
-                Text("Reader check \(flow.checkpoint.rawValue + 1) of \(ProgressCheckpoint.allCases.count)").font(.caption).foregroundStyle(.secondary)
-                progressInstructions
-                HStack {
-                    if flow.checkpoint == .returnToXteink {
-                        action("Both directions worked", "verify_progress", ["verified": true], "Saving your confirmation…", disabled: !flow.canConfirmRoundTrip(readiness), success: "Reading-position roundtrip confirmed by you.")
-                    } else {
-                        Button(progressContinueTitle) { flow.continueProgress(readiness) }.buttonStyle(.borderedProminent).disabled(model.busy || !readiness.canVisit(.progress))
-                    }
-                    Button("Later") { model.selection = .highlights }.disabled(model.busy)
-                }
-                DisclosureGroup("Full instructions") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Use identical EPUB bytes, the same progress account and server, Binary matching and Auto sync in KOReader, and Ask every time on X4 Pro. Compare the passage in each direction, not just the percentage.").font(.callout).foregroundStyle(.secondary)
-                        Link("Reading-position guide", destination: URL(string: "https://github.com/skyerus/reader-bridge/blob/main/docs/SETUP.md#6-connect-reading-progress")!)
-                    }.padding(.top, 8)
-                }.font(.callout)
-            }
-        }
-    }
-
-    @ViewBuilder private var progressInstructions: some View {
-        switch flow.checkpoint {
-        case .sameBook:
-            DeviceIllustration(guide: .sameBook)
-            Text("Open the exact same EPUB file on both readers. Reconverted or metadata-edited copies may not match.").foregroundStyle(.secondary)
-        case .xteinkAccount:
-            DeviceIllustration(guide: .xteinkAccount)
-            Text("On X4 Pro: Settings → System → KOReader Sync.").foregroundStyle(.secondary)
-            progressServer
-            Text("Use a unique progress-only account. Sign Up once, then choose Ask every time.").font(.callout)
-        case .kindleAccount:
-            DeviceIllustration(guide: .kindleAccount)
-            Text("In KOReader, open Progress sync. Use the same server and account.").foregroundStyle(.secondary)
-            progressServer
-            Text("Choose Binary document matching and turn Auto sync on.").font(.callout)
-        case .sendToKindle:
-            DeviceIllustration(guide: .sendToKindle)
-            Text("On X4 Pro, read to a distinctive paragraph. Choose More → Sync Progress → Upload Local.").foregroundStyle(.secondary)
-            Text("Sync the same book in KOReader with Wi-Fi connected. Check that it opens at the same passage.").font(.callout)
-        case .returnToXteink:
-            DeviceIllustration(guide: .returnToXteink)
-            Text("Read onward in KOReader and close the book. On X4 Pro, choose More → Sync Progress → Apply Remote.").foregroundStyle(.secondary)
-            Text("Check the new passage matches. Confirm only after both directions work on the readers.").font(.callout)
-        }
-    }
-
-    private var progressServer: some View { Text("https://sync.crosspointreader.com").font(.system(.callout, design: .monospaced)).textSelection(.enabled) }
-    private var progressContinueTitle: String {
-        switch flow.checkpoint {
-        case .sameBook: return "The same EPUB is open"
-        case .xteinkAccount: return "X4 Pro account is ready"
-        case .kindleAccount: return "KOReader settings are ready"
-        case .sendToKindle: return "The passage matches on Kindle"
-        case .returnToXteink: return "Both directions worked"
+        VStack(alignment: .leading, spacing: 12) {
+            ReadingProgressView(status: status, pairing: true)
+            Button("Later") { model.selection = .highlights }.font(.callout)
         }
     }
 

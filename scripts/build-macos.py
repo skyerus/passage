@@ -77,7 +77,7 @@ def main():
         (resources / 'python').rename(resources / 'runtime')
         bridge = resources / 'bridge'
         bridge.mkdir()
-        for filename in ('desktop.py', 'setup.py', 'collector.py', 'db.py', 'archive_backup.py', 'import_clippings.py', 'import_archive.py', 'covers.py', 'device_covers.py', 'firmware.json', 'LICENSE'):
+        for filename in ('desktop.py', 'setup.py', 'collector.py', 'db.py', 'archive_backup.py', 'progress_sync.py', 'progress_setup.py', 'lua_settings.py', 'import_clippings.py', 'import_archive.py', 'covers.py', 'device_covers.py', 'firmware.json', 'LICENSE'):
             shutil.copy2(ROOT / filename, bridge / filename)
         shutil.copytree(ROOT / 'koreader', bridge / 'koreader', ignore=shutil.ignore_patterns('__pycache__', '*.pyc', 'tests'))
         shutil.copytree(ROOT / 'docs', resources / 'docs')
@@ -88,10 +88,10 @@ def main():
         info = {
             'CFBundleName': 'Reader Bridge', 'CFBundleDisplayName': 'Reader Bridge',
             'CFBundleIdentifier': 'com.readerbridge.desktop', 'CFBundleExecutable': 'ReaderBridge',
-            'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.5.1',
-            'CFBundleVersion': '12', 'LSMinimumSystemVersion': '13.0',
+            'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.6.0',
+            'CFBundleVersion': '13', 'LSMinimumSystemVersion': '13.0',
             'CFBundleIconFile': 'ReaderBridge', 'NSHighResolutionCapable': True,
-            'NSLocalNetworkUsageDescription': 'Reader Bridge pairs your readers and receives their highlights on your home network.',
+            'NSLocalNetworkUsageDescription': 'Reader Bridge pairs your readers and syncs their highlights and reading positions on your home network.',
             'NSRemovableVolumesUsageDescription': 'Reader Bridge installs its plugin and pairing settings on the reader you choose.',
         }
         (contents / 'Info.plist').write_bytes(plistlib.dumps(info))

@@ -74,7 +74,7 @@ def image_file(path):
 
 
 def capture(database, app):
-    """One read transaction; only allowlisted archive data, never app settings."""
+    """Consistent reads per database; allowlisted archive data, never settings."""
     database, app = guarded(database), guarded(app)
     with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True)) as con:
         con.execute('PRAGMA query_only=ON')
@@ -104,6 +104,11 @@ def capture(database, app):
     manifest = {'format':'reader-bridge-backup', 'version':1, 'records':records,
                 'tombstones':deleted, 'history':history,
                 'covers':{k:Path(v).name for k,v in sorted(covers.items())}}
+    from progress_sync import read_archive
+    positions = read_archive(guarded(app / 'progress_sync/positions.sqlite3'))
+    if positions:
+        manifest['version'] = 2
+        manifest['positions'] = positions
     content = encode(manifest)
     if len(content) > MAX_JSON or len(content) + sum(map(len, images.values())) > MAX_ARCHIVE:
         raise ValueError('Archive exceeds the 256 MiB backup limit.')
@@ -163,8 +168,18 @@ def read_snapshot(path):
         if 'archive.json' not in names or archive.getinfo('archive.json').file_size > MAX_JSON:
             raise ValueError('Missing or oversized archive manifest.')
         manifest = json.loads(archive.read('archive.json'))
-        if manifest.get('format') != 'reader-bridge-backup' or manifest.get('version') != 1:
+        if manifest.get('format') != 'reader-bridge-backup' or manifest.get('version') not in (1,2):
             raise ValueError('Unsupported backup version.')
+        from progress_sync import validate as validate_position
+        positions = manifest.get('positions', [])
+        if not isinstance(positions, list) or len(positions) > 100000 or (positions and manifest['version'] != 2):
+            raise ValueError('Invalid saved positions')
+        seen_positions = set()
+        for position in positions:
+            normalized = validate_position(position,saved=True)
+            if set(position) - set(normalized) or normalized['document'] in seen_positions:
+                raise ValueError('Invalid or duplicate saved position')
+            seen_positions.add(normalized['document'])
         if not isinstance(manifest.get('records'), list) or len(manifest['records']) > 100000:
             raise ValueError('Invalid backup records.')
         identities = set()
@@ -244,6 +259,9 @@ def restore(path, database, app):
         con.execute('CREATE TABLE IF NOT EXISTS book_covers (book_key TEXT PRIMARY KEY, sha256 TEXT NOT NULL, extension TEXT NOT NULL)')
         con.executemany('INSERT OR IGNORE INTO book_covers VALUES(?,?,?)', [(key,name[:-4],name[-3:]) for key,name in manifest['covers'].items()])
         store._scrub_deleted(con)
+    if manifest.get('positions'):
+        from progress_sync import Store as ProgressStore
+        ProgressStore(guarded(app / 'progress_sync/positions.sqlite3')).seed(manifest['positions'])
     return len(manifest['records'])
 
 

@@ -14,7 +14,7 @@ struct CloudBackupView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(backup?.enabled == true ? status.backupSummary : "Keep your reading safe")
                         .font(.headline)
-                    Text("Your highlights, dates and book covers.")
+                    Text("Your highlights, dates, book covers and reading positions.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }
