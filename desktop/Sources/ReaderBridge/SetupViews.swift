@@ -55,11 +55,7 @@ struct SetupView: View {
 
     private var selectedEndpoint: String { endpoint.isEmpty ? status.endpoint : endpoint }
     private var firmwareConfirmed: Bool { !firmwareConfirmedReference.isEmpty && firmwareConfirmedReference == SetupInput.firmwareConfirmationReference(status) }
-    private var readiness: SetupReadiness {
-        var value = SetupReadiness(status: status, firmwareConfirmedByUser: firmwareConfirmed)
-        if model.error != nil { value.collectorOnline = false }
-        return value
-    }
+    private var readiness: SetupReadiness { SetupReadiness(status: status, firmwareConfirmedByUser: firmwareConfirmed) }
     private var validEndpoint: Bool { SetupInput.validLANAddress(selectedEndpoint) }
     private var xteinkConnectionValid: Bool { method == "SD card" ? !xteinkMount.isEmpty : SetupInput.validLANAddress(deviceURL) }
 
