@@ -268,7 +268,7 @@ class ProgressSetup:
                 # KOSync has no account-wide export API. An SD card also cannot
                 # decode the reader's hardware-key-obfuscated password. Keep the
                 # old account intact until a complete migration is available.
-                raise setup.SetupError("Your reader already uses another progress account. Passage cannot safely copy its saved server positions from this connection yet. Choose Later and keep using the reader's current progress sync; its settings and saved positions are unchanged.")
+                raise setup.SetupError("Your reader already uses another progress account. Passage cannot safely copy its saved server positions from this connection yet. Choose Finish setup for now and keep using the reader's current progress sync; its settings and saved positions are unchanged.")
         previous.pop('password_obf',None)
         previous.update(cfgVersion=2, username=account['username'], password=account['password'], serverUrl=endpoint,matchMethod=1,sendMetadata=True)
         previous.setdefault('syncBehavior',0)

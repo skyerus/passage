@@ -7,7 +7,7 @@ struct ExistingSetupView: View {
     private var collectorOnline: Bool { SetupInput.existingCollectorOnline(status) }
 
     var body: some View {
-        Card(title: status.usesExistingSetup ? "Your readers are set up" : "Connect your existing readers") {
+        Card(title: status.usesExistingSetup ? "Existing archive connected" : "Connect your existing archive") {
             Label(model.error != nil ? "Unable to check connection" : collectorOnline ? "Ready to receive highlights" : "Highlight sync is paused", systemImage: model.error == nil && collectorOnline ? "checkmark.circle.fill" : "exclamationmark.triangle")
                 .font(.callout).foregroundStyle(model.error == nil && collectorOnline ? teal : .orange)
             if status.usesExistingSetup {
@@ -69,11 +69,8 @@ struct SetupView: View {
 
     var body: some View {
         Group {
-            if status.usesExistingSetup || status.offersExistingSetup {
-                VStack(alignment: .leading, spacing: 20) {
-                    ExistingSetupView(status: status)
-                    if status.usesExistingSetup { ReadingProgressView(status: status, pairing: true, deviceChoice: deviceChoice ?? .both, crosspointModel: selectedModel) }
-                }
+            if status.offersExistingSetup {
+                ExistingSetupView(status: status)
             } else {
                 VStack(alignment: .leading, spacing: 20) {
                     stepNavigation
@@ -173,8 +170,11 @@ struct SetupView: View {
             } else if status.service.healthy {
                 Label("Ready to receive highlights", systemImage: "checkmark.circle.fill").font(.callout).foregroundStyle(teal)
                 continueButton
+            } else if status.usesExistingSetup {
+                Text("Start your existing Reading Highlights service, then refresh.").font(.callout).foregroundStyle(.secondary)
+                action("Refresh connection", "status", [:], "Checking sync…")
             } else {
-                action("Start Passage sync", "start_collector", ["port": Int(portText) ?? 8084], "Starting your bridge…", disabled: !SetupInput.validCollectorPort(portText), success: "Your bridge is online.")
+                action("Start Passage sync", "start_collector", ["port": Int(portText) ?? 8084], "Starting sync…", disabled: !SetupInput.validCollectorPort(portText))
             }
             connectionOptions
         }
@@ -313,7 +313,7 @@ struct SetupView: View {
                 if readiness.progressConfigured {
                     Button("Finish setup") { savedPositionChoice = SetupPositionChoice.enabled.rawValue; flow.advance(readiness) }.buttonStyle(.borderedProminent).disabled(model.busy)
                 } else {
-                    Button("Finish without position sync") {
+                    Button("Finish setup for now") {
                         savedPositionChoice = SetupPositionChoice.later.rawValue
                         flow.advance(readiness)
                     }.disabled(model.busy)
@@ -368,7 +368,7 @@ struct SetupView: View {
                 TextField("Mac LAN address", text: $endpoint).textFieldStyle(.roundedBorder).accessibilityLabel("Mac collector LAN address")
                 if !status.addresses.isEmpty { Menu("Choose a Mac address") { ForEach(status.addresses, id: \.self) { address in Button(address) { endpoint = address } } } }
                 Text(validEndpoint ? "Use the Mac’s private IP if .local fails." : "Use http:// with a private IP or a .local name, without a path.").font(.caption).foregroundStyle(validEndpoint ? Color.secondary : Color.orange)
-                if status.service.healthy {
+                if status.service.healthy && !status.usesExistingSetup {
                     Button("Stop sync") { Task { await model.perform("stop_collector", activity: "Stopping your bridge…", success: "Sync stopped. Readers will retain queued highlights.") } }.disabled(model.busy)
                 }
             }.padding(.top, 10)

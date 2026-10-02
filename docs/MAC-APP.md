@@ -33,7 +33,7 @@ Choose **Set up your reader**, then answer **What will you read on?** with **Kin
 
 The first highlight can also send the EPUB's original JPEG/PNG cover. A book without a supported embedded cover uses a placeholder. Keep the Mac awake and allow a brief upload attempt. If nothing arrives, use the reader's **Sync Highlights** action once, then check its Wi-Fi and Passage's status.
 
-For two readers, repeat the highlight check on each. To continue at the same passage, enable the optional reading-position service and use the exact same EPUB file on both. Follow the [position-sync walkthrough](PROGRESS-SYNC.md), including a test in both directions. CrossPoint uses **Upload Local** when leaving and **Apply Remote** when returning. Choose **Finish without position sync** if you only want highlights. A single-reader archive does not need this service.
+For two readers, repeat the highlight check on each. To continue at the same passage, enable the optional reading-position service and use the exact same EPUB file on both. Follow the [position-sync walkthrough](PROGRESS-SYNC.md), including a test in both directions. CrossPoint uses **Upload Local** when leaving and **Apply Remote** when returning. Choose **Finish setup for now** to leave positions for later; any existing position connections stay active. A single-reader archive does not need this service.
 
 ## Back up and use your library
 

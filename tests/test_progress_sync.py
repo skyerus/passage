@@ -269,7 +269,7 @@ class PairingTests(unittest.TestCase):
         original=json.dumps({'cfgVersion':2,'username':'previous','password_obf':'private','serverUrl':'https://sync.crosspointreader.com'})
         config.write_text(original)
         with patch.object(self.bridge,'progress_authenticated',return_value=True):
-            with self.assertRaisesRegex(setup.SetupError,'Choose Later') as error:
+            with self.assertRaisesRegex(setup.SetupError,'Choose Finish setup for now') as error:
                 self.bridge.pair_progress_xteink(mount=str(card),model='xteink_x4')
         self.assertNotIn('Kindle',str(error.exception))
         self.assertNotIn('private',str(error.exception))
@@ -282,7 +282,7 @@ class PairingTests(unittest.TestCase):
         original=json.dumps({'cfgVersion':2,'username':self.account['username'],'password_obf':'private','serverUrl':'https://sync.crosspointreader.com'})
         config.write_text(original)
         with patch.object(self.bridge,'progress_authenticated',return_value=True):
-            with self.assertRaisesRegex(setup.SetupError,'Choose Later'):
+            with self.assertRaisesRegex(setup.SetupError,'Choose Finish setup for now'):
                 self.bridge.pair_progress_xteink(mount=str(card),model='xteink_x4')
         self.assertEqual(config.read_text(),original)
         self.assertNotIn('xteink',self.bridge.state['progress_sync'])
