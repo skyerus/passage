@@ -115,4 +115,13 @@ final class ModelTests: XCTestCase {
         XCTAssertNil(try Backend.decode(fixture()).highlights[0].coverPath)
     }
 
+    func testBookRecencyDecodesAndOlderHelpersRemainCompatible() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let recent = try decoder.decode(BookSummary.self, from: Data(#"{"id":"book","title":"Book","author":"Writer","count":2,"latest_highlight_at":1790856000}"#.utf8))
+        XCTAssertEqual(recent.latestHighlightAt, 1790856000)
+        let older = try decoder.decode(BookSummary.self, from: Data(#"{"id":"book","title":"Book","author":"Writer","count":2}"#.utf8))
+        XCTAssertNil(older.latestHighlightAt)
+    }
+
 }

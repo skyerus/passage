@@ -73,6 +73,37 @@ class DesktopTests(unittest.TestCase):
         self.assertFalse(status['service']['healthy'])
         self.assertNotIn('token', json.dumps(status))
 
+    def test_books_use_latest_live_highlight_before_search_and_limit(self):
+        self.initialize()
+        records = [dict(self.item(str(i), f'Passage {i}'), book_title=title, created_at=date)
+                   for i, (title, date) in enumerate([
+                       ('Zulu', '2020-01-01'),
+                       ('Zulu', '2026-10-01T13:00:00+02:00'),
+                       ('Zulu', '2026-10-01'),
+                       ('Zulu', '2026-10-01T12:00:00Z'),
+                       ('Alpha', '2021-01-01'),
+                       ('Undated', ''),
+                       ('Undated', '2026-02-31')])]
+        payload = {'source': 'koreader', 'device_id': 'fixture', 'highlights': records}
+        self.store.accept(payload)
+        with patch.object(desktop, 'HIGHLIGHTS_LIMIT', 1):
+            status = self.bridge.status()
+        books = {book['title']: book for book in status['books']}
+        latest = desktop.highlight_date('2026-10-01T12:00:00Z').timestamp()
+        self.assertEqual(len(status['highlights']), 1)
+        self.assertEqual(len(books), 3)
+        self.assertEqual(books['Zulu']['latest_highlight_at'], latest)
+        self.assertEqual(books['Zulu']['count'], 4)
+        self.assertEqual(books['Alpha']['latest_highlight_at'], desktop.highlight_date('2021-01-01').timestamp())
+        self.assertIsNone(books['Undated']['latest_highlight_at'])
+        filtered = self.bridge.status(query='Passage 0', book_id=books['Zulu']['id'])
+        self.assertEqual(filtered['highlights_matches'], 1)
+        self.assertEqual(filtered['books'], status['books'])
+        self.store.accept({**payload, 'highlights': [{'id': '3', 'deleted': True}]})
+        remaining = next(book for book in self.bridge.status()['books'] if book['title'] == 'Zulu')
+        self.assertEqual(remaining['latest_highlight_at'], desktop.highlight_date('2026-10-01T11:00:00Z').timestamp())
+        self.assertEqual(remaining['count'], 3)
+
     def test_http_dedup_delete_and_authenticate(self):
         with self.server() as (port, token):
             self.assertTrue(self.bridge.authenticated(port))

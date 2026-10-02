@@ -7,11 +7,12 @@ struct HighlightsView: View {
     @EnvironmentObject var model: AppModel
     let status: BridgeStatus
     @AppStorage("archive.layout") private var layout = "books"
+    @AppStorage("archive.bookSort") private var bookSort = BookSort.recent
     @State private var selectedID: String?
     @FocusState private var searchFocused: Bool
     private var query: String { model.highlightQuery }
     private var filtered: [Highlight] { status.highlights.filter { $0.matches(query) && (model.highlightBookID.isEmpty || $0.bookId == model.highlightBookID) } }
-    private var books: [BookSummary] { (status.books ?? []).filter { $0.matches(query) } }
+    private var books: [BookSummary] { bookSort.sorted((status.books ?? []).filter { $0.matches(query) }) }
     private var selectedBook: BookSummary? { status.books?.first { $0.id == model.highlightBookID } }
     private var selectedHighlight: Highlight? { filtered.first { $0.id == selectedID } }
     private var showingBooks: Bool { layout == "books" && model.highlightBookID.isEmpty }
@@ -109,7 +110,17 @@ struct HighlightsView: View {
             HStack {
                 Text(query.isEmpty ? "YOUR BOOKS" : "MATCHING BOOKS").font(.system(size: 10, weight: .semibold)).tracking(1.2)
                 Spacer()
-                Text("\(books.count) books · A–Z").font(.system(size: 11))
+                Text("\(books.count) books").font(.system(size: 11))
+                Menu {
+                    Picker("Sort books", selection: $bookSort) {
+                        ForEach(BookSort.allCases) { order in Text(order.label).tag(order) }
+                    }.pickerStyle(.inline)
+                } label: {
+                    Label(bookSort.label, systemImage: "arrow.up.arrow.down").font(.system(size: 11))
+                }
+                .menuStyle(.borderlessButton).fixedSize().padding(.leading, 10)
+                .accessibilityLabel("Sort books: \(bookSort.label)")
+                .help(bookSort == .recent ? "Sort by latest highlight; books without dates appear last" : "Sort books")
             }.foregroundStyle(.secondary).padding(.horizontal, 6)
             if books.isEmpty {
                 BridgeEmptyState(symbol: "magnifyingglass", title: "No matching books", detail: "Try another title or author, or switch to highlights to search inside quotes.").bridgeSurface()
