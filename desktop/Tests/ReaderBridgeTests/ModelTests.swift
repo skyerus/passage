@@ -124,4 +124,28 @@ final class ModelTests: XCTestCase {
         XCTAssertNil(older.latestHighlightAt)
     }
 
+    func testDeviceRegistryContractDecodesCapabilitiesAndModelMetadata() throws {
+        var response = try XCTUnwrap(JSONSerialization.jsonObject(with: fixture()) as? [String: Any])
+        var data = try XCTUnwrap(response["data"] as? [String: Any])
+        data["supported_devices"] = [["id": "xteink_x3", "name": "Xteink X3", "capabilities": ["highlights": true, "progress": true, "touch": false], "pairing_supported": true, "firmware_available": false, "source_build_available": true, "firmware_filename": "passage-xteink-x3.bin", "setup_url": "https://crosspointreader.com/#flash-tools", "firmware_update_instructions": "Install on the reader.", "support_note": "Uses arrow and Confirm buttons."]] as [[String: Any]]
+        data["xteink"] = ["paired": true, "firmware_staged": false, "url": "", "model": "xteink_x3"] as [String: Any]
+        response["data"] = data
+        let status = try Backend.decode(JSONSerialization.data(withJSONObject: response))
+        let device = try XCTUnwrap(status.supportedDevices?.first)
+        XCTAssertEqual(device.id, "xteink_x3")
+        XCTAssertTrue(device.capabilities.highlights)
+        XCTAssertFalse(device.capabilities.touch)
+        XCTAssertTrue(device.pairingSupported)
+        XCTAssertFalse(device.firmwareAvailable)
+        XCTAssertEqual(device.firmwareFilename, "passage-xteink-x3.bin")
+        XCTAssertEqual(device.setupUrl, "https://crosspointreader.com/#flash-tools")
+        XCTAssertEqual(device.firmwareUpdateInstructions, "Install on the reader.")
+        XCTAssertEqual(status.xteink.model, "xteink_x3")
+        XCTAssertEqual(SetupInput.selectedCrossPointModel(saved: "", status: status), "xteink_x3")
+        var legacy = try Backend.decode(fixture(xteink: true))
+        legacy.supportedDevices = status.supportedDevices
+        XCTAssertEqual(SetupInput.selectedCrossPointModel(saved: "", status: legacy), "xteink_x4_pro")
+        XCTAssertEqual(SetupInput.selectedCrossPointModel(saved: "xteink_x3", status: legacy), "xteink_x3")
+    }
+
 }

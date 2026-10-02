@@ -7,6 +7,13 @@ struct HighlightsView: View {
     @EnvironmentObject var model: AppModel
     let status: BridgeStatus
     @AppStorage("archive.layout") private var layout = "books"
+    @AppStorage("setup.devices") private var savedDeviceChoice = ""
+    @AppStorage("setup.positions") private var savedPositionChoice = ""
+    @AppStorage("setup.crosspointModel") private var savedCrossPointModel = ""
+    @AppStorage("setup.firmwareConfirmedReference") private var firmwareConfirmedReference = ""
+    private var setupReadiness: SetupReadiness {
+        SetupReadiness(status: status, firmwareConfirmedByUser: !firmwareConfirmedReference.isEmpty && firmwareConfirmedReference == SetupInput.firmwareConfirmationReference(status), deviceChoice: SetupDeviceChoice.resolved(saved: savedDeviceChoice, status: status), positionChoice: SetupPositionChoice(rawValue: savedPositionChoice) ?? .undecided, crosspointModel: savedCrossPointModel.isEmpty ? nil : savedCrossPointModel)
+    }
     @AppStorage("archive.bookSort") private var bookSort = BookSort.recent
     @State private var selectedID: String?
     @FocusState private var searchFocused: Bool
@@ -38,10 +45,10 @@ struct HighlightsView: View {
             }
             if status.highlightCount == 0 {
                 VStack(spacing: 0) {
-                    BridgeEmptyState(symbol: "books.vertical", title: "No highlights yet", detail: "Import Kindle highlights or highlight a passage on either reader.")
+                    BridgeEmptyState(symbol: "books.vertical", title: "No highlights yet", detail: setupReadiness.readerPairingComplete ? "Save a highlight on your reader with Wi-Fi connected, or import Kindle highlights." : "Connect your reader to bring your highlights here.")
                     HStack {
-                        if !status.kindle.paired || !status.xteink.paired {
-                            Button("Connect your readers") { model.selection = .setup }.buttonStyle(.borderedProminent)
+                        if !setupReadiness.readerPairingComplete && !status.usesExistingSetup {
+                            Button("Set up your reader") { model.selection = .setup }.buttonStyle(.borderedProminent)
                         }
                         Button("Import highlights…", action: importHighlights).buttonStyle(.bordered).disabled(model.busy || !status.service.healthy)
                     }.padding(.bottom, 40)
@@ -361,7 +368,7 @@ struct SettingsView: View {
                         if let progress = status.localProgress, progress.enabled {
                             TextField("Position sync Mac address", text: $progressAddress).textFieldStyle(.roundedBorder)
                             Button("Update position sync address") {
-                                Task { await model.perform("start_progress", ["endpoint": progressAddress, "port": progress.port], activity: "Updating position sync address…", success: "Address saved. Reconnect both readers in Setup if the address changed.") }
+                                Task { await model.perform("start_progress", ["endpoint": progressAddress, "port": progress.port], activity: "Updating position sync address…", success: "Address saved. Reconnect your selected readers in Setup if the address changed.") }
                             }.disabled(model.busy || !SetupInput.validLANAddress(progressAddress))
                             Text("Changing this address requires reconnecting each reader.").font(.caption).foregroundStyle(.secondary)
                         }

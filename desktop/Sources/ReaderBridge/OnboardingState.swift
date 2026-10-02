@@ -1,14 +1,49 @@
 import Foundation
 
-enum SetupStep: Int, CaseIterable, Identifiable {
-    case bridge, kindle, xteink, progress, complete
-    var id: Int { rawValue }
-    static var visibleSteps: [Self] { [.bridge, .kindle, .xteink, .progress] }
+enum SetupDeviceChoice: String, CaseIterable, Identifiable {
+    case kindle, crosspoint, both
+    var id: String { rawValue }
+    var includesKindle: Bool { self != .crosspoint }
+    var includesCrossPoint: Bool { self != .kindle }
     var title: String {
         switch self {
+        case .kindle: return "Kindle"
+        case .crosspoint: return "CrossPoint reader"
+        case .both: return "Both readers"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .kindle: return "Save highlights from KOReader."
+        case .crosspoint: return "Connect the CrossPoint model you own."
+        case .both: return "Bring your highlights and reading places together."
+        }
+    }
+    /// Existing pairings remain usable when upgrading from the two-reader wizard.
+    static func resolved(saved: String, status: BridgeStatus) -> Self? {
+        if let choice = Self(rawValue: saved) { return choice }
+        let kindle = status.kindle.paired || status.localProgress?.kindlePaired == true
+        let crosspoint = status.xteink.paired || status.localProgress?.xteinkPaired == true
+        if kindle && crosspoint { return .both }
+        if kindle { return .kindle }
+        if crosspoint { return .crosspoint }
+        return nil
+    }
+}
+
+enum SetupPositionChoice: String {
+    case undecided = "", enabled, later
+}
+
+enum SetupStep: Int, CaseIterable, Identifiable {
+    case readers, bridge, kindle, xteink, progress, complete
+    var id: Int { rawValue }
+    var title: String {
+        switch self {
+        case .readers: return "Readers"
         case .bridge: return "Mac"
         case .kindle: return "Kindle"
-        case .xteink: return "X4 Pro"
+        case .xteink: return "CrossPoint"
         case .progress: return "Positions"
         case .complete: return "Done"
         }
@@ -18,53 +53,87 @@ enum SetupStep: Int, CaseIterable, Identifiable {
 /// Backend facts stay separate from the user's firmware acknowledgement.
 /// Neither a pairing file nor a staged binary proves the reader is reachable.
 struct SetupReadiness: Equatable {
+    var deviceChoice: SetupDeviceChoice?
     var collectorOnline: Bool
     var kindlePaired: Bool
     var xteinkPaired: Bool
     var firmwareStaged: Bool
     var firmwareConfirmedByUser: Bool
+    var firmwareRequired: Bool
     var progressConfigured: Bool
+    var positionChoice: SetupPositionChoice
+    var progressAvailable: Bool
 
-    init(status: BridgeStatus, firmwareConfirmedByUser: Bool) {
+    init(status: BridgeStatus, firmwareConfirmedByUser: Bool, deviceChoice: SetupDeviceChoice? = .both, positionChoice: SetupPositionChoice = .undecided, crosspointModel: String? = nil) {
+        self.deviceChoice = deviceChoice
+        self.positionChoice = positionChoice
         collectorOnline = status.service.healthy
         kindlePaired = status.kindle.paired
-        xteinkPaired = status.xteink.paired
+        let model = crosspointModel ?? status.xteink.model ?? BridgeStatus.SupportedDevice.legacyX4Pro.id
+        let profile = status.crossPointDevices.first { $0.id == model }
+        xteinkPaired = status.xteink.paired && (status.xteink.model ?? BridgeStatus.SupportedDevice.legacyX4Pro.id) == model
         firmwareStaged = status.xteink.firmwareStaged
         self.firmwareConfirmedByUser = firmwareConfirmedByUser
-        progressConfigured = status.localProgress?.isConfigured == true
+        firmwareRequired = profile?.capabilities.highlights == true
+        progressAvailable = deviceChoice?.includesCrossPoint != true || profile?.capabilities.progress == true
+        progressConfigured = status.localProgress?.isConfigured(for: deviceChoice ?? .both, crosspointModel: deviceChoice?.includesCrossPoint == true ? model : nil) == true
     }
 
-    var firmwareNeedsConfirmation: Bool { xteinkPaired && !firmwareConfirmedByUser }
+    var firmwareNeedsConfirmation: Bool { xteinkPaired && firmwareRequired && !firmwareConfirmedByUser }
+    var readerPairingComplete: Bool {
+        guard let deviceChoice else { return false }
+        return (!deviceChoice.includesKindle || kindlePaired) && (!deviceChoice.includesCrossPoint || (xteinkPaired && !firmwareNeedsConfirmation))
+    }
+    var steps: [SetupStep] {
+        guard let deviceChoice else { return [.readers] }
+        var result: [SetupStep] = [.readers, .bridge]
+        if deviceChoice.includesKindle { result.append(.kindle) }
+        if deviceChoice.includesCrossPoint { result.append(.xteink) }
+        if progressAvailable { result.append(.progress) }
+        return result + [.complete]
+    }
+    var visibleSteps: [SetupStep] { steps.filter { $0 != .complete } }
     var recommendedStep: SetupStep {
+        guard let deviceChoice else { return .readers }
         if !collectorOnline { return .bridge }
-        if !kindlePaired { return .kindle }
-        if !xteinkPaired || firmwareNeedsConfirmation { return .xteink }
-        if !progressConfigured { return .progress }
+        if deviceChoice.includesKindle && !kindlePaired { return .kindle }
+        if deviceChoice.includesCrossPoint && (!xteinkPaired || firmwareNeedsConfirmation) { return .xteink }
+        if progressAvailable && !progressConfigured && positionChoice != .later { return .progress }
         return .complete
     }
 
+    func nextStep(after step: SetupStep) -> SetupStep? {
+        guard let index = steps.firstIndex(of: step), index + 1 < steps.count else { return nil }
+        var next = steps[index + 1]
+        if next == .progress && positionChoice == .later { next = .complete }
+        return canVisit(next) ? next : recommendedStep
+    }
+
     func canVisit(_ step: SetupStep) -> Bool {
+        guard steps.contains(step) else { return false }
         switch step {
-        case .bridge: return true
-        case .kindle: return collectorOnline
-        case .xteink: return collectorOnline && kindlePaired
-        case .progress: return collectorOnline && kindlePaired && xteinkPaired && !firmwareNeedsConfirmation
+        case .readers: return true
+        case .bridge: return deviceChoice != nil
+        case .kindle, .xteink: return collectorOnline
+        case .progress: return collectorOnline && readerPairingComplete
         case .complete: return recommendedStep == .complete
         }
     }
 
     func isComplete(_ step: SetupStep) -> Bool {
         switch step {
+        case .readers: return deviceChoice != nil
         case .bridge: return collectorOnline
         case .kindle: return kindlePaired
         case .xteink: return xteinkPaired && !firmwareNeedsConfirmation
-        case .progress, .complete: return progressConfigured
+        case .progress: return progressConfigured || positionChoice == .later
+        case .complete: return recommendedStep == .complete
         }
     }
 }
 
 struct SetupNavigation {
-    private(set) var step = SetupStep.bridge
+    private(set) var step = SetupStep.readers
     private var resumed = false
 
     mutating func reconcile(_ readiness: SetupReadiness) {
@@ -80,14 +149,13 @@ struct SetupNavigation {
     }
 
     mutating func advance(_ readiness: SetupReadiness) {
-        guard readiness.isComplete(step), let next = SetupStep(rawValue: step.rawValue + 1) else { return }
+        guard readiness.isComplete(step), let next = readiness.nextStep(after: step) else { return }
         visit(next, readiness: readiness)
     }
 
     mutating func back(_ readiness: SetupReadiness) {
-        if let previous = SetupStep(rawValue: step.rawValue - 1) {
-            visit(previous, readiness: readiness)
-        }
+        guard let index = readiness.steps.firstIndex(of: step), index > 0 else { return }
+        visit(readiness.steps[index - 1], readiness: readiness)
     }
 }
 
@@ -96,8 +164,8 @@ enum SetupInput {
         status.offersExistingSetup ? status.existingSetup?.healthy == true : status.service.healthy
     }
 
-    static func canPairXteink(collectorOnline: Bool, endpoint: String, connectionValid: Bool, modelConfirmed: Bool, stageFirmware: Bool, installedFirmwareConfirmed: Bool) -> Bool {
-        collectorOnline && validLANAddress(endpoint) && connectionValid && modelConfirmed && (stageFirmware || installedFirmwareConfirmed)
+    static func canPairXteink(collectorOnline: Bool, endpoint: String, connectionValid: Bool, modelConfirmed: Bool, stageFirmware: Bool, installedFirmwareConfirmed: Bool, highlightsSupported: Bool = true, pairingSupported: Bool = true, firmwareAvailable: Bool = true) -> Bool {
+        collectorOnline && validLANAddress(endpoint) && connectionValid && modelConfirmed && pairingSupported && (!stageFirmware || firmwareAvailable) && (!highlightsSupported || stageFirmware || installedFirmwareConfirmed)
     }
 
     static func validCollectorPort(_ text: String) -> Bool {
@@ -131,7 +199,21 @@ enum SetupInput {
         return candidates[0].path
     }
 
+    static func selectedCrossPointModel(saved: String, status: BridgeStatus) -> String {
+        if !saved.isEmpty { return saved }
+        if status.xteink.paired { return status.xteink.model ?? BridgeStatus.SupportedDevice.legacyX4Pro.id }
+        if status.localProgress?.xteinkPaired == true { return status.localProgress?.xteinkModel ?? BridgeStatus.SupportedDevice.legacyX4Pro.id }
+        return status.xteink.model ?? status.crossPointDevices.first?.id ?? ""
+    }
+
+    static func installationURL(_ value: String?) -> URL {
+        if let value, let url = URL(string: value), url.scheme == "https", url.host == "crosspointreader.com" { return url }
+        return URL(string: "https://crosspointreader.com/#flash-tools")!
+    }
+
     static func firmwareConfirmationReference(_ status: BridgeStatus) -> String {
-        "\(status.service.port)|\(status.endpoint)|\(status.xteink.url)"
+        let connection = "\(status.service.port)|\(status.endpoint)|\(status.xteink.url)"
+        guard let model = status.xteink.model, model != BridgeStatus.SupportedDevice.legacyX4Pro.id else { return connection }
+        return "\(connection)|\(model)"
     }
 }

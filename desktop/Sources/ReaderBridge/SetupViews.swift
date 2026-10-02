@@ -35,33 +35,49 @@ struct SetupView: View {
     @State private var xteinkMount = ""
     @State private var deviceURL = ""
     @State private var method = "SD card"
-    @State private var kindleReady = false
-    @State private var modelConfirmed = false
     @State private var firmware = true
     @State private var installedFirmwareConfirmed = false
     @State private var showXteinkRepair = false
     @State private var connectionSettings = false
+    @AppStorage("setup.devices") private var savedDeviceChoice = ""
+    @AppStorage("setup.crosspointModel") private var savedCrossPointModel = ""
+    @AppStorage("setup.positions") private var savedPositionChoice = ""
+    @AppStorage("setup.kindleModelChecked") private var kindleModelChecked = false
+    @AppStorage("setup.kindleJailbroken") private var kindleJailbroken = false
+    @AppStorage("setup.kindleReady") private var kindleReady = false
+    @AppStorage("setup.crosspointModelConfirmed") private var confirmedCrossPointModel = ""
+    @AppStorage("setup.crosspointReadyModel") private var readyCrossPointModel = ""
     @AppStorage("setup.firmwareConfirmedReference") private var firmwareConfirmedReference = ""
 
+    private var deviceChoice: SetupDeviceChoice? { SetupDeviceChoice.resolved(saved: savedDeviceChoice, status: status) }
+    private var positionChoice: SetupPositionChoice { SetupPositionChoice(rawValue: savedPositionChoice) ?? .undecided }
     private var selectedEndpoint: String { endpoint.isEmpty ? status.endpoint : endpoint }
+    private var selectedDevice: BridgeStatus.SupportedDevice? { status.crossPointDevices.first { $0.id == selectedModel } }
+    private var selectedModel: String { SetupInput.selectedCrossPointModel(saved: savedCrossPointModel, status: status) }
+    private var deviceName: String { selectedDevice?.name ?? "CrossPoint reader" }
+    private var modelConfirmed: Bool { !selectedModel.isEmpty && confirmedCrossPointModel == selectedModel }
+    private var crossPointReady: Bool { !selectedModel.isEmpty && readyCrossPointModel == selectedModel }
     private var firmwareConfirmed: Bool { !firmwareConfirmedReference.isEmpty && firmwareConfirmedReference == SetupInput.firmwareConfirmationReference(status) }
-    private var readiness: SetupReadiness { SetupReadiness(status: status, firmwareConfirmedByUser: firmwareConfirmed) }
+    private var readiness: SetupReadiness { SetupReadiness(status: status, firmwareConfirmedByUser: firmwareConfirmed, deviceChoice: deviceChoice, positionChoice: positionChoice, crosspointModel: selectedModel) }
     private var validEndpoint: Bool { SetupInput.validLANAddress(selectedEndpoint) }
     private var xteinkConnectionValid: Bool { method == "SD card" ? !xteinkMount.isEmpty : SetupInput.validLANAddress(deviceURL) }
+    private var continueTitle: String {
+        guard let next = readiness.nextStep(after: flow.step) else { return "Continue" }
+        return next == .complete ? "Finish setup" : "Continue to \(next.title)"
+    }
 
     var body: some View {
         Group {
             if status.usesExistingSetup || status.offersExistingSetup {
                 VStack(alignment: .leading, spacing: 20) {
                     ExistingSetupView(status: status)
-                    if status.usesExistingSetup { ReadingProgressView(status: status, pairing: true) }
+                    if status.usesExistingSetup { ReadingProgressView(status: status, pairing: true, deviceChoice: deviceChoice ?? .both, crosspointModel: selectedModel) }
                 }
-            }
-            else {
+            } else {
                 VStack(alignment: .leading, spacing: 20) {
                     stepNavigation
                     currentStep
-                    if flow.step != .bridge && flow.step != .complete {
+                    if flow.step != .readers && flow.step != .complete {
                         Button { flow.back(readiness) } label: { Label("Back", systemImage: "chevron.left") }
                             .buttonStyle(.plain).font(.callout).foregroundStyle(.secondary).disabled(model.busy)
                     }
@@ -75,37 +91,41 @@ struct SetupView: View {
             lastSuggestedEndpoint = value
         }
         .onChange(of: status.mounts.map(\.path)) { _ in selectDetectedMounts() }
-        .onChange(of: method) { _ in resetDeviceConfirmations() }
-        .onChange(of: xteinkMount) { _ in resetDeviceConfirmations() }
-        .onChange(of: deviceURL) { _ in resetDeviceConfirmations() }
+        .onChange(of: selectedModel) { _ in
+            installedFirmwareConfirmed = false
+            showXteinkRepair = false
+            firmware = selectedDevice?.capabilities.highlights == true && selectedDevice?.firmwareAvailable == true
+        }
+        .onChange(of: method) { _ in installedFirmwareConfirmed = false }
+        .onChange(of: xteinkMount) { _ in installedFirmwareConfirmed = false }
+        .onChange(of: deviceURL) { _ in installedFirmwareConfirmed = false }
     }
 
     private var stepNavigation: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 0) {
-                ForEach(SetupStep.visibleSteps) { step in
-                    if step != .bridge { Rectangle().fill(teal.opacity(0.15)).frame(height: 1).padding(.horizontal, 10).accessibilityHidden(true) }
-                    Button { flow.visit(step, readiness: readiness) } label: {
-                        HStack(spacing: 7) {
-                            ZStack {
-                                Circle().fill(flow.step == step ? teal : teal.opacity(0.08)).frame(width: 24, height: 24)
-                                if readiness.isComplete(step) { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)) }
-                                else { Text("\(step.rawValue + 1)").font(.system(size: 11, weight: .semibold)) }
-                            }.foregroundStyle(flow.step == step ? .white : teal)
-                            Text(step.title).font(.callout.weight(flow.step == step ? .semibold : .regular))
-                        }
+        HStack(spacing: 0) {
+            ForEach(Array(readiness.visibleSteps.enumerated()), id: \.element.id) { index, step in
+                if index > 0 { Rectangle().fill(teal.opacity(0.15)).frame(height: 1).padding(.horizontal, 10).accessibilityHidden(true) }
+                Button { flow.visit(step, readiness: readiness) } label: {
+                    HStack(spacing: 7) {
+                        ZStack {
+                            Circle().fill(flow.step == step ? teal : teal.opacity(0.08)).frame(width: 24, height: 24)
+                            if readiness.isComplete(step) { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)) }
+                            else { Text("\(index + 1)").font(.system(size: 11, weight: .semibold)) }
+                        }.foregroundStyle(flow.step == step ? .white : teal)
+                        Text(step.title).font(.callout.weight(flow.step == step ? .semibold : .regular))
                     }
-                    .buttonStyle(.plain).foregroundStyle(flow.step == step ? ink : .secondary)
-                    .disabled(model.busy || !readiness.canVisit(step))
-                    .accessibilityLabel("\(step.title), step \(step.rawValue + 1) of 4\(readiness.isComplete(step) ? ", confirmed" : "")")
-                    .accessibilityAddTraits(flow.step == step ? [.isSelected] : [])
                 }
+                .buttonStyle(.plain).foregroundStyle(flow.step == step ? ink : .secondary)
+                .disabled(model.busy || !readiness.canVisit(step))
+                .accessibilityLabel("\(step.title), step \(index + 1) of \(readiness.visibleSteps.count)\(readiness.isComplete(step) ? ", confirmed" : "")")
+                .accessibilityAddTraits(flow.step == step ? [.isSelected] : [])
             }
         }
     }
 
     @ViewBuilder private var currentStep: some View {
         switch flow.step {
+        case .readers: readersStep
         case .bridge: bridgeStep
         case .kindle: kindleStep
         case .xteink: xteinkStep
@@ -114,125 +134,222 @@ struct SetupView: View {
         }
     }
 
+    private var readersStep: some View {
+        Card(title: "What will you read on?") {
+            Text("Connect one reader or both. You can add another later.").foregroundStyle(.secondary)
+            VStack(spacing: 10) {
+                ForEach(SetupDeviceChoice.allCases) { choice in
+                    Button { savedDeviceChoice = choice.rawValue } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: choice == .both ? "books.vertical" : "book.closed").font(.system(size: 22, weight: .light)).frame(width: 32)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(choice.title).font(.callout.weight(.semibold))
+                                Text(choice.detail).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: deviceChoice == choice ? "checkmark.circle.fill" : "circle").foregroundStyle(deviceChoice == choice ? teal : .secondary)
+                        }.padding(15).contentShape(Rectangle())
+                            .background(deviceChoice == choice ? teal.opacity(0.07) : BridgePalette.secondarySurface, in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(deviceChoice == choice ? teal.opacity(0.45) : BridgePalette.separator))
+                    }.buttonStyle(.plain).disabled(model.busy)
+                        .accessibilityAddTraits(deviceChoice == choice ? [.isSelected] : [])
+                }
+            }
+            Button("Continue") { flow.advance(readiness) }.buttonStyle(.borderedProminent).disabled(model.busy || deviceChoice == nil)
+        }
+    }
+
     private var bridgeStep: some View {
-        Card(title: "Highlight sync") {
-            DeviceIllustration(guide: .bridge)
-            Text("Connect both readers to the same Wi-Fi as your Mac.").foregroundStyle(.secondary)
+        Card(title: "Connect to your Mac") {
+            DeviceIllustration(guide: .bridge, readers: deviceChoice ?? .both, crosspointName: deviceName)
+            Text("Keep your Mac awake and your selected readers on the same Wi-Fi.").foregroundStyle(.secondary)
             if model.error != nil {
                 Text("The latest check failed. Refresh before continuing.").font(.callout).foregroundStyle(.secondary)
                 action("Check again", "status", [:], "Checking your bridge…")
             } else if status.service.healthy {
                 Label("Ready to receive highlights", systemImage: "checkmark.circle.fill").font(.callout).foregroundStyle(teal)
-                Button("Continue to Kindle") { flow.advance(readiness) }.buttonStyle(.borderedProminent).disabled(model.busy)
+                continueButton
             } else {
-                action("Start highlight sync", "start_collector", ["port": Int(portText) ?? 8084], "Starting your bridge…", disabled: !SetupInput.validCollectorPort(portText), success: "Your bridge is online.")
+                action("Start Passage sync", "start_collector", ["port": Int(portText) ?? 8084], "Starting your bridge…", disabled: !SetupInput.validCollectorPort(portText), success: "Your bridge is online.")
             }
             connectionOptions
         }
     }
 
     private var kindleStep: some View {
-        Card(title: status.kindle.paired ? "Kindle pairing saved" : "Connect your Kindle") {
-            DeviceIllustration(guide: .kindleUSB)
+        Card(title: status.kindle.paired ? "Kindle connected" : "Connect your Kindle") {
             if status.kindle.paired {
+                DeviceIllustration(guide: .kindleUSB)
                 Text("Eject the Kindle, then open KOReader with Wi-Fi connected.").foregroundStyle(.secondary)
-                Button("Continue to X4 Pro") { flow.advance(readiness) }.buttonStyle(.borderedProminent).disabled(model.busy)
-                DisclosureGroup("Update pairing") {
+                continueButton
+                DisclosureGroup("Reconnect Kindle") {
                     VStack(alignment: .leading, spacing: 12) {
                         mountPicker("Kindle", kind: "kindle", selection: $kindleMount)
                         action("Update Kindle pairing", "pair_kindle", ["mount": kindleMount, "endpoint": selectedEndpoint], "Updating Kindle pairing…", disabled: !status.service.healthy || kindleMount.isEmpty || !validEndpoint, success: "Pairing saved. Eject the Kindle and reopen KOReader.")
                     }.padding(.top, 10)
                 }.font(.callout)
             } else {
-                Text("Close KOReader, then connect the Kindle by USB.").foregroundStyle(.secondary)
-                Toggle("KOReader already opens on my jailbroken Kindle", isOn: $kindleReady).font(.callout)
-                DisclosureGroup("Need KOReader first?") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Check your model and firmware, jailbreak your Kindle, then install KOReader.").font(.callout).foregroundStyle(.secondary)
-                        HStack(spacing: 16) {
-                            Link("Check model", destination: URL(string: "https://kindlemodding.org/kindle-models")!)
-                            Link("Jailbreak guide", destination: URL(string: "https://kindlemodding.org/jailbreaking/")!)
-                            Link("Install KOReader", destination: URL(string: "https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices")!)
-                        }
-                    }.padding(.top, 10)
-                }.font(.callout)
-                mountPicker("Kindle", kind: "kindle", selection: $kindleMount)
-                action("Pair Kindle", "pair_kindle", ["mount": kindleMount, "endpoint": selectedEndpoint], "Installing the KOReader plugin…", disabled: !kindleReady || !status.service.healthy || kindleMount.isEmpty || !validEndpoint, success: "Plugin installed and pairing saved. Eject your Kindle, then open KOReader.")
+                Text("Passage uses KOReader on a jailbroken Kindle.").foregroundStyle(.secondary)
+                if !kindleReady {
+                    prerequisite("1. Check your model and firmware", detail: "Find them in Settings → Device options → Device info. Use the live guide to check eligibility.", checked: $kindleModelChecked, link: "Check eligibility", url: "https://kindlemodding.org/kindle-models")
+                    prerequisite("2. Complete the jailbreak", detail: "Follow the method the guide selects, including its post-jailbreak steps. If no method is supported, pause here.", checked: $kindleJailbroken, link: "Jailbreak guide", url: "https://kindlemodding.org/jailbreaking/")
+                    prerequisite("3. Open an EPUB in KOReader", detail: "Use the installation path for your jailbreak. Open a DRM-free EPUB to check it works.", checked: $kindleReady, link: "Install KOReader", url: "https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices")
+                    Text("Already set up? Check the final step when KOReader opens your EPUB.").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Label("KOReader is ready", systemImage: "checkmark.circle.fill").font(.callout).foregroundStyle(teal)
+                    DeviceIllustration(guide: .kindleUSB)
+                    Text("Close KOReader, then connect the Kindle by USB.").foregroundStyle(.secondary)
+                    mountPicker("Kindle", kind: "kindle", selection: $kindleMount)
+                    action("Connect Kindle", "pair_kindle", ["mount": kindleMount, "endpoint": selectedEndpoint], "Installing the KOReader plugin…", disabled: !status.service.healthy || kindleMount.isEmpty || !validEndpoint, success: "Plugin installed. Eject your Kindle, then open KOReader.")
+                    Button("Show preparation steps") { kindleReady = false }.font(.callout)
+                }
             }
             if !validEndpoint || model.error != nil { connectionOptions }
         }
     }
 
     private var xteinkStep: some View {
-        Card(title: readiness.firmwareNeedsConfirmation && !showXteinkRepair ? (status.xteink.firmwareStaged ? "Finish on your X4 Pro" : "Check your X4 Pro firmware") : status.xteink.paired && !showXteinkRepair ? "X4 Pro pairing saved" : "Connect your X4 Pro") {
-            if readiness.firmwareNeedsConfirmation && !showXteinkRepair {
-                if status.xteink.firmwareStaged {
-                    DeviceIllustration(guide: .firmware)
-                    Text("Eject the card or leave File Transfer, then install the update on your reader.").foregroundStyle(.secondary)
-                    Text("Choose reader-bridge-x4-pro.bin in Settings → System → SD Card Firmware Update. Keep the reader powered on until it finishes.").font(.callout)
-                } else {
-                    DeviceIllustration(guide: .xteinkLAN)
-                    Text("Shared highlights need Passage firmware. Open a book and check More → Sync Highlights.").foregroundStyle(.secondary)
-                }
-                Button(status.xteink.firmwareStaged ? "I installed it and see Sync Highlights" : "Passage firmware is already installed") {
-                    firmwareConfirmedReference = SetupInput.firmwareConfirmationReference(status)
-                    showXteinkRepair = false
-                }.buttonStyle(.borderedProminent).disabled(model.busy)
-                Button("I need the Passage firmware") { firmware = true; modelConfirmed = false; showXteinkRepair = true }.disabled(model.busy)
-                firmwareHelp
-            } else if status.xteink.paired && !showXteinkRepair {
-                DeviceIllustration(guide: .xteinkLAN)
-                Text("Leave File Transfer or eject the SD card. Open a book and save a clipping with Wi-Fi connected.").foregroundStyle(.secondary)
-                HStack {
-                    Button("View highlights") { model.selection = .highlights }.buttonStyle(.borderedProminent)
-                    Button("Set up reading positions") { flow.advance(readiness) }.disabled(model.busy)
-                }
-                DisclosureGroup("Pair again or install firmware") {
-                    Button("Show pairing options") { modelConfirmed = false; showXteinkRepair = true }.padding(.top, 8)
-                }.font(.callout)
+        VStack(alignment: .leading, spacing: 16) {
+            Card(title: "Your CrossPoint reader") {
+                Picker("Model", selection: Binding(get: { selectedModel }, set: { savedCrossPointModel = $0 })) {
+                    ForEach(status.crossPointDevices) { device in Text(device.name).tag(device.id) }
+                }.frame(maxWidth: 370)
+                if let device = selectedDevice {
+                    Text(device.capabilities.highlights ? "Highlights and reading positions" : device.capabilities.progress ? "Reading positions" : "Setup guidance only")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if !device.pairingSupported {
+                        Text(device.supportNote ?? "Passage pairing is not available for this model yet.").font(.callout).foregroundStyle(.secondary)
+                    }
+                } else { Text("Choose a supported model before continuing.").font(.callout).foregroundStyle(.orange) }
+            }
+            if readiness.firmwareNeedsConfirmation && !showXteinkRepair { firmwareConfirmationStep }
+            else if readiness.xteinkPaired && !showXteinkRepair { crossPointConnectedStep }
+            else { crossPointPairingStep }
+        }
+    }
+
+    private var firmwareConfirmationStep: some View {
+        Card(title: status.xteink.firmwareStaged ? "Finish on your reader" : "Check your Passage firmware") {
+            if status.xteink.firmwareStaged {
+                DeviceIllustration(guide: .firmware, crosspointName: deviceName, firmwareFilename: selectedDevice?.firmwareFilename ?? "Passage firmware")
+                Text("Eject the card or leave File Transfer, then install the update on your reader.").foregroundStyle(.secondary)
+                Text(selectedDevice?.firmwareUpdateInstructions ?? "Follow the firmware update instructions for your exact reader model.").font(.callout)
             } else {
-                DeviceIllustration(guide: method == "SD card" ? .xteinkSD : .xteinkLAN)
-                Text(method == "SD card" ? "Insert the X4 Pro SD card into your Mac." : "Open File Transfer on the X4 Pro. Use the address it shows.").foregroundStyle(.secondary)
+                Text("Open a book and check More → Sync Highlights.").foregroundStyle(.secondary)
+            }
+            Button("I installed it and see Sync Highlights") {
+                firmwareConfirmedReference = SetupInput.firmwareConfirmationReference(status)
+                showXteinkRepair = false
+            }.buttonStyle(.borderedProminent).disabled(model.busy)
+            Button("Show firmware options") { showXteinkRepair = true }.disabled(model.busy)
+            firmwareHelp
+        }
+    }
+
+    private var crossPointConnectedStep: some View {
+        Card(title: "\(deviceName) connected") {
+            DeviceIllustration(guide: .xteinkLAN, crosspointName: deviceName)
+            Text(selectedDevice?.capabilities.highlights == true ? "Leave File Transfer or eject the SD card. Save a clipping in a book with Wi-Fi connected." : "Leave File Transfer or eject the SD card, then reopen your book.").foregroundStyle(.secondary)
+            continueButton
+            DisclosureGroup("Reconnect or update firmware") {
+                Button("Show pairing options") { showXteinkRepair = true }.padding(.top, 8)
+            }.font(.callout)
+        }
+    }
+
+    private var crossPointPairingStep: some View {
+        Card(title: crossPointReady ? "Connect \(deviceName)" : "Prepare \(deviceName)") {
+            if !crossPointReady {
+                prerequisite("1. Confirm your reader model", detail: "Check the name on your device. Select the same model in the installer.", checked: Binding(get: { modelConfirmed }, set: { confirmedCrossPointModel = $0 ? selectedModel : "" }))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("2. Install official CrossPoint").font(.callout.weight(.semibold))
+                    Text("Back up your SD card, including its hidden .crosspoint folder. Connect by USB-C and follow the official installer for this model.").font(.callout).foregroundStyle(.secondary)
+                    Link("Open CrossPoint installer", destination: SetupInput.installationURL(selectedDevice?.setupUrl))
+                }
+                prerequisite("3. Open an EPUB in CrossPoint", detail: "Confirm CrossPoint starts and reads your book before connecting Passage.", checked: Binding(get: { crossPointReady }, set: { readyCrossPointModel = $0 ? selectedModel : "" }))
+                Text("Already running CrossPoint? Confirm the first and final steps.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                DeviceIllustration(guide: method == "SD card" ? .xteinkSD : .xteinkLAN, crosspointName: deviceName)
+                Text(method == "SD card" ? "Insert your reader’s SD card into your Mac." : "Open File Transfer on your reader and use the address it shows.").foregroundStyle(.secondary)
                 Picker("Connection", selection: $method) {
                     Text("SD card").tag("SD card")
                     Text("Wi-Fi transfer").tag("LAN upload")
                 }.pickerStyle(.segmented).frame(maxWidth: 320)
-                if method == "SD card" { mountPicker("X4 Pro SD card", kind: "xteink", selection: $xteinkMount) }
+                if method == "SD card" { mountPicker("reader SD card", kind: "xteink", selection: $xteinkMount) }
                 else {
-                    TextField("http://192.168.1.42", text: $deviceURL).textFieldStyle(.roundedBorder).accessibilityLabel("X4 Pro File Transfer address")
+                    TextField("http://192.168.1.42", text: $deviceURL).textFieldStyle(.roundedBorder).accessibilityLabel("CrossPoint File Transfer address")
                     if !deviceURL.isEmpty && !SetupInput.validLANAddress(deviceURL) { Text("Use the reader’s http:// LAN address, without a path.").font(.caption).foregroundStyle(.orange) }
                 }
-                Toggle("I checked: this device is an Xteink X4 Pro", isOn: $modelConfirmed).font(.callout)
-                Toggle("Build and stage Passage firmware", isOn: $firmware).font(.callout)
-                if !firmware { Toggle("Passage firmware is already installed", isOn: $installedFirmwareConfirmed).font(.callout) }
-                if firmware { Text("Requires internet and several minutes. You’ll install the update on your reader.").font(.caption).foregroundStyle(.secondary) }
-                action(firmware ? "Build firmware & pair" : "Pair X4 Pro", "pair_xteink", xteinkParameters, firmware ? "Building and staging firmware… This can take several minutes." : "Pairing your X4 Pro…", disabled: !SetupInput.canPairXteink(collectorOnline: status.service.healthy, endpoint: selectedEndpoint, connectionValid: xteinkConnectionValid, modelConfirmed: modelConfirmed, stageFirmware: firmware, installedFirmwareConfirmed: installedFirmwareConfirmed), success: firmware ? "Firmware staged. Complete the update on your X4 Pro." : "Pairing saved. Leave File Transfer or eject the card.", resetFirmwareConfirmation: firmware)
+                Toggle("I checked: this is \(deviceName)", isOn: Binding(get: { modelConfirmed }, set: { confirmedCrossPointModel = $0 ? selectedModel : "" })).font(.callout)
+                if selectedDevice?.capabilities.highlights == true {
+                    if selectedDevice?.firmwareAvailable == true {
+                        Toggle("Prepare Passage firmware", isOn: $firmware).font(.callout)
+                        if firmware { Text("You’ll install the prepared update on your reader.").font(.caption).foregroundStyle(.secondary) }
+                    } else {
+                        Text(selectedDevice?.supportNote ?? "Passage firmware is not available for this model yet.").font(.callout).foregroundStyle(.secondary)
+                    }
+                    if !firmware { Toggle("Passage firmware is already installed", isOn: $installedFirmwareConfirmed).font(.callout) }
+                }
+                action(firmware ? "Prepare firmware and connect" : "Connect reader", "pair_xteink", xteinkParameters, firmware ? "Preparing Passage firmware…" : "Connecting your reader…", disabled: !canPairCrossPoint, success: firmware ? "Firmware prepared. Complete the update on your reader." : "Pairing saved. Leave File Transfer or eject the card.", resetFirmwareConfirmation: firmware)
+                Button("Show preparation steps") { readyCrossPointModel = "" }.font(.callout)
                 firmwareHelp
                 if !validEndpoint || model.error != nil { connectionOptions }
             }
         }
     }
 
+    private var canPairCrossPoint: Bool {
+        SetupInput.canPairXteink(collectorOnline: status.service.healthy, endpoint: selectedEndpoint, connectionValid: xteinkConnectionValid, modelConfirmed: modelConfirmed && crossPointReady, stageFirmware: firmware, installedFirmwareConfirmed: installedFirmwareConfirmed, highlightsSupported: selectedDevice?.capabilities.highlights == true, pairingSupported: selectedDevice?.pairingSupported == true, firmwareAvailable: selectedDevice?.firmwareAvailable == true)
+    }
+
     private var progressStep: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ReadingProgressView(status: status, pairing: true)
-            if !readiness.progressConfigured { Button("Later") { model.selection = .highlights }.font(.callout) }
+            ReadingProgressView(status: status, pairing: true, deviceChoice: deviceChoice ?? .both, crosspointModel: selectedModel)
+            HStack {
+                if readiness.progressConfigured {
+                    Button("Finish setup") { savedPositionChoice = SetupPositionChoice.enabled.rawValue; flow.advance(readiness) }.buttonStyle(.borderedProminent).disabled(model.busy)
+                } else {
+                    Button("Finish without position sync") {
+                        savedPositionChoice = SetupPositionChoice.later.rawValue
+                        flow.advance(readiness)
+                    }.disabled(model.busy)
+                }
+            }
+            Text("Optional. You can change this in Settings at any time.").font(.caption).foregroundStyle(.secondary)
         }
     }
 
     private var completedStep: some View {
-        Card(title: "Setup complete") {
-            DeviceIllustration(guide: .bridge)
-            Button("View highlights") { model.selection = .highlights }.buttonStyle(.borderedProminent)
+        Card(title: "Your readers are ready") {
+            Label(deviceChoice == .both ? "Both readers connected" : "\(deviceChoice?.title ?? "Reader") connected", systemImage: "checkmark.circle.fill").foregroundStyle(teal)
+            Text("Keep Passage open while your readers sync. Your Mac needs to be awake.").font(.callout).foregroundStyle(.secondary)
+            HStack {
+                Button("View highlights") { model.selection = .highlights }.buttonStyle(.borderedProminent)
+                Button(deviceChoice == .both ? "Manage readers" : "Add another reader") { flow.visit(.readers, readiness: readiness) }.disabled(model.busy)
+            }
+            if !readiness.progressConfigured && readiness.progressAvailable {
+                Button("Set up reading positions") { savedPositionChoice = ""; flow.visit(.progress, readiness: readiness) }.font(.callout).disabled(model.busy)
+            }
         }
     }
 
+    private var continueButton: some View {
+        Button(continueTitle) { flow.advance(readiness) }.buttonStyle(.borderedProminent).disabled(model.busy)
+    }
+
+    private func prerequisite(_ title: String, detail: String, checked: Binding<Bool>, link: String? = nil, url: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(title, isOn: checked).font(.callout.weight(.semibold))
+            Text(detail).font(.callout).foregroundStyle(.secondary)
+            if let link, let url, let destination = URL(string: url) { Link(link, destination: destination).font(.callout) }
+        }.disabled(model.busy)
+    }
+
     private var firmwareHelp: some View {
-        DisclosureGroup("Firmware help") {
+        DisclosureGroup("Firmware details") {
             VStack(alignment: .leading, spacing: 8) {
-                Text("CrossPoint must already start on an X4 Pro. Preserve its SD card and hidden .crosspoint folder. Building needs Git and downloaded build tools; staging does not flash the reader.").font(.callout).foregroundStyle(.secondary)
-                Link("CrossPoint installation", destination: URL(string: "https://crosspointreader.com/")!)
-                Link("Passage firmware instructions", destination: URL(string: "https://github.com/skyerus/reader-bridge/blob/main/docs/SETUP.md#xteink")!)
+                Text("Preserve your SD card and hidden .crosspoint folder. Preparing an update does not install it: finish on the reader, then confirm Sync Highlights appears.").font(.callout).foregroundStyle(.secondary)
+                Link("CrossPoint installation", destination: SetupInput.installationURL(selectedDevice?.setupUrl))
             }.padding(.top, 8)
         }.font(.callout)
     }
@@ -249,14 +366,14 @@ struct SetupView: View {
                 if !status.addresses.isEmpty { Menu("Choose a Mac address") { ForEach(status.addresses, id: \.self) { address in Button(address) { endpoint = address } } } }
                 Text(validEndpoint ? "Use the Mac’s private IP if .local fails." : "Use http:// with a private IP or a .local name, without a path.").font(.caption).foregroundStyle(validEndpoint ? Color.secondary : Color.orange)
                 if status.service.healthy {
-                    Button("Stop bridge") { Task { await model.perform("stop_collector", activity: "Stopping your bridge…", success: "Bridge stopped. Readers will retain queued highlights.") } }.disabled(model.busy)
+                    Button("Stop sync") { Task { await model.perform("stop_collector", activity: "Stopping your bridge…", success: "Sync stopped. Readers will retain queued highlights.") } }.disabled(model.busy)
                 }
             }.padding(.top, 10)
         }.font(.callout)
     }
 
     private var xteinkParameters: [String: Any] {
-        var parameters: [String: Any] = ["endpoint": selectedEndpoint, "firmware": firmware, "model_confirmed": modelConfirmed]
+        var parameters: [String: Any] = ["endpoint": selectedEndpoint, "firmware": firmware, "model_confirmed": modelConfirmed, "model": selectedModel]
         parameters[method == "SD card" ? "mount" : "device_url"] = method == "SD card" ? xteinkMount : deviceURL
         return parameters
     }
@@ -298,6 +415,9 @@ struct SetupView: View {
     }
 
     private func populateDefaults() {
+        if savedDeviceChoice.isEmpty, let existing = deviceChoice { savedDeviceChoice = existing.rawValue }
+        if savedCrossPointModel.isEmpty, let existing = status.xteink.model { savedCrossPointModel = existing }
+        firmware = selectedDevice?.capabilities.highlights == true && selectedDevice?.firmwareAvailable == true
         portText = String(status.service.port > 0 ? status.service.port : 8084)
         if endpoint.isEmpty { endpoint = status.endpoint }
         lastSuggestedEndpoint = status.endpoint
@@ -308,10 +428,5 @@ struct SetupView: View {
     private func selectDetectedMounts() {
         kindleMount = SetupInput.suggestedMount(kind: "kindle", mounts: status.mounts, current: kindleMount)
         xteinkMount = SetupInput.suggestedMount(kind: "xteink", mounts: status.mounts, current: xteinkMount)
-    }
-
-    private func resetDeviceConfirmations() {
-        modelConfirmed = false
-        installedFirmwareConfirmed = false
     }
 }

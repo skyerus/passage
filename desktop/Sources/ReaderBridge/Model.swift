@@ -4,7 +4,15 @@ import SwiftUI
 struct BridgeStatus: Decodable {
     struct Service: Decodable { var installed: Bool; var healthy: Bool; var port: Int; var mode: String; var archive: String; var pendingBackup: Int }
     struct Kindle: Decodable { var paired: Bool; var connected: Bool; var mount: String }
-    struct Xteink: Decodable { var paired: Bool; var firmwareStaged: Bool; var url: String }
+    struct Xteink: Decodable { var paired: Bool; var firmwareStaged: Bool; var url: String; var model: String? = nil }
+    struct SupportedDevice: Decodable, Identifiable {
+        struct Capabilities: Decodable, Equatable { var highlights: Bool; var progress: Bool; var touch: Bool }
+        var id: String; var name: String; var capabilities: Capabilities
+        var pairingSupported: Bool; var firmwareAvailable: Bool
+        var firmwareFilename: String?; var setupUrl: String?; var firmwareUpdateInstructions: String?; var supportNote: String?
+        // Older helpers support only this model. New helpers supply the authoritative registry.
+        static let legacyX4Pro = Self(id: "xteink_x4_pro", name: "Xteink X4 Pro", capabilities: .init(highlights: true, progress: true, touch: true), pairingSupported: true, firmwareAvailable: false, firmwareFilename: "reader-bridge-x4-pro.bin", setupUrl: "https://crosspointreader.com/#flash-tools", firmwareUpdateInstructions: "Choose reader-bridge-x4-pro.bin in Settings → System → SD Card Firmware Update. Keep the reader powered on until it finishes.", supportNote: "Refresh Passage to check firmware availability.")
+    }
     struct Mount: Decodable, Identifiable { var name: String; var path: String; var kind: String; var id: String { path } }
     struct Library: Decodable { var installed: Bool; var port: Int; var books: String }
     struct ExistingSetup: Decodable { var available: Bool; var connected: Bool; var healthy: Bool; var port: Int; var archive: String }
@@ -14,10 +22,17 @@ struct BridgeStatus: Decodable {
         var enabled: Bool; var healthy: Bool; var endpoint: String; var port: Int
         var kindlePaired: Bool; var xteinkPaired: Bool; var bookCount: Int
         var uploads: [Upload]; var error: String; var verified: Bool
+        var xteinkModel: String? = nil
         // Pairing is configuration, not proof of a device being online or applying a position.
-        var isConfigured: Bool { enabled && kindlePaired && xteinkPaired && error.isEmpty }
+        var isConfigured: Bool { isConfigured(for: .both) }
+        func isConfigured(for choice: SetupDeviceChoice, crosspointModel: String? = nil) -> Bool {
+            enabled && error.isEmpty && (!choice.includesKindle || kindlePaired) &&
+                (!choice.includesCrossPoint || (xteinkPaired && (crosspointModel == nil || (xteinkModel ?? SupportedDevice.legacyX4Pro.id) == crosspointModel)))
+        }
     }
     var localProgress: LocalProgress?
+    var supportedDevices: [SupportedDevice]?
+    var crossPointDevices: [SupportedDevice] { supportedDevices ?? [.legacyX4Pro] }
     var service: Service; var kindle: Kindle; var xteink: Xteink
     var mounts: [Mount]; var highlights: [Highlight]; var highlightCount: Int
     var progressVerified: Bool; var endpoint: String; var addresses: [String]; var warnings: [String]; var library: Library

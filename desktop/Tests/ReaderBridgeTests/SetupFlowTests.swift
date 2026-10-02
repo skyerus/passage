@@ -145,4 +145,149 @@ final class SetupFlowTests: XCTestCase {
         original.service.port = 8090
         XCTAssertNotEqual(reference, SetupInput.firmwareConfirmationReference(original))
     }
+    func testNewUserChoosesReadersBeforeStartingAnySetup() throws {
+        let fresh = try status()
+        XCTAssertNil(SetupDeviceChoice.resolved(saved: "", status: fresh))
+        let readiness = SetupReadiness(status: fresh, firmwareConfirmedByUser: false, deviceChoice: nil)
+        XCTAssertEqual(readiness.recommendedStep, .readers)
+        XCTAssertEqual(readiness.visibleSteps, [.readers])
+        XCTAssertFalse(readiness.canVisit(.bridge))
+        var navigation = SetupNavigation()
+        navigation.reconcile(readiness)
+        navigation.advance(readiness)
+        XCTAssertEqual(navigation.step, .readers)
+    }
+
+    func testKindleOnlyPathSkipsCrossPointAndCanFinishWithoutPositions() throws {
+        let unpaired = SetupReadiness(status: try status(online: true), firmwareConfirmedByUser: false, deviceChoice: .kindle)
+        XCTAssertEqual(unpaired.steps, [.readers, .bridge, .kindle, .progress, .complete])
+        XCTAssertEqual(unpaired.recommendedStep, .kindle)
+        XCTAssertFalse(unpaired.canVisit(.xteink))
+        var navigation = SetupNavigation()
+        navigation.reconcile(unpaired)
+        let paired = SetupReadiness(status: try status(online: true, kindle: true), firmwareConfirmedByUser: false, deviceChoice: .kindle)
+        navigation.advance(paired)
+        XCTAssertEqual(navigation.step, .progress)
+        navigation.advance(paired)
+        XCTAssertEqual(navigation.step, .progress)
+        let later = SetupReadiness(status: try status(online: true, kindle: true), firmwareConfirmedByUser: false, deviceChoice: .kindle, positionChoice: .later)
+        navigation.advance(later)
+        XCTAssertEqual(navigation.step, .complete)
+        XCTAssertEqual(later.recommendedStep, .complete)
+        XCTAssertFalse(later.xteinkPaired)
+    }
+
+    func testCrossPointOnlyPathNeverRequiresKindlePairing() throws {
+        let unpaired = SetupReadiness(status: try status(online: true), firmwareConfirmedByUser: false, deviceChoice: .crosspoint)
+        XCTAssertEqual(unpaired.steps, [.readers, .bridge, .xteink, .progress, .complete])
+        XCTAssertEqual(unpaired.recommendedStep, .xteink)
+        XCTAssertTrue(unpaired.canVisit(.xteink))
+        XCTAssertFalse(unpaired.canVisit(.kindle))
+        let staged = SetupReadiness(status: try status(online: true, xteink: true, staged: true), firmwareConfirmedByUser: false, deviceChoice: .crosspoint)
+        XCTAssertFalse(staged.canVisit(.progress))
+        let confirmed = SetupReadiness(status: try status(online: true, xteink: true, staged: true), firmwareConfirmedByUser: true, deviceChoice: .crosspoint, positionChoice: .later)
+        XCTAssertEqual(confirmed.recommendedStep, .complete)
+        XCTAssertTrue(confirmed.canVisit(.complete))
+        XCTAssertFalse(confirmed.kindlePaired)
+    }
+
+    func testEachSelectedReaderCanConfigurePositionsIndependently() throws {
+        var saved = try status(online: true, kindle: true, xteink: true)
+        saved.localProgress = .init(enabled: true, healthy: true, endpoint: "http://reader.local:8085", port: 8085, kindlePaired: true, xteinkPaired: false, bookCount: 0, uploads: [], error: "", verified: false)
+        XCTAssertTrue(SetupReadiness(status: saved, firmwareConfirmedByUser: true, deviceChoice: .kindle).progressConfigured)
+        XCTAssertFalse(SetupReadiness(status: saved, firmwareConfirmedByUser: true, deviceChoice: .both).progressConfigured)
+        saved.localProgress?.kindlePaired = false
+        saved.localProgress?.xteinkPaired = true
+        XCTAssertTrue(SetupReadiness(status: saved, firmwareConfirmedByUser: true, deviceChoice: .crosspoint).progressConfigured)
+        XCTAssertFalse(SetupReadiness(status: saved, firmwareConfirmedByUser: true, deviceChoice: .both).progressConfigured)
+        saved.localProgress?.error = "Reader settings need updating."
+        XCTAssertFalse(SetupReadiness(status: saved, firmwareConfirmedByUser: true, deviceChoice: .crosspoint).progressConfigured)
+    }
+
+    func testChoiceAndLaterDecisionResumeAfterRestartAndCanAddSecondReader() throws {
+        let suite = "Passage.SetupFlowTests.\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        preferences.set(SetupDeviceChoice.kindle.rawValue, forKey: "setup.devices")
+        preferences.set(SetupPositionChoice.later.rawValue, forKey: "setup.positions")
+        let restarted = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let saved = try status(online: true, kindle: true)
+        let choice = SetupDeviceChoice.resolved(saved: restarted.string(forKey: "setup.devices") ?? "", status: saved)
+        let decision = SetupPositionChoice(rawValue: restarted.string(forKey: "setup.positions") ?? "") ?? .undecided
+        let resumed = SetupReadiness(status: saved, firmwareConfirmedByUser: false, deviceChoice: choice, positionChoice: decision)
+        XCTAssertEqual(resumed.recommendedStep, .complete)
+        var navigation = SetupNavigation()
+        navigation.reconcile(resumed)
+        XCTAssertEqual(navigation.step, .complete)
+        let secondReader = SetupReadiness(status: saved, firmwareConfirmedByUser: false, deviceChoice: .both, positionChoice: decision)
+        navigation.reconcile(secondReader)
+        XCTAssertEqual(navigation.step, .xteink)
+        XCTAssertTrue(secondReader.kindlePaired)
+        XCTAssertEqual(secondReader.positionChoice, .later)
+    }
+
+    func testLegacyPairingsInferChoiceAndExplicitChoiceWins() throws {
+        XCTAssertEqual(SetupDeviceChoice.resolved(saved: "", status: try status(kindle: true)), .kindle)
+        XCTAssertEqual(SetupDeviceChoice.resolved(saved: "", status: try status(xteink: true)), .crosspoint)
+        XCTAssertEqual(SetupDeviceChoice.resolved(saved: "", status: try status(kindle: true, xteink: true)), .both)
+        XCTAssertEqual(SetupDeviceChoice.resolved(saved: "kindle", status: try status(kindle: true, xteink: true)), .kindle)
+        XCTAssertEqual(SetupDeviceChoice.resolved(saved: "unknown", status: try status(xteink: true)), .crosspoint)
+        var progressOnly = try status()
+        progressOnly.localProgress = .init(enabled: true, healthy: true, endpoint: "", port: 8085, kindlePaired: false, xteinkPaired: true, bookCount: 0, uploads: [], error: "", verified: false)
+        XCTAssertEqual(SetupDeviceChoice.resolved(saved: "", status: progressOnly), .crosspoint)
+    }
+
+    func testSelectedModelCannotReuseAnotherModelsPairingOrFirmwareAcknowledgement() throws {
+        var saved = try status(online: true, xteink: true)
+        saved.xteink.model = "xteink_x4_pro"
+        saved.supportedDevices = [BridgeStatus.SupportedDevice.legacyX4Pro, .init(id: "xteink_x4", name: "Xteink X4", capabilities: .init(highlights: true, progress: true, touch: false), pairingSupported: true, firmwareAvailable: false, firmwareFilename: nil, setupUrl: nil, firmwareUpdateInstructions: nil, supportNote: nil)]
+        saved.localProgress = .init(enabled: true, healthy: true, endpoint: "", port: 8085, kindlePaired: false, xteinkPaired: true, bookCount: 0, uploads: [], error: "", verified: false, xteinkModel: "xteink_x4_pro")
+        let other = SetupReadiness(status: saved, firmwareConfirmedByUser: true, deviceChoice: .crosspoint, crosspointModel: "xteink_x4")
+        XCTAssertFalse(other.xteinkPaired)
+        XCTAssertFalse(other.progressConfigured)
+        XCTAssertEqual(other.recommendedStep, .xteink)
+        let reference = SetupInput.firmwareConfirmationReference(saved)
+        saved.xteink.model = "xteink_x4"
+        XCTAssertNotEqual(reference, SetupInput.firmwareConfirmationReference(saved))
+    }
+
+    func testCapabilityAndFirmwareAvailabilityControlPairingRequirements() throws {
+        XCTAssertFalse(SetupInput.canPairXteink(collectorOnline: true, endpoint: "http://reader.local:8084", connectionValid: true, modelConfirmed: true, stageFirmware: true, installedFirmwareConfirmed: false, firmwareAvailable: false))
+        XCTAssertTrue(SetupInput.canPairXteink(collectorOnline: true, endpoint: "http://reader.local:8084", connectionValid: true, modelConfirmed: true, stageFirmware: false, installedFirmwareConfirmed: true, firmwareAvailable: false))
+        XCTAssertTrue(SetupInput.canPairXteink(collectorOnline: true, endpoint: "http://reader.local:8084", connectionValid: true, modelConfirmed: true, stageFirmware: false, installedFirmwareConfirmed: false, highlightsSupported: false, firmwareAvailable: false))
+        XCTAssertFalse(SetupInput.canPairXteink(collectorOnline: true, endpoint: "http://reader.local:8084", connectionValid: true, modelConfirmed: true, stageFirmware: false, installedFirmwareConfirmed: true, pairingSupported: false))
+        var saved = try status(online: true, xteink: true)
+        saved.xteink.model = "progress_only"
+        saved.supportedDevices = [.init(id: "progress_only", name: "Position reader", capabilities: .init(highlights: false, progress: true, touch: false), pairingSupported: true, firmwareAvailable: false, firmwareFilename: nil, setupUrl: nil, firmwareUpdateInstructions: nil, supportNote: nil)]
+        let progressOnly = SetupReadiness(status: saved, firmwareConfirmedByUser: false, deviceChoice: .crosspoint, crosspointModel: "progress_only")
+        XCTAssertFalse(progressOnly.firmwareNeedsConfirmation)
+        XCTAssertTrue(progressOnly.canVisit(.progress))
+    }
+
+    func testBothReadersMayPairCrossPointFirstAndContinueToMissingKindle() throws {
+        var navigation = SetupNavigation()
+        let fresh = SetupReadiness(status: try status(online: true), firmwareConfirmedByUser: false)
+        navigation.reconcile(fresh)
+        navigation.visit(.xteink, readiness: fresh)
+        XCTAssertEqual(navigation.step, .xteink)
+        let crosspointPaired = SetupReadiness(status: try status(online: true, xteink: true), firmwareConfirmedByUser: true, positionChoice: .later)
+        XCTAssertEqual(crosspointPaired.nextStep(after: .xteink), .kindle)
+        navigation.advance(crosspointPaired)
+        XCTAssertEqual(navigation.step, .kindle)
+        let bothPaired = SetupReadiness(status: try status(online: true, kindle: true, xteink: true), firmwareConfirmedByUser: true, positionChoice: .later)
+        navigation.visit(.xteink, readiness: bothPaired)
+        navigation.advance(bothPaired)
+        XCTAssertEqual(navigation.step, .complete)
+    }
+
+    func testLegacyX4ProAcknowledgementRemainsValidAndInstallLinksAreSafe() throws {
+        var legacy = try status(online: true, xteink: true)
+        let reference = SetupInput.firmwareConfirmationReference(legacy)
+        legacy.xteink.model = BridgeStatus.SupportedDevice.legacyX4Pro.id
+        XCTAssertEqual(reference, SetupInput.firmwareConfirmationReference(legacy))
+        XCTAssertEqual(SetupInput.installationURL("not a URL").host, "crosspointreader.com")
+        XCTAssertEqual(SetupInput.installationURL("javascript:alert(1)").scheme, "https")
+        XCTAssertEqual(SetupInput.installationURL("https://crosspointreader.com/#flash-tools").fragment, "flash-tools")
+    }
+
 }
