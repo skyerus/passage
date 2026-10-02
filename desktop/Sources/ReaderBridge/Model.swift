@@ -129,6 +129,19 @@ enum Backend {
         var icon: String { switch self { case .setup: return "link"; case .highlights: return "text.quote"; case .settings: return "slider.horizontal.3" } }
     }
     var serviceLabel: String { guard error == nil else { return "Status needs attention" }; guard let status else { return "Checking sync…" }; return status.service.healthy ? "Ready for highlights" : "Highlight sync paused" }
+    /// Imports need the archive service, but never require a reader pairing.
+    func prepareArchiveForImport(port: Int) async -> Bool {
+        guard !busy, let status else { return false }
+        if status.service.healthy { return true }
+        if status.usesExistingSetup {
+            await perform("status")
+        } else if status.offersExistingSetup {
+            await perform("connect_existing", activity: "Connecting your existing archive…")
+        } else {
+            await perform("start_collector", ["port": port], activity: "Preparing your highlight archive…")
+        }
+        return error == nil && self.status?.service.healthy == true
+    }
     func perform(_ command: String, _ parameters: [String: Any] = [:], activity: String = "Checking status…", success: String? = nil) async {
         if command == "status" { await refreshStatus(interactive: true); return }
         guard !busy else { return }

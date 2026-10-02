@@ -16,6 +16,8 @@ struct HighlightsView: View {
     }
     @AppStorage("archive.bookSort") private var bookSort = BookSort.recent
     @State private var selectedID: String?
+    @State private var showImportPreparation = false
+    @State private var chooseImportAfterPreparation = false
     @FocusState private var searchFocused: Bool
     private var query: String { model.highlightQuery }
     private var filtered: [Highlight] { status.highlights.filter { $0.matches(query) && (model.highlightBookID.isEmpty || $0.bookId == model.highlightBookID) } }
@@ -45,12 +47,12 @@ struct HighlightsView: View {
             }
             if status.highlightCount == 0 {
                 VStack(spacing: 0) {
-                    BridgeEmptyState(symbol: "books.vertical", title: "No highlights yet", detail: setupReadiness.readerPairingComplete ? "Save a highlight on your reader with Wi-Fi connected, or import Kindle highlights." : "Connect your reader to bring your highlights here.")
+                    BridgeEmptyState(symbol: "books.vertical", title: "No highlights yet", detail: setupReadiness.readerPairingComplete ? "Save a highlight on your reader with Wi-Fi connected, or import Kindle highlights." : "Set up a reader or import highlights you already have.")
                     HStack {
                         if !setupReadiness.readerPairingComplete && !status.usesExistingSetup {
                             Button("Set up your reader") { model.selection = .setup }.buttonStyle(.borderedProminent)
                         }
-                        Button("Import highlights…", action: importHighlights).buttonStyle(.bordered).disabled(model.busy || !status.service.healthy)
+                        Button("Import highlights…", action: importHighlights).buttonStyle(.bordered).disabled(model.busy)
                     }.padding(.bottom, 40)
                 }.bridgeSurface()
             } else if showingBooks {
@@ -84,6 +86,17 @@ struct HighlightsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .bridgeFindHighlights)) { _ in
             layout = "quotes"; model.highlightBookID = ""; model.searchHighlights(); searchFocused = true
         }
+        .sheet(isPresented: $showImportPreparation, onDismiss: {
+            if chooseImportAfterPreparation {
+                chooseImportAfterPreparation = false
+                chooseImportFile()
+            }
+        }) {
+            ArchiveImportPreparationView(status: model.status ?? status) {
+                chooseImportAfterPreparation = true
+                showImportPreparation = false
+            }
+        }
     }
     private var archiveToolbar: some View {
         HStack(spacing: 10) {
@@ -103,7 +116,7 @@ struct HighlightsView: View {
                 Image(systemName: "text.quote").tag("quotes").help("All highlights")
             }.pickerStyle(.segmented).labelsHidden().frame(width: 80).accessibilityLabel("Archive view: books or highlights")
             Menu {
-                Button("Import highlights…", action: importHighlights).disabled(model.busy || !status.service.healthy)
+                Button("Import highlights…", action: importHighlights).disabled(model.busy)
                 Button("Download missing covers") { Task { await model.perform("cache_covers", activity: "Downloading covers…") } }.disabled(model.busy || status.highlightCount == 0)
                 Divider()
                 Button("Export highlights & covers…", action: exportArchive).disabled(model.busy || status.highlightCount == 0)
@@ -181,6 +194,10 @@ struct HighlightsView: View {
     private func showAllBooks() { model.highlightBookID = ""; model.highlightQuery = ""; layout = "books"; model.searchHighlights() }
     private func reconcileSelection() { selectedID = HighlightPresentation.selection(current: selectedID, visibleIDs: filtered.map(\.id)) }
     private func importHighlights() {
+        if status.service.healthy { chooseImportFile() }
+        else { showImportPreparation = true }
+    }
+    private func chooseImportFile() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false; panel.canChooseFiles = true; panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.plainText, .json]
@@ -197,6 +214,65 @@ struct HighlightsView: View {
         if panel.runModal() == .OK, let path = panel.url?.path {
             Task { await model.perform("export", ["path": path], activity: "Exporting highlights and covers…", success: "Highlights and cached covers exported together.") }
         }
+    }
+}
+
+struct ArchiveImportPreparationView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    let status: BridgeStatus
+    let onReady: () -> Void
+    @State private var portText = "8084"
+    @State private var showConnectionSettings = false
+    private var existingPaused: Bool {
+        (status.usesExistingSetup || status.offersExistingSetup) && !SetupInput.existingCollectorOnline(status)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Prepare your archive").font(.title2.weight(.medium))
+            Text("Import My Clippings.txt, supported Kindle JSON, or a Passage export. You can do this without pairing a reader.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if status.usesExistingSetup || status.offersExistingSetup {
+                Text(existingPaused ? "Start your existing archive’s original service, then check again." : "Passage will use your existing archive and keep its settings.")
+                    .font(.callout).fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Start Passage’s background service to save imported highlights on this Mac.")
+                    .font(.callout).fixedSize(horizontal: false, vertical: true)
+                DisclosureGroup("Connection settings", isExpanded: $showConnectionSettings) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Port").font(.callout)
+                            TextField("8084", text: $portText).textFieldStyle(.roundedBorder).frame(width: 90)
+                                .accessibilityLabel("Highlight archive port")
+                        }
+                        Text(SetupInput.validCollectorPort(portText) ? "If this port is occupied, choose another unused port." : "Choose a port from 1024 to 65535.")
+                            .font(.caption).foregroundStyle(SetupInput.validCollectorPort(portText) ? Color.secondary : .orange)
+                    }.padding(.top, 8)
+                }.font(.callout)
+            }
+            if let error = model.error { Text(error).font(.callout).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
+            HStack {
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Spacer()
+                if existingPaused {
+                    Button("Check again") { Task { await model.perform("status"); if model.error == nil && model.status?.service.healthy == true { onReady() } } }
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Button(status.service.healthy ? "Choose import file…" : status.offersExistingSetup ? "Use existing archive & choose file…" : "Start Passage & choose file…") {
+                        Task {
+                            if await model.prepareArchiveForImport(port: Int(portText) ?? 8084) { onReady() }
+                            else { showConnectionSettings = true }
+                        }
+                    }.buttonStyle(.borderedProminent)
+                        .disabled(!status.service.healthy && !status.offersExistingSetup && !SetupInput.validCollectorPort(portText))
+                }
+            }
+        }.padding(24).frame(width: 480).disabled(model.busy)
+            .onAppear {
+                portText = String(status.service.port > 0 ? status.service.port : 8084)
+                showConnectionSettings = !SetupInput.validCollectorPort(portText)
+            }
     }
 }
 

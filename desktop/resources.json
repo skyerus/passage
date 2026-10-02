@@ -29,6 +29,9 @@
   ],
   "documentation_files": [
     "README.md",
+    "SUPPORT.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
     "docs/MAC-APP.md",
     "docs/SETUP.md",
     "docs/PROGRESS-SYNC.md",
@@ -37,9 +40,9 @@
     "docs/RELEASING.md",
     "docs/release-acceptance.example.json",
     "docs/images/passage-icon.png",
-    "docs/images/mac-books-dark.png",
-    "docs/images/mac-highlights-dark.jpg",
-    "docs/images/mac-setup.jpg"
+    "docs/images/mac-books.png",
+    "docs/images/mac-highlights.png",
+    "docs/images/mac-setup.png"
   ],
   "runtime_license_files": [
     "desktop/licenses/python-standalone/LICENSE",

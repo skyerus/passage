@@ -2,7 +2,7 @@
 
 For the native app's download and first-reader setup, use [Passage for Mac](MAC-APP.md). This guide covers the legacy command-line wizard and optional services. It requires Python 3.10 or later and GitHub CLI authenticated with your own account; explicit firmware source builds also require Git and downloaded build tools.
 
-Reader Bridge collects Kindle KOReader highlights and Xteink CrossPoint clippings in your own archive. It can also help connect both readers to a home book library and the same reading-progress account.
+Passage (formerly Reader Bridge) collects Kindle KOReader highlights and CrossPoint clippings in your own archive. It can also connect readers to a home book library and the same reading-progress account. The command-line tools and data paths retain the Reader Bridge name.
 
 These are three separate services:
 
@@ -14,7 +14,7 @@ These are three separate services:
 
 ## Before starting
 
-Have the Mac, both readers, charging cables, and one ordinary DRM-free EPUB ready. Use a book you are allowed to copy to both devices. Keep the Mac plugged in, awake, logged in, and on the same trusted home network as the readers.
+Have the Mac, your chosen reader or readers, charging cables, and one DRM-free EPUB ready. For reading-position sync, use the identical EPUB on both readers. Keep the Mac awake, logged in, and on the same trusted home network as the readers. You can skip reader pairing, Calibre-Web, or progress setup; the Mac app also offers [import-only setup](MAC-APP.md#import-without-a-reader) without GitHub.
 
 Configuration reference checked on **2026-09-29**: the development setup used a **Kindle Paperwhite 5 (11th generation), firmware 5.19.2**, already jailbroken, running **KOReader v2026.07.2-185-gdcf6e3b42_2026-09-20_kindlehf**, plus an **Xteink X4 Pro with the custom CrossPoint 1.6.5 build**. This is a tested configuration reference, not a compatibility guarantee for another Kindle or firmware. A successful software build is also not proof that every device has completed the checks below.
 
@@ -40,9 +40,13 @@ Skip installation if KOReader already opens and reads your EPUB.
 
 ## 2. Prepare a CrossPoint reader
 
-If CrossPoint is not installed, start with the [official CrossPoint site](https://crosspointreader.com/) and its [device picker](https://updates.crosspointreader.com/). Select your exact hardware model. Stop if the installer does not explicitly support it.
+If CrossPoint is not installed, follow the [official installation guide](https://github.com/crosspoint-reader/crosspoint-reader#install-firmware) and [flash tools](https://crosspointreader.com/#flash-tools). Select your exact hardware model. Stop if the installer does not explicitly support it. The [upstream status page](https://updates.crosspointreader.com/) reports firmware availability.
+
+For factory USB-locked Xteink units, follow the upstream [locked-device and recovery guidance](https://github.com/crosspoint-reader/crosspoint-reader#usb-locked-devices-xteink-unlocker). Passage's custom images have not been tested on this hardware; confirm image compatibility and recovery before proceeding.
 
 **Checkpoint:** The model is confirmed, CrossPoint starts, and it can open your EPUB. Passage's custom highlights build is also needed. Available profiles and source pins are recorded in [firmware.json](../firmware.json); a declared profile or successful compilation alone is not a physical compatibility pass.
+
+Profiles cover Xteink X3, X4, X4 Pro, X4 Classic (X4C), Seeed reTerminal Sticky, and M5Stack Paper Mono. See the [profile and physical-evidence table](MAC-APP.md#reader-profiles). Choose by exact model, not appearance; button and touch selection differ.
 
 ## 3. Run the Mac setup wizard
 
@@ -106,9 +110,9 @@ The pairing file is `/.crosspoint/highlight-sync.json`. It contains a dedicated 
 
 Leave File Transfer mode and open a book. Use that model's touch or button controls to save a clipping. The reader quietly attempts uploads from Home or the normal reader using a saved Wi-Fi network. Failed attempts back off; sleeping readers do not wake just to sync. **Sync Highlights** is available to test immediately.
 
-**Checkpoint:** Find one new test quote from each reader in the collector's chosen archive. Check the full excerpt and title, then restart the Mac service and confirm those quotes remain. A successful local receipt and a successful GitHub publication are separate checks.
+**Checkpoint:** Find one new test quote from each paired reader in the collector's chosen archive. Check the full excerpt and title, then restart the Mac service and confirm those quotes remain. A successful local receipt and a successful GitHub publication are separate checks.
 
-## 5. Add the home book library
+## 5. Add the optional home book library
 
 This step needs an existing **Calibre library folder containing `metadata.db`**, not just a folder of EPUBs. Prepare it with [Calibre](https://calibre-ebook.com/download_osx) if needed, then use the wizard's library step or:
 
@@ -124,9 +128,9 @@ Add the catalog URL printed by the wizard to KOReader's **OPDS catalog** and Cro
 
 **Checkpoint:** Each reader browses Home Books with its credentials and downloads the EPUB. A browser without credentials must not be able to browse the library. If `.local` discovery fails, use the Mac's private IP; a router DHCP reservation prevents that address changing unexpectedly.
 
-## 6. Connect reading progress
+## 6. Connect optional reading progress
 
-**Mac app:** Enable **Settings → Reading positions → Use Reader Bridge for positions** and follow **Setup** to connect both readers. The app hosts the service, creates its private account and copies existing progress before changing the reader settings. Follow the [local progress guide](PROGRESS-SYNC.md) for the two-device test and backup/recovery details.
+**Mac app:** Choose **Settings → Reading positions → Turn on position sync** and follow **Setup** to connect both readers. The app hosts the service, creates its private account and copies existing progress before changing the reader settings. Follow the [local progress guide](PROGRESS-SYNC.md) for the two-device test and backup/recovery details.
 
 **Legacy CLI / external-server setup:** The following walkthrough keeps a separate progress server; it is optional when using the Mac app’s local service.
 
@@ -151,7 +155,7 @@ Run the wizard's progress step (`python3 setup.py progress`) for its device chec
 
 ## If something does not connect
 
-Run `python3 setup.py doctor` and `python3 setup.py status`. Check the Mac is awake and logged in, devices use the same home LAN, the address is current, and the firewall allows the selected local services. Guest Wi-Fi often isolates devices. Do not expose ports 8083 or 8084 through your router.
+Run `python3 setup.py doctor` and `python3 setup.py status`. Check the Mac is awake and logged in, devices use the same home LAN, the address is current, and the firewall allows the selected local services. Guest Wi-Fi often isolates devices. Do not expose ports 8083 or 8084 through your router. Follow the [support guide](../SUPPORT.md) for a report that includes useful redacted details.
 
 The default highlights endpoint uses plain HTTP on a private LAN; its token is not encrypted in transit. Use a trusted network. Do not send the pairing files or full service state to support. Share only redacted diagnostic output.
 
