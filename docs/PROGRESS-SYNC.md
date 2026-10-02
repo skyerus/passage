@@ -4,15 +4,18 @@ The Mac app includes a private KOSync-compatible service. KOReader on Kindle and
 
 ## Connect once
 
-1. In **Settings → Reading positions**, choose **Use Reader Bridge for positions**. Reader Bridge starts the service and creates a dedicated local account.
+1. In **Settings → Reading positions**, choose **Turn on position sync**. Reader Bridge starts the service and creates a dedicated local account.
 2. In **Setup → Reading positions**, close KOReader, connect Kindle in USB drive mode, and choose **Connect Kindle**. The app preserves its old settings, installs the Reader Bridge progress patch, and copies existing server positions for EPUBs on that Kindle. A current KOReader version with user patches enabled is required. It checks the old server before changing the account. Internet access is needed for this one-time copy if the old server is online.
 3. On Xteink X4 Pro, open **File Transfer** on the same trusted network. Enter the shown address in Reader Bridge and choose **Connect Xteink**. Alternatively, connect its SD card and choose **Use its SD card instead**. No firmware change is needed if the reader already supports custom KOSync servers.
 4. Eject Kindle and reopen KOReader. Restart Xteink so it loads the new settings. Keep the exact same EPUB bytes on both readers.
-5. On Xteink, choose **More → Sync Progress → Upload Local**, then sync the same book in KOReader. Read onward in KOReader and close the book, then choose **Apply Remote** on Xteink. Confirm **The passage matched in both directions** in the app only after checking the actual text.
+
+Setup completes from the saved pairings. No manual sync test or confirmation is required. **Readers paired** means the settings are saved; received timestamps show actual uploads.
 
 Reader Bridge preserves KOReader's existing automatic-sync preferences. New configurations enable Auto sync; the reader's own Wi-Fi settings still apply. CrossPoint's Upload Local and Apply Remote actions remain manual. Choosing a new server does not add a polling loop, keep the readers' Wi-Fi on, change their sleep settings, or create Amazon Whispersync compatibility.
 
 ## Daily use
+
+On Xteink, choose **More → Sync Progress → Upload Local** before continuing on Kindle, or **Apply Remote** to pick up the position saved by KOReader.
 
 The service starts after Mac login and stays running when you close the app. The Mac must be awake and reachable from the readers; it cannot sync during shutdown, FileVault unlock, sleep, or when the readers are away from its network. Readers retain their local reading place while offline. KOReader versions that support an offline sync queue retain it. Xteink can upload its local place once the Mac is reachable.
 
