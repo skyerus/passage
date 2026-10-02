@@ -539,7 +539,7 @@ class Desktop(ProgressSetup, setup.Bridge):
                 'mounts': mounts, 'highlights': rows[:HIGHLIGHTS_LIMIT], 'highlight_count': count, 'highlights_matches': len(rows), 'highlights_limit': HIGHLIGHTS_LIMIT,
                 'books': sorted(books.values(), key=lambda b: (b['title'].casefold(), b['author'].casefold())),
                 'highlights_order': 'newest_first' if undated < len(rows) else 'book_title', 'highlights_undated': undated,
-                'progress_verified': bool(self.state.get('progress_sync', {}).get('verified') if self.state.get('progress_sync', {}).get('enabled') else self.state.get('progress', {}).get('verified')), 'endpoint': endpoint or (addresses[0] if addresses else ''), 'addresses': addresses, 'warnings': warnings,
+                'progress_verified': bool(self.state.get('progress_sync', {}).get('verified') and self.state.get('progress_sync', {}).get('kindle',{}).get('guard_version') == 1 if self.state.get('progress_sync', {}).get('enabled') else self.state.get('progress', {}).get('verified')), 'endpoint': endpoint or (addresses[0] if addresses else ''), 'addresses': addresses, 'warnings': warnings,
                 'library': {'installed': self.owned('library'), 'port': library.get('port', 8083), 'books': library.get('books', '')}}
 
     def endpoint(self, value):
@@ -722,6 +722,8 @@ class Desktop(ProgressSetup, setup.Bridge):
         elif command == 'verify_local_progress':
             if not self.progress_status()['kindle_paired'] or not self.progress_status()['xteink_paired'] or not self.progress_authenticated():
                 raise setup.SetupError('Connect both readers to the running progress service before confirming the test.')
+            if self.state['progress_sync']['kindle'].get('guard_version') != 1:
+                raise setup.SetupError('Reconnect Kindle to install stale-upload protection before confirming the test.')
             self.state['progress_sync']['verified'] = bool_arg(args.get('verified'), 'verified')
             self.save()
         elif command == 'verify_progress':

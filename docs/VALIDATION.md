@@ -86,3 +86,32 @@ the development build. These tests do not establish a physical Kindle/Xteink
 round trip, an actual Mac reboot, or measured battery usage. The physical
 two-reader checkpoint in `PROGRESS-SYNC.md` remains required before confirming
 setup. The firmware and notarization release gates above remain unchanged.
+
+## Stale position protection (0.6.2, 2026-10-02)
+
+The original physical test confirmed both directions but exposed a conflict:
+Xteink uploaded a position, then a late Kindle upload replaced it. Repeating
+with Kindle already awake avoided the race; it did not fix it.
+
+The revision guard rejects that stale update, preserves the remote location
+and ownership, and retains the conflicting Kindle position for recovery.
+Tests cover same-second updates, concurrent writes, restart persistence,
+legacy queued updates, deliberate backward reading, explicit overrides,
+failed manual pushes losing override permission, rejected pulls, and queue
+changes while an asynchronous upload is running. The patch adds no Wi-Fi
+polling or sleep-setting changes.
+
+Validation includes the Python/HTTP suite, Lua guard tests, Swift tests, and
+`scripts/check-koreader-progress.lua` run against the connected Kindle's
+actual KOSync `main.lua` and `KOSyncClient.lua`. That harness substitutes
+network and UI boundaries; it does not claim a physical wake/sleep test.
+Run it with:
+
+```sh
+lua scripts/check-koreader-progress.lua koreader/patches/2-reader-bridge-progress.lua /path/to/koreader/plugins/kosync.koplugin
+```
+
+The packaged macOS smoke test also sends a stale update over real HTTP to
+its disposable paired background service and requires HTTP 409 with the
+Xteink location retained. Physical wake/reconnect confirmation remains a
+separate checkpoint after the new app and Kindle patch are installed.
