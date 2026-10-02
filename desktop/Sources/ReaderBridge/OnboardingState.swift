@@ -164,6 +164,10 @@ enum SetupInput {
         status.offersExistingSetup ? status.existingSetup?.healthy == true : status.service.healthy
     }
 
+    static func shouldPrepareFirmware(requested: Bool, device: BridgeStatus.SupportedDevice?) -> Bool {
+        requested && device?.capabilities.highlights == true && device?.firmwareAvailable == true
+    }
+
     static func canPairXteink(collectorOnline: Bool, endpoint: String, connectionValid: Bool, modelConfirmed: Bool, stageFirmware: Bool, installedFirmwareConfirmed: Bool, highlightsSupported: Bool = true, pairingSupported: Bool = true, firmwareAvailable: Bool = true) -> Bool {
         collectorOnline && validLANAddress(endpoint) && connectionValid && modelConfirmed && pairingSupported && (!stageFirmware || firmwareAvailable) && (!highlightsSupported || stageFirmware || installedFirmwareConfirmed)
     }

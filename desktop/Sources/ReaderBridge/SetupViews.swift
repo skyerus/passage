@@ -57,6 +57,7 @@ struct SetupView: View {
     private var deviceName: String { selectedDevice?.name ?? "CrossPoint reader" }
     private var modelConfirmed: Bool { !selectedModel.isEmpty && confirmedCrossPointModel == selectedModel }
     private var crossPointReady: Bool { !selectedModel.isEmpty && readyCrossPointModel == selectedModel }
+    private var prepareFirmware: Bool { SetupInput.shouldPrepareFirmware(requested: firmware, device: selectedDevice) }
     private var firmwareConfirmed: Bool { !firmwareConfirmedReference.isEmpty && firmwareConfirmedReference == SetupInput.firmwareConfirmationReference(status) }
     private var readiness: SetupReadiness { SetupReadiness(status: status, firmwareConfirmedByUser: firmwareConfirmed, deviceChoice: deviceChoice, positionChoice: positionChoice, crosspointModel: selectedModel) }
     private var validEndpoint: Bool { SetupInput.validLANAddress(selectedEndpoint) }
@@ -95,6 +96,9 @@ struct SetupView: View {
             installedFirmwareConfirmed = false
             showXteinkRepair = false
             firmware = selectedDevice?.capabilities.highlights == true && selectedDevice?.firmwareAvailable == true
+        }
+        .onChange(of: selectedDevice?.firmwareAvailable) { available in
+            if available != true { firmware = false }
         }
         .onChange(of: method) { _ in installedFirmwareConfirmed = false }
         .onChange(of: xteinkMount) { _ in installedFirmwareConfirmed = false }
@@ -191,7 +195,7 @@ struct SetupView: View {
             } else {
                 Text("Passage uses KOReader on a jailbroken Kindle.").foregroundStyle(.secondary)
                 if !kindleReady {
-                    prerequisite("1. Check your model and firmware", detail: "Find them in Settings → Device options → Device info. Use the live guide to check eligibility.", checked: $kindleModelChecked, link: "Check eligibility", url: "https://kindlemodding.org/kindle-models")
+                    prerequisite("1. Check your model and firmware", detail: "Find them in Settings → Device options → Device info. Use the live guide to check eligibility.", checked: $kindleModelChecked, link: "Check eligibility", url: "https://kindlemodding.org/jailbreak-wizard.html")
                     prerequisite("2. Complete the jailbreak", detail: "Follow the method the guide selects, including its post-jailbreak steps. If no method is supported, pause here.", checked: $kindleJailbroken, link: "Jailbreak guide", url: "https://kindlemodding.org/jailbreaking/")
                     prerequisite("3. Open an EPUB in KOReader", detail: "Use the installation path for your jailbreak. Open a DRM-free EPUB to check it works.", checked: $kindleReady, link: "Install KOReader", url: "https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices")
                     Text("Already set up? Check the final step when KOReader opens your EPUB.").font(.caption).foregroundStyle(.secondary)
@@ -284,13 +288,13 @@ struct SetupView: View {
                 if selectedDevice?.capabilities.highlights == true {
                     if selectedDevice?.firmwareAvailable == true {
                         Toggle("Prepare Passage firmware", isOn: $firmware).font(.callout)
-                        if firmware { Text("You’ll install the prepared update on your reader.").font(.caption).foregroundStyle(.secondary) }
+                        if prepareFirmware { Text("You’ll install the prepared update on your reader.").font(.caption).foregroundStyle(.secondary) }
                     } else {
                         Text(selectedDevice?.supportNote ?? "Passage firmware is not available for this model yet.").font(.callout).foregroundStyle(.secondary)
                     }
-                    if !firmware { Toggle("Passage firmware is already installed", isOn: $installedFirmwareConfirmed).font(.callout) }
+                    if !prepareFirmware { Toggle("Passage firmware is already installed", isOn: $installedFirmwareConfirmed).font(.callout) }
                 }
-                action(firmware ? "Prepare firmware and connect" : "Connect reader", "pair_xteink", xteinkParameters, firmware ? "Preparing Passage firmware…" : "Connecting your reader…", disabled: !canPairCrossPoint, success: firmware ? "Firmware prepared. Complete the update on your reader." : "Pairing saved. Leave File Transfer or eject the card.", resetFirmwareConfirmation: firmware)
+                action(prepareFirmware ? "Prepare firmware and connect" : "Connect reader", "pair_xteink", xteinkParameters, prepareFirmware ? "Preparing Passage firmware…" : "Connecting your reader…", disabled: !canPairCrossPoint, success: prepareFirmware ? "Firmware prepared. Complete the update on your reader." : "Pairing saved. Leave File Transfer or eject the card.", resetFirmwareConfirmation: prepareFirmware)
                 Button("Show preparation steps") { readyCrossPointModel = "" }.font(.callout)
                 firmwareHelp
                 if !validEndpoint || model.error != nil { connectionOptions }
@@ -299,7 +303,7 @@ struct SetupView: View {
     }
 
     private var canPairCrossPoint: Bool {
-        SetupInput.canPairXteink(collectorOnline: status.service.healthy, endpoint: selectedEndpoint, connectionValid: xteinkConnectionValid, modelConfirmed: modelConfirmed && crossPointReady, stageFirmware: firmware, installedFirmwareConfirmed: installedFirmwareConfirmed, highlightsSupported: selectedDevice?.capabilities.highlights == true, pairingSupported: selectedDevice?.pairingSupported == true, firmwareAvailable: selectedDevice?.firmwareAvailable == true)
+        SetupInput.canPairXteink(collectorOnline: status.service.healthy, endpoint: selectedEndpoint, connectionValid: xteinkConnectionValid, modelConfirmed: modelConfirmed && crossPointReady, stageFirmware: prepareFirmware, installedFirmwareConfirmed: installedFirmwareConfirmed, highlightsSupported: selectedDevice?.capabilities.highlights == true, pairingSupported: selectedDevice?.pairingSupported == true, firmwareAvailable: selectedDevice?.firmwareAvailable == true)
     }
 
     private var progressStep: some View {
@@ -322,7 +326,6 @@ struct SetupView: View {
     private var completedStep: some View {
         Card(title: "Your readers are ready") {
             Label(deviceChoice == .both ? "Both readers connected" : "\(deviceChoice?.title ?? "Reader") connected", systemImage: "checkmark.circle.fill").foregroundStyle(teal)
-            Text("Keep Passage open while your readers sync. Your Mac needs to be awake.").font(.callout).foregroundStyle(.secondary)
             HStack {
                 Button("View highlights") { model.selection = .highlights }.buttonStyle(.borderedProminent)
                 Button(deviceChoice == .both ? "Manage readers" : "Add another reader") { flow.visit(.readers, readiness: readiness) }.disabled(model.busy)
@@ -373,7 +376,7 @@ struct SetupView: View {
     }
 
     private var xteinkParameters: [String: Any] {
-        var parameters: [String: Any] = ["endpoint": selectedEndpoint, "firmware": firmware, "model_confirmed": modelConfirmed, "model": selectedModel]
+        var parameters: [String: Any] = ["endpoint": selectedEndpoint, "firmware": prepareFirmware, "model_confirmed": modelConfirmed, "model": selectedModel]
         parameters[method == "SD card" ? "mount" : "device_url"] = method == "SD card" ? xteinkMount : deviceURL
         return parameters
     }

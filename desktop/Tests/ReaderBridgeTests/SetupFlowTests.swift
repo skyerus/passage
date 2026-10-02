@@ -290,4 +290,15 @@ final class SetupFlowTests: XCTestCase {
         XCTAssertEqual(SetupInput.installationURL("https://crosspointreader.com/#flash-tools").fragment, "flash-tools")
     }
 
+    func testUnavailableFirmwareUsesAlreadyInstalledPathEvenWithStalePrepareChoice() {
+        var device = BridgeStatus.SupportedDevice.legacyX4Pro
+        device.firmwareAvailable = true
+        XCTAssertTrue(SetupInput.shouldPrepareFirmware(requested: true, device: device))
+        device.firmwareAvailable = false
+        let prepare = SetupInput.shouldPrepareFirmware(requested: true, device: device)
+        XCTAssertFalse(prepare)
+        XCTAssertTrue(SetupInput.canPairXteink(collectorOnline: true, endpoint: "http://reader.local:8084", connectionValid: true, modelConfirmed: true, stageFirmware: prepare, installedFirmwareConfirmed: true, firmwareAvailable: device.firmwareAvailable))
+        XCTAssertFalse(SetupInput.canPairXteink(collectorOnline: true, endpoint: "http://reader.local:8084", connectionValid: true, modelConfirmed: true, stageFirmware: prepare, installedFirmwareConfirmed: false, firmwareAvailable: device.firmwareAvailable))
+    }
+
 }
