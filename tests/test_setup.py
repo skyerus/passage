@@ -1,9 +1,12 @@
 import contextlib
 import hashlib
 import io
+import itertools
 import json
 from pathlib import Path
+import plistlib
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import patch
 import setup
@@ -106,12 +109,14 @@ class SetupTests(unittest.TestCase):
         self.assertTrue(unrelated.exists()); self.assertFalse(agent.exists())
         self.assertTrue((self.bridge.app / 'collector/data/token').exists())
     def test_launch_failure_resumes_owned_plist(self):
-        with patch.object(setup.sys, 'platform', 'darwin'), patch.object(setup, 'run', side_effect=setup.SetupError('lint failed')):
+        with patch.object(setup.sys, 'platform', 'darwin'), patch.object(setup, 'run', side_effect=setup.SetupError('lint failed')), \
+                patch.object(setup.subprocess, 'run', return_value=subprocess.CompletedProcess([], 113, stdout='', stderr='')):
             with self.assertRaises(setup.SetupError):
                 self.bridge.launch('collector', ['/usr/bin/python3', 'collector.py'], self.bridge.app)
         resumed = setup.Bridge(self.bridge.app, agent_dir=self.bridge.agent_dir)
         self.assertEqual(resumed.state['collector']['agent'], str(resumed.agent_path('collector')))
-        with patch.object(setup.sys, 'platform', 'darwin'), patch.object(setup, 'run', return_value=''), patch.object(setup.subprocess, 'run'):
+        with patch.object(setup.sys, 'platform', 'darwin'), patch.object(setup, 'run', return_value=''), \
+                patch.object(setup.subprocess, 'run', return_value=subprocess.CompletedProcess([], 113, stdout='', stderr='')):
             resumed.launch('collector', ['/usr/bin/python3', 'collector.py'], self.bridge.app)
         self.assertTrue(resumed.agent_path('collector').exists())
 
@@ -172,6 +177,142 @@ class SetupTests(unittest.TestCase):
         setup.atomic_write(directory / 'venv/bin/python', b'fixture')
         with patch.object(setup, 'run', side_effect=['', spec['commit'] + '\n']), contextlib.redirect_stdout(io.StringIO()):
             with self.assertRaises(setup.SetupError): self.bridge.build_firmware(spec)
+
+
+class LaunchLifecycleTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.bridge = setup.Bridge(self.root / 'app', agent_dir=self.root / 'agents')
+        self.kind = 'progress_sync'
+        self.agent = self.bridge.agent_path(self.kind)
+        self.directory = self.bridge.app / self.kind
+        spec = {'Label': setup.LABELS[self.kind], 'ProgramArguments': ['/fixture/old-python', 'progress_sync.py'],
+                'WorkingDirectory': str(self.directory)}
+        setup.atomic_write(self.agent, plistlib.dumps(spec))
+        self.bridge.state[self.kind] = {'agent': str(self.agent)}
+        self.identity = f'path = {self.agent}\nprogram = /fixture/old-python\nworking directory = {self.directory}\n'
+        self.statuses = []
+        self.events = []
+        self.removal_code = 0
+        self.bootstrap_error = False
+
+    def loaded(self, identity=None):
+        return subprocess.CompletedProcess([], 0, stdout=identity or self.identity, stderr='')
+
+    def absent(self):
+        return subprocess.CompletedProcess([], 113, stdout='', stderr='Could not find service fixture')
+
+    def subprocess(self, command, **kwargs):
+        self.events.append(command[1])
+        if command[1] == 'print':
+            return self.statuses.pop(0) if self.statuses else self.loaded()
+        self.assertEqual(command[1], 'bootout')
+        return subprocess.CompletedProcess(command, self.removal_code, stdout='', stderr='')
+
+    def setup_command(self, command, **kwargs):
+        operation = command[1]
+        self.events.append(operation)
+        if operation == 'bootstrap' and self.bootstrap_error:
+            raise setup.SetupError('bootstrap fixture failure')
+        return ''
+
+    def launch(self):
+        with patch.object(setup.sys, 'platform', 'darwin'), patch.object(setup, 'run', side_effect=self.setup_command), \
+                patch.object(setup.subprocess, 'run', side_effect=self.subprocess), patch.object(setup.time, 'sleep'):
+            self.bridge.launch(self.kind, ['/fixture/new-python', 'progress_sync.py'], self.directory)
+
+    def test_replacement_waits_for_owned_old_identity_to_disappear(self):
+        self.statuses = [self.loaded(), self.loaded(), self.loaded(), self.loaded(), self.absent()]
+        self.launch()
+        self.assertEqual(self.events, ['print', '-lint', 'print', 'bootout', 'print', 'print', 'print', 'bootstrap'])
+        self.assertFalse(self.statuses)
+
+    def test_owned_removal_wait_is_bounded_without_bootstrap_retry(self):
+        original = self.agent.read_bytes()
+        with patch.object(setup.time, 'monotonic', side_effect=itertools.count()):
+            with self.assertRaisesRegex(setup.SetupError, 'still in progress'):
+                self.launch()
+        self.assertEqual(self.events.count('bootout'), 1)
+        self.assertLessEqual(self.events.count('print'), 8)
+        self.assertNotIn('bootstrap', self.events)
+        self.assertEqual(self.agent.read_bytes(), original)
+        self.assertEqual(self.bridge.state[self.kind]['agent'], str(self.agent))
+        self.statuses = [self.loaded(), self.loaded(), self.absent()]
+        self.launch()
+        self.assertEqual(plistlib.loads(self.agent.read_bytes())['ProgramArguments'][0], '/fixture/new-python')
+        self.assertEqual(self.events.count('bootstrap'), 1)
+
+    def test_changed_loaded_identity_is_not_removed_or_overwritten(self):
+        original = self.agent.read_bytes()
+        self.statuses = [self.loaded(self.identity.replace('/fixture/old-python', '/unrelated/python'))]
+        with self.assertRaisesRegex(setup.SetupError, 'differs'):
+            self.launch()
+        self.assertEqual(self.events, ['print'])
+        self.assertEqual(self.agent.read_bytes(), original)
+
+    def test_different_service_appearing_during_removal_is_left_alone(self):
+        self.statuses = [self.loaded(), self.loaded(), self.loaded(self.identity.replace(str(self.agent), '/unrelated/job.plist'))]
+        with self.assertRaisesRegex(setup.SetupError, 'changed during removal'):
+            self.launch()
+        self.assertEqual(self.events.count('bootout'), 1)
+        self.assertNotIn('bootstrap', self.events)
+
+    def test_service_changed_before_bootout_is_never_removed(self):
+        original = self.agent.read_bytes()
+        self.statuses = [self.loaded(), self.loaded(self.identity.replace(str(self.agent), '/unrelated/job.plist'))]
+        with self.assertRaisesRegex(setup.SetupError, 'changed before removal'):
+            self.launch()
+        self.assertNotIn('bootout', self.events)
+        self.assertNotIn('bootstrap', self.events)
+        self.assertEqual(self.agent.read_bytes(), original)
+
+    def test_failed_removal_retains_old_executable_and_retry_resumes_upgrade(self):
+        original = self.agent.read_bytes()
+        self.statuses = [self.loaded(), self.loaded()]
+        self.removal_code = 5
+        with self.assertRaisesRegex(setup.SetupError, 'removal failed'):
+            self.launch()
+        self.assertEqual(self.agent.read_bytes(), original)
+        self.assertNotIn('bootstrap', self.events)
+        self.removal_code = 0
+        self.statuses = [self.loaded(), self.loaded(), self.absent()]
+        self.launch()
+        self.assertEqual(plistlib.loads(self.agent.read_bytes())['ProgramArguments'][0], '/fixture/new-python')
+        self.assertEqual(self.events.count('bootstrap'), 1)
+
+    def test_unknown_status_and_failed_bootout_fail_without_retry(self):
+        for operation in ('status', 'bootout'):
+            with self.subTest(operation=operation):
+                self.events = []
+                self.statuses = [subprocess.CompletedProcess([], 5, stdout='', stderr='private fixture')] if operation == 'status' else [self.loaded()]
+                self.removal_code = 5
+                with self.assertRaises(setup.SetupError) as error:
+                    self.launch()
+                self.assertNotIn('private fixture', str(error.exception))
+                self.assertNotIn('bootstrap', self.events)
+                self.assertLessEqual(self.events.count('bootout'), 1)
+
+    def test_absent_service_bootstraps_once_without_bootout(self):
+        self.statuses = [self.absent()]
+        self.launch()
+        self.assertEqual(self.events, ['print', '-lint', 'bootstrap'])
+
+    def test_loaded_service_without_owned_plist_cannot_be_taken_over(self):
+        self.agent.unlink()
+        with self.assertRaisesRegex(setup.SetupError, 'unowned'):
+            self.launch()
+        self.assertEqual(self.events, ['print'])
+        self.assertFalse(self.agent.exists())
+
+    def test_bootstrap_failure_after_removal_is_not_retried(self):
+        self.statuses = [self.loaded(), self.loaded(), self.absent()]
+        self.bootstrap_error = True
+        with self.assertRaisesRegex(setup.SetupError, 'bootstrap fixture failure'):
+            self.launch()
+        self.assertEqual(self.events.count('bootout'), 1)
+        self.assertEqual(self.events.count('bootstrap'), 1)
 
 
 if __name__ == '__main__': unittest.main()

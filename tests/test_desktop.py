@@ -327,7 +327,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('--repo', launch.call_args.args[1])
 
     def test_launch_environment_disables_bytecode(self):
-        with patch.object(desktop.sys, 'platform', 'darwin'), patch.object(desktop.subprocess, 'run', return_value=Mock(returncode=1)), patch.object(setup, 'run', return_value=''):
+        with patch.object(desktop.sys, 'platform', 'darwin'), patch.object(desktop.subprocess, 'run', return_value=Mock(returncode=113)), patch.object(setup, 'run', return_value=''):
             self.bridge.launch('collector', [sys.executable, self.app / 'collector/collector.py', 'serve'], self.app / 'collector')
         spec = plistlib.loads(self.bridge.agent_path('collector').read_bytes())
         self.assertEqual(spec['EnvironmentVariables']['PYTHONDONTWRITEBYTECODE'], '1')

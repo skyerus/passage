@@ -154,6 +154,36 @@ class Bridge:
     def agent_path(self, kind):
         return self.agent_dir / (LABELS[kind] + '.plist')
 
+    @staticmethod
+    def loaded_identity(status):
+        def field(name):
+            value = re.search(r'^\s*' + re.escape(name) + r' = (.+)\s*$', status, re.MULTILINE)
+            return value.group(1).strip() if value else None
+        return {name: field(name) for name in ('path', 'program', 'working directory')}
+
+    @staticmethod
+    def loaded_service(target, timeout=5):
+        try:
+            status = subprocess.run(['launchctl', 'print', target], capture_output=True, text=True, timeout=timeout)
+        except (OSError, subprocess.TimeoutExpired):
+            raise SetupError('Background service status could not be verified. Existing services were left alone.') from None
+        if status.returncode not in (0, 113):
+            raise SetupError('Background service status could not be verified. Existing services were left alone.')
+        return status
+
+    def wait_for_removal(self, target, identity):
+        deadline = time.monotonic() + 10
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SetupError('Background service removal is still in progress. Saved configuration is retained; retry shortly.')
+            status = self.loaded_service(target, timeout=min(2, remaining))
+            if status.returncode == 113:
+                return
+            if self.loaded_identity(status.stdout) != identity:
+                raise SetupError('The loaded service changed during removal. Existing services were left alone.')
+            time.sleep(min(.1, max(0, deadline - time.monotonic())))
+
     def launch(self, kind, arguments, directory, start=True):
         if sys.platform != 'darwin':
             raise SetupError('Installing background services requires macOS.')
@@ -161,6 +191,22 @@ class Bridge:
         agent = self.agent_path(kind)
         if agent.exists() and self.state.get(kind, {}).get('agent') != str(agent):
             raise SetupError('An unowned Reader Bridge agent already exists. Inspect it before selecting another app directory.')
+        domain = f'gui/{os.getuid()}'
+        target = domain + '/' + label
+        identity = None
+        if start:
+            loaded = self.loaded_service(target)
+            if loaded.returncode == 0:
+                if not agent.exists() or self.state.get(kind, {}).get('agent') != str(agent):
+                    raise SetupError('An unowned Reader Bridge service is already loaded. Existing services were left alone.')
+                try:
+                    previous = plistlib.loads(guarded(agent).read_bytes())
+                    identity = {'path': str(agent), 'program': previous['ProgramArguments'][0],
+                                'working directory': previous['WorkingDirectory']}
+                except (OSError, ValueError, KeyError, IndexError, TypeError, plistlib.InvalidFileException):
+                    raise SetupError('The saved background service could not be verified. Existing services were left alone.') from None
+                if previous.get('Label') != label or self.loaded_identity(loaded.stdout) != identity:
+                    raise SetupError('The loaded service differs from this app’s saved service. Existing services were left alone.')
         logs = self.app / 'logs'
         logs.mkdir(mode=0o700, parents=True, exist_ok=True)
         spec = {'Label': label, 'ProgramArguments': [str(x) for x in arguments], 'WorkingDirectory': str(directory),
@@ -171,11 +217,30 @@ class Bridge:
         # bootstrap can then resume without mistaking our file for another app's.
         self.state.setdefault(kind, {})['agent'] = str(agent)
         self.save()
-        self.install_file(agent, plistlib.dumps(spec))
-        run(['plutil', '-lint', str(agent)])
-        domain = f'gui/{os.getuid()}'
+        content = plistlib.dumps(spec)
+        # Lint the replacement separately; retain the old plist while its
+        # service is loaded so a failed removal can resume an app upgrade.
+        with tempfile.TemporaryDirectory(prefix='agent-', dir=self.app) as staging:
+            candidate = Path(staging) / agent.name
+            atomic_write(candidate, content)
+            run(['plutil', '-lint', str(candidate)])
         if start:
-            subprocess.run(['launchctl', 'bootout', domain + '/' + label], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if identity is not None:
+                current = self.loaded_service(target)
+                if current.returncode == 0:
+                    if self.loaded_identity(current.stdout) != identity:
+                        raise SetupError('The loaded service changed before removal. Existing services were left alone.')
+                    try:
+                        removal = subprocess.run(['launchctl', 'bootout', target], capture_output=True, text=True, timeout=5)
+                    except (OSError, subprocess.TimeoutExpired):
+                        raise SetupError('Background service removal could not complete. Saved configuration is retained.') from None
+                    if removal.returncode:
+                        raise SetupError('Background service removal failed. Saved configuration is retained.')
+                    # bootout returns before its process exits. Do not reuse the
+                    # label until launchd confirms the owned service is absent.
+                    self.wait_for_removal(target, identity)
+        self.install_file(agent, content)
+        if start:
             run(['launchctl', 'bootstrap', domain, str(agent)])
         self.state.setdefault(kind, {})['agent'] = str(agent)
         self.save()
