@@ -485,8 +485,14 @@ class Desktop(ProgressSetup, setup.Bridge):
             key = row['book_id']
             if key not in books:
                 books[key] = {k: row[k] for k in ('title', 'author', 'cover_url', 'cover_path')}
-                books[key].update({'id': key, 'count': 0})
+                books[key].update({'id': key, 'count': 0, 'latest_highlight_at': None})
             books[key]['count'] += 1
+            recorded = highlight_date(row['created_at'])
+            if recorded is not None:
+                timestamp = recorded.timestamp()
+                latest = books[key]['latest_highlight_at']
+                if latest is None or timestamp > latest:
+                    books[key]['latest_highlight_at'] = timestamp
         if book_id:
             rows = [row for row in rows if row['book_id'] == book_id]
         if query:

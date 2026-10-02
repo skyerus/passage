@@ -50,6 +50,7 @@ struct Highlight: Decodable, Identifiable {
 struct BookSummary: Decodable, Identifiable {
     var id: String; var title: String; var author: String; var count: Int
     var coverUrl: String?; var coverPath: String?
+    var latestHighlightAt: Double? = nil
     func matches(_ query: String) -> Bool { query.isEmpty || [title, author].contains { $0.localizedCaseInsensitiveContains(query) } }
 }
 struct BridgeResponse: Decodable { var ok: Bool; var data: BridgeStatus?; var error: String? }
