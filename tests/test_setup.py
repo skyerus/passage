@@ -166,7 +166,7 @@ class SetupTests(unittest.TestCase):
 
     def test_source_manifest_build_rejects_override(self):
         spec = json.loads((setup.SOURCE / 'firmware.json').read_text())['devices']['xteink_x4_pro']
-        directory = self.bridge.app / 'builds' / spec['commit']
+        directory = self.bridge.app / 'builds' / spec['commit'] / spec['environment']
         source = directory / 'source'; source.mkdir(parents=True)
         setup.atomic_write(source / 'platformio.local.ini', b'[env:x4pro]\nextra_scripts=untrusted.py')
         setup.atomic_write(directory / 'venv/bin/python', b'fixture')

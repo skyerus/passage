@@ -1,12 +1,153 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "upstream_repository": "https://github.com/crosspoint-reader/crosspoint-reader",
+  "source_evidence": {
+    "commit": "d03f6e6a2afbdbdf99d35fcb91d35a847166f514",
+    "hardware": "platformio.ini; freeink-sdk BoardConfig at 87c4493a6a5aa0c7c0e61aacc4a24e2c273e6895",
+    "highlights": "USER_GUIDE.md \u00a75.3; src/activities/reader/EpubReaderActivity.cpp",
+    "progress": "lib/KOReaderSync; src/activities/reader/KOReaderSyncActivity.cpp"
+  },
   "devices": {
+    "xteink_x3": {
+      "id": "xteink_x3",
+      "name": "Xteink X3",
+      "api_models": [
+        "X3",
+        "xteink_x3",
+        "xteink_x3_uc8279"
+      ],
+      "capabilities": {
+        "highlights": true,
+        "progress": true,
+        "touch": false
+      },
+      "pairing_supported": true,
+      "chip_id": 5,
+      "repository": "https://github.com/skyerus/crosspoint-reader.git",
+      "commit": "d03f6e6a2afbdbdf99d35fcb91d35a847166f514",
+      "platformio": "6.2.0",
+      "environment": "default",
+      "filename": "passage-xteink-x3.bin",
+      "prebuilt": null,
+      "setup_url": "https://crosspointreader.com/#flash-tools",
+      "firmware_update_instructions": "Eject the SD card or close File Transfer. On Xteink X3, use the arrow and confirm buttons to open Settings \u2192 System \u2192 SD Card Firmware Update, select passage-xteink-x3.bin, and confirm. Keep the reader powered until it restarts. Then open a book and confirm Sync Highlights appears in the reader menu.",
+      "support_note": "Highlight selection uses the arrow and Confirm buttons; this model has no touchscreen."
+    },
+    "xteink_x4": {
+      "id": "xteink_x4",
+      "name": "Xteink X4",
+      "api_models": [
+        "X4",
+        "xteink_x4"
+      ],
+      "capabilities": {
+        "highlights": true,
+        "progress": true,
+        "touch": false
+      },
+      "pairing_supported": true,
+      "chip_id": 5,
+      "repository": "https://github.com/skyerus/crosspoint-reader.git",
+      "commit": "d03f6e6a2afbdbdf99d35fcb91d35a847166f514",
+      "platformio": "6.2.0",
+      "environment": "default",
+      "filename": "passage-xteink-x4.bin",
+      "prebuilt": null,
+      "setup_url": "https://crosspointreader.com/#flash-tools",
+      "firmware_update_instructions": "Eject the SD card or close File Transfer. On Xteink X4, use the arrow and confirm buttons to open Settings \u2192 System \u2192 SD Card Firmware Update, select passage-xteink-x4.bin, and confirm. Keep the reader powered until it restarts. Then open a book and confirm Sync Highlights appears in the reader menu.",
+      "support_note": "Highlight selection uses the arrow and Confirm buttons; this model has no touchscreen."
+    },
     "xteink_x4_pro": {
+      "id": "xteink_x4_pro",
+      "name": "Xteink X4 Pro",
+      "api_models": [
+        "xteink_x4_pro"
+      ],
+      "capabilities": {
+        "highlights": true,
+        "progress": true,
+        "touch": true
+      },
+      "pairing_supported": true,
+      "chip_id": 9,
       "repository": "https://github.com/skyerus/crosspoint-reader.git",
       "commit": "d03f6e6a2afbdbdf99d35fcb91d35a847166f514",
       "platformio": "6.2.0",
       "environment": "x4pro",
-      "filename": "reader-bridge-x4-pro.bin"
+      "filename": "passage-xteink-x4-pro.bin",
+      "prebuilt": null,
+      "setup_url": "https://crosspointreader.com/#flash-tools",
+      "firmware_update_instructions": "Eject the SD card or close File Transfer. On Xteink X4 Pro, tap Settings \u2192 System \u2192 SD Card Firmware Update, select passage-xteink-x4-pro.bin, and confirm. Keep the reader powered until it restarts. Then open a book and confirm Sync Highlights appears in the reader menu.",
+      "support_note": "Highlight selection uses first and last word taps."
+    },
+    "xteink_x4_classic": {
+      "id": "xteink_x4_classic",
+      "name": "Xteink X4 Classic (X4C)",
+      "api_models": [
+        "xteink_x4_classic"
+      ],
+      "capabilities": {
+        "highlights": true,
+        "progress": true,
+        "touch": false
+      },
+      "pairing_supported": true,
+      "chip_id": 9,
+      "repository": "https://github.com/skyerus/crosspoint-reader.git",
+      "commit": "d03f6e6a2afbdbdf99d35fcb91d35a847166f514",
+      "platformio": "6.2.0",
+      "environment": "x4c",
+      "filename": "passage-xteink-x4-classic.bin",
+      "prebuilt": null,
+      "setup_url": "https://crosspointreader.com/#flash-tools",
+      "firmware_update_instructions": "Eject the SD card or close File Transfer. On Xteink X4 Classic (X4C), use the arrow and confirm buttons to open Settings \u2192 System \u2192 SD Card Firmware Update, select passage-xteink-x4-classic.bin, and confirm. Keep the reader powered until it restarts. Then open a book and confirm Sync Highlights appears in the reader menu.",
+      "support_note": "Highlight selection uses the arrow and Confirm buttons; this model has no touchscreen."
+    },
+    "sticky": {
+      "id": "sticky",
+      "name": "Seeed reTerminal Sticky",
+      "api_models": [
+        "sticky"
+      ],
+      "capabilities": {
+        "highlights": true,
+        "progress": true,
+        "touch": true
+      },
+      "pairing_supported": true,
+      "chip_id": 9,
+      "repository": "https://github.com/skyerus/crosspoint-reader.git",
+      "commit": "d03f6e6a2afbdbdf99d35fcb91d35a847166f514",
+      "platformio": "6.2.0",
+      "environment": "sticky",
+      "filename": "passage-sticky.bin",
+      "prebuilt": null,
+      "setup_url": "https://crosspointreader.com/#flash-tools",
+      "firmware_update_instructions": "Eject the SD card or close File Transfer. On Seeed reTerminal Sticky, tap Settings \u2192 System \u2192 SD Card Firmware Update, select passage-sticky.bin, and confirm. Keep the reader powered until it restarts. Then open a book and confirm Sync Highlights appears in the reader menu.",
+      "support_note": "Highlight selection uses first and last word taps."
+    },
+    "m5stack_paper_mono": {
+      "id": "m5stack_paper_mono",
+      "name": "M5Stack Paper Mono",
+      "api_models": [
+        "m5stack_paper_mono"
+      ],
+      "capabilities": {
+        "highlights": true,
+        "progress": true,
+        "touch": true
+      },
+      "pairing_supported": true,
+      "chip_id": 9,
+      "repository": "https://github.com/skyerus/crosspoint-reader.git",
+      "commit": "d03f6e6a2afbdbdf99d35fcb91d35a847166f514",
+      "platformio": "6.2.0",
+      "environment": "papermono",
+      "filename": "passage-m5stack-paper-mono.bin",
+      "prebuilt": null,
+      "setup_url": "https://crosspointreader.com/#flash-tools",
+      "firmware_update_instructions": "Eject the SD card or close File Transfer. On M5Stack Paper Mono, tap Settings \u2192 System \u2192 SD Card Firmware Update, select passage-m5stack-paper-mono.bin, and confirm. Keep the reader powered until it restarts. Then open a book and confirm Sync Highlights appears in the reader menu.",
+      "support_note": "Highlight selection uses first and last word taps."
     }
   }
 }

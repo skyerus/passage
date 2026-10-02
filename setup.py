@@ -19,11 +19,13 @@ import tempfile
 import time
 from urllib import request, parse, error
 
+import device_profiles
+import firmware as firmware_delivery
+
 SOURCE = Path(__file__).resolve().parent
 DEFAULT_APP = Path.home() / 'Library/Application Support/Reader Bridge'
 LABELS = {'collector': 'com.readerbridge.collector', 'library': 'com.readerbridge.library', 'cloud_backup': 'com.readerbridge.backup', 'progress_sync': 'com.readerbridge.progress'}
 CALIBRE_WEB = '0.6.27'
-BUILD_OVERRIDE = b'[env:x4pro]\nlib_deps =\n  ${base.lib_deps}\n  greiman/SdFat @ 2.3.1\n'
 
 
 class SetupError(Exception):
@@ -290,63 +292,117 @@ class Bridge:
         self.save()
         print('Plugin and pairing verified. Queue preserved. Eject Kindle, restart KOReader, enable Wi-Fi, then open a book.')
 
-    def xteink(self, mount=None, device_url=None, url=None, firmware=False, model=None):
-        if model != 'xteink_x4_pro':
-            raise SetupError('This release supports only explicitly confirmed --model xteink_x4_pro. Do not flash another model.')
-        if not mount and not device_url:
-            raise SetupError('Choose --mount SD_PATH or --xteink-url http://DEVICE-LAN-IP.')
-        if mount and device_url:
-            raise SetupError('Choose one Xteink connection method.')
-        if self.dry_run:
-            print('Would validate X4 Pro, back up/pair config and optionally stage checksum-verified firmware; flashing remains manual.')
-            return
+    @staticmethod
+    def device_profile(model):
+        try:
+            return device_profiles.profile(model)
+        except device_profiles.ProfileError as exc:
+            raise SetupError(str(exc)) from exc
+
+    def crosspoint_connection(self, model, mount=None, device_url=None):
+        spec = self.device_profile(model)
+        if bool(mount) == bool(device_url):
+            raise SetupError('Choose one CrossPoint connection: SD card or File Transfer LAN address.')
         client = Xteink(private_url(device_url), self) if device_url else None
         if client:
             status = json.loads(client.get('/api/status'))
-            if status.get('device') != model:
-                raise SetupError('Device API model does not match X4 Pro; nothing uploaded.')
-            old = client.read_file('/.crosspoint/highlight-sync.json')
-        else:
-            mount = guarded(Path(mount).expanduser())
-            if not (mount / '.crosspoint').is_dir():
-                raise SetupError('Selected SD card has no .crosspoint directory. Confirm the device and initialize CrossPoint first.')
-            path = guarded(mount / '.crosspoint/highlight-sync.json')
-            old = path.read_bytes() if path.exists() else None
-        previous = json.loads(old) if old else {}
-        config = self.pairing('crosspoint', url, previous)
-        data = (json.dumps({'endpoint': config['url'] + '/v1/highlights', 'token': config['token'], 'device_id': config['device_id']}, indent=2) + '\n').encode()
-        if client:
-            client.put_file('/.crosspoint/highlight-sync.json', data, old)
-        else:
-            self.install_file(path, data)
-        if firmware:
-            manifest = json.loads((SOURCE / 'firmware.json').read_text())
-            spec = manifest.get('devices', {}).get(model)
-            if not spec:
-                raise SetupError('No pinned firmware source available for this model.')
-            firmware_bytes = self.build_firmware(spec)
-            filename = spec.get('filename', 'reader-bridge-x4-pro.bin')
-            if Path(filename).name != filename or not filename.endswith('.bin'):
-                raise SetupError('Invalid firmware filename in release manifest.')
+            if device_profiles.model_from_status(status) != model:
+                raise SetupError('The connected reader does not match ' + spec['name'] + '; no reader files were changed.')
+            return spec, client, None
+        mount = guarded(Path(mount).expanduser())
+        if not (mount / '.crosspoint').is_dir():
+            raise SetupError('Select the SD card initialized by CrossPoint. Confirm its exact model first.')
+        marker = guarded(mount / '.crosspoint/passage-device.json')
+        if marker.is_file():
+            recorded = json.loads(marker.read_text())
+            if not isinstance(recorded, dict) or recorded.get('model') != model:
+                raise SetupError('This SD card was paired with a different model. Check the card and selected reader; no files were changed.')
+        # An SD card cannot prove physical hardware. The caller must explicitly
+        # select/confirm the model; the receipt protects subsequent reuse.
+        return spec, None, mount
+
+    def delivered_firmware(self, spec):
+        try:
+            release = firmware_delivery.prebuilt_spec(spec)
+            notice = guarded(SOURCE / release['license_notice'])
+            if not notice.is_file() or not notice.read_text().strip():
+                raise firmware_delivery.FirmwareError('The firmware redistribution notice is missing. Update Passage before staging firmware.')
+            if release.get('bundled_path'):
+                bundled = guarded(SOURCE / release['bundled_path'])
+                if not bundled.is_file():
+                    raise firmware_delivery.FirmwareError('The bundled firmware image is missing. Reinstall Passage before staging firmware.')
+                return firmware_delivery.verify(bundled.read_bytes(), spec)
+            cached = guarded(self.app / 'firmware' / release['sha256'] / spec['filename'])
+            if cached.is_file():
+                return firmware_delivery.verify(cached.read_bytes(), spec)
+            data = firmware_delivery.verify(firmware_delivery.download(spec), spec)
+            atomic_write(cached, data)
+            return data
+        except firmware_delivery.FirmwareError as exc:
+            raise SetupError(str(exc)) from exc
+
+    def xteink(self, mount=None, device_url=None, url=None, firmware=False, model=None, developer_build=False):
+        spec = self.device_profile(model)
+        if developer_build and not firmware:
+            raise SetupError('--developer-build requires --firmware.')
+        if self.dry_run:
+            if bool(mount) == bool(device_url):
+                raise SetupError('Choose one CrossPoint connection method.')
+            print('Would validate ' + spec['name'] + ', preserve pairing files, and optionally stage verified firmware; flashing remains manual.')
+            return
+        spec, client, mount = self.crosspoint_connection(model, mount, device_url)
+        # Fetch and verify firmware before touching pairing state or the reader.
+        # The desktop cannot invoke a developer build implicitly.
+        firmware_bytes = (self.build_firmware(spec) if developer_build else self.delivered_firmware(spec)) if firmware else None
+        if spec['capabilities']['highlights']:
+            config_path = '/.crosspoint/highlight-sync.json'
+            path = guarded(mount / config_path.lstrip('/')) if mount else None
+            old = client.read_file(config_path) if client else path.read_bytes() if path.exists() else None
+            previous = json.loads(old) if old else {}
+            if not isinstance(previous, dict):
+                raise SetupError('Unrecognized CrossPoint highlight settings. No pairing files were changed.')
+            kind = 'crosspoint' if model == device_profiles.LEGACY_MODEL else 'crosspoint-' + model
+            config = self.pairing(kind, url, previous)
+            data = (json.dumps({'endpoint': config['url'] + '/v1/highlights', 'token': config['token'], 'device_id': config['device_id']}, indent=2) + '\n').encode()
+            if client:
+                client.put_file(config_path, data, old)
+            else:
+                self.install_file(path, data)
+        if firmware_bytes is not None:
+            filename = spec['filename']
             if client:
                 client.put_file('/' + filename, firmware_bytes, client.read_file('/' + filename))
             else:
                 self.install_file(mount / filename, firmware_bytes)
-            print('Firmware staged and fully readback-verified. On the X4 Pro, open Settings → System → SD Card Firmware Update and confirm this .bin manually. Do not interrupt power.')
-        self.state['xteink'] = {'paired': True, 'firmware_staged': firmware, 'device_url': device_url}
+            print('Firmware staged and fully readback-verified. ' + spec['firmware_update_instructions'])
+        marker_data = (json.dumps({'version': 1, 'model': model}) + '\n').encode()
+        if client:
+            client.put_file('/.crosspoint/passage-device.json', marker_data, client.read_file('/.crosspoint/passage-device.json'))
+        else:
+            self.install_file(mount / '.crosspoint/passage-device.json', marker_data)
+        previous_state = self.state.get('xteink', {})
+        same_model = device_profiles.saved_model(previous_state) == model
+        self.state['xteink'] = {'paired': True, 'model': model, 'firmware_staged': firmware or bool(same_model and previous_state.get('firmware_staged')),
+                                'firmware_confirmed': bool(same_model and not firmware and previous_state.get('firmware_confirmed')),
+                                'device_url': device_url, 'mount': str(mount) if mount else '',
+                                'model_verification': 'api' if client else 'user_confirmation'}
         self.save()
-        print('Pairing verified. Close File Transfer to resume reading and automatic sync.')
+        print('Pairing verified for ' + spec['name'] + '. Close File Transfer or eject the card to resume reading.')
 
     def build_firmware(self, spec):
         commit = spec.get('commit', '')
-        if not re.fullmatch('[a-f0-9]{40}', commit) or spec.get('environment') != 'x4pro' or spec.get('repository') != 'https://github.com/skyerus/crosspoint-reader.git' or spec.get('platformio') != '6.2.0':
+        canonical = self.device_profile(spec.get('id'))
+        if (not re.fullmatch('[a-f0-9]{40}', commit) or
+                any(spec.get(key) != canonical.get(key) for key in ('commit', 'environment', 'repository', 'platformio'))):
             raise SetupError('Unsupported firmware source manifest; refusing an unpinned build.')
-        directory = self.app / 'builds' / commit
+        environment = spec['environment']
+        override_data = ('[env:' + environment + ']\nlib_deps =\n  ${base.lib_deps}\n  greiman/SdFat @ 2.3.1\n').encode()
+        directory = self.app / 'builds' / commit / environment
         source = directory / 'source'
         venv = directory / 'venv'
-        output = source / '.pio/build/x4pro/firmware.bin'
+        output = source / ('.pio/build/' + environment + '/firmware.bin')
         receipt = directory / 'build.json'
-        print('Building pinned X4 Pro source locally. First build downloads toolchains/dependencies and can take several minutes.')
+        print('Developer build: compiling pinned ' + spec.get('name', environment) + ' source. This requires Git and downloads toolchains/dependencies.')
         directory.mkdir(parents=True, exist_ok=True)
         if not (venv / 'bin/python').exists():
             run([sys.executable, '-m', 'venv', str(venv)], timeout=120)
@@ -364,16 +420,16 @@ class Bridge:
         if run(['git', '-C', source, 'rev-parse', 'HEAD']).strip() != commit:
             raise SetupError('Cached source is not the pinned commit. Preserve your edits and choose a fresh app directory.')
         override = source / 'platformio.local.ini'
-        if override.exists() and override.read_bytes() != BUILD_OVERRIDE:
+        if override.exists() and override.read_bytes() != override_data:
             raise SetupError('An unrecognized local PlatformIO override exists. Preserve it elsewhere before building the pinned firmware.')
-        atomic_write(override, BUILD_OVERRIDE)
+        atomic_write(override, override_data)
         if run(['git', '-C', source, 'status', '--porcelain', '--untracked-files=no']).strip():
             raise SetupError('Cached firmware source was modified; refusing to build an unreviewed variant.')
         run(['git', '-C', source, 'submodule', 'update', '--init', '--recursive'], timeout=600)
         submodules = run(['git', '-C', source, 'submodule', 'status', '--recursive'])
         if any(line.startswith(('+', '-', 'U')) for line in submodules.splitlines()):
             raise SetupError('Firmware submodule revision mismatch; refusing an unpinned build.')
-        fingerprint = {'commit': commit, 'environment': 'x4pro', 'platformio': '6.2.0', 'override_sha256': hashlib.sha256(BUILD_OVERRIDE).hexdigest()}
+        fingerprint = {'commit': commit, 'environment': environment, 'platformio': '6.2.0', 'override_sha256': hashlib.sha256(override_data).hexdigest()}
         if output.exists() and receipt.exists():
             data = output.read_bytes()
             cached = json.loads(receipt.read_text())
@@ -383,7 +439,7 @@ class Bridge:
         print('Build progress log: ' + str(build_log), flush=True)
         with build_log.open('w') as log:
             os.chmod(build_log, 0o600)
-            result = subprocess.run([str(venv / 'bin/pio'), 'run', '-e', 'x4pro'], cwd=source, stdout=log, stderr=subprocess.STDOUT, timeout=1800, env={**os.environ, "PLATFORMIO_CORE_DIR": str(self.app / "platformio")})
+            result = subprocess.run([str(venv / 'bin/pio'), 'run', '-e', environment], cwd=source, stdout=log, stderr=subprocess.STDOUT, timeout=1800, env={**os.environ, "PLATFORMIO_CORE_DIR": str(self.app / "platformio")})
         if result.returncode or not output.is_file():
             raise SetupError('Firmware build failed. Inspect the private builds directory build.log and resume setup.')
         data = output.read_bytes()
@@ -553,7 +609,7 @@ class Xteink:
 
 def wizard(bridge):
     if bridge.dry_run:
-        print('Plan: prerequisites -> private archive -> collector -> Kindle model/KOReader checkpoint -> plugin -> X4 Pro pairing/verified firmware -> progress account walkthrough -> optional Calibre-Web -> verification. No files, services, devices or repositories changed.')
+        print('Plan: prerequisites -> private archive -> collector -> Kindle model/KOReader checkpoint -> plugin -> selected CrossPoint model/verified firmware -> progress account walkthrough -> optional Calibre-Web -> verification. No files, services, devices or repositories changed.')
         return
     print('Reader Bridge: resumable setup. Your Mac and readers must share a trusted LAN. An asleep Mac is unavailable; readers retain pending uploads. Press Ctrl-C to pause safely.')
     if sys.platform != 'darwin':
@@ -575,11 +631,14 @@ def wizard(bridge):
     print('Kindle checkpoint: follow docs/SETUP.md for your exact model and firmware. Jailbreak/KOReader installation is model-specific; this installer never flashes a Kindle.')
     if yes('KOReader is installed, exited, and Kindle is connected by USB. Install the highlight plugin now?'):
         bridge.kindle(input('Kindle mounted volume path: ').strip(), url)
-    print('Xteink checkpoint: this firmware supports only X4 Pro. Open CrossPoint File Transfer on your trusted LAN.')
-    if yes('Pair an X4 Pro now?'):
-        device_url = input('X4 Pro File Transfer URL (http://LAN-IP): ').strip()
-        firmware = yes('Stage the pinned custom X4 Pro firmware for manual on-device installation?')
-        bridge.xteink(device_url=device_url, url=url, firmware=firmware, model='xteink_x4_pro')
+    print('CrossPoint checkpoint: select the exact hardware model. Open File Transfer on your trusted LAN.')
+    if yes('Pair a CrossPoint reader now?'):
+        print('Models: ' + ', '.join(device_profiles.registry()))
+        model = input('Exact model ID: ').strip()
+        bridge.device_profile(model)
+        device_url = input('CrossPoint File Transfer URL (http://LAN-IP): ').strip()
+        firmware = yes('Download verified Passage firmware for manual on-device installation?')
+        bridge.xteink(device_url=device_url, url=url, firmware=firmware, model=model)
         if firmware:
             if yes('Has the on-device firmware update completed successfully?'):
                 bridge.state['xteink']['firmware_confirmed'] = True; bridge.save()
@@ -609,7 +668,7 @@ def main(argv=None):
     collector.add_argument('--allow-public', action='store_true')
     collector.add_argument('--port', type=int, default=8084)
     kindle = subs.add_parser('kindle'); kindle.add_argument('--mount', required=True); kindle.add_argument('--url')
-    xteink = subs.add_parser('xteink'); xteink.add_argument('--mount'); xteink.add_argument('--xteink-url'); xteink.add_argument('--url'); xteink.add_argument('--model', required=True); xteink.add_argument('--firmware', action='store_true')
+    xteink = subs.add_parser('xteink'); xteink.add_argument('--mount'); xteink.add_argument('--xteink-url'); xteink.add_argument('--url'); xteink.add_argument('--model', required=True); xteink.add_argument('--firmware', action='store_true', help='Download and stage verified prebuilt firmware for this model.'); xteink.add_argument('--developer-build', action='store_true', help='Developer-only: explicitly build pinned source using Git and PlatformIO instead of downloading firmware.')
     library = subs.add_parser('library'); library.add_argument('--books', required=True); library.add_argument('--port', type=int, default=8083)
     clippings = subs.add_parser('import-clippings'); clippings.add_argument('path')
     args = parser.parse_args(argv)
@@ -622,7 +681,7 @@ def main(argv=None):
         elif command in ('doctor', 'status'): bridge.doctor()
         elif command == 'collector': bridge.collector(args.archive, args.create_archive, args.port, args.allow_public)
         elif command == 'kindle': bridge.kindle(args.mount, args.url)
-        elif command == 'xteink': bridge.xteink(args.mount, args.xteink_url, args.url, args.firmware, args.model)
+        elif command == 'xteink': bridge.xteink(args.mount, args.xteink_url, args.url, args.firmware, args.model, args.developer_build)
         elif command == 'library': bridge.library(args.books, args.port)
         elif command == 'progress': bridge.progress()
         elif command == 'import-clippings': bridge.import_clippings(args.path)

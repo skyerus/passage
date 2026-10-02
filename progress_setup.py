@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 import lua_settings
 import progress_sync
 import setup
+import device_profiles
 
 
 def book_documents(mount):
@@ -75,9 +76,10 @@ class ProgressSetup:
         return {'enabled':bool(saved.get('enabled')), 'healthy':bool(saved.get('enabled')) and self.progress_authenticated(),
                 'endpoint':saved.get('endpoint',''), 'port':saved.get('port',8085),
                 'kindle_paired':bool(saved.get('kindle')) and saved['kindle'].get('endpoint') == saved.get('endpoint'),
+                'xteink_model':device_profiles.saved_model(saved.get('xteink')),
                 'xteink_paired':bool(saved.get('xteink')) and saved['xteink'].get('endpoint') == saved.get('endpoint'),
                 'book_count':len(rows), 'uploads':uploads, 'error':error,
-                'verified':bool(saved.get('verified')) and saved.get('kindle',{}).get('guard_version') == 1}
+                'verified':bool(saved.get('verified')) and (not saved.get('kindle') or saved.get('kindle',{}).get('guard_version') == 1)}
 
     def start_progress(self, endpoint, port=None):
         self.stable_installation()
@@ -235,20 +237,19 @@ class ProgressSetup:
         self.state['progress_sync']['verified'] = False
         self.save()
 
-    def pair_progress_xteink(self, mount=None, device_url=None):
+    def pair_progress_xteink(self, mount=None, device_url=None, model=None):
         endpoint = self.paired_progress_endpoint()
-        if self.state['progress_sync'].get('kindle',{}).get('endpoint') != endpoint:
-            raise setup.SetupError('Connect Kindle progress first so its existing server positions are copied before switching Xteink.')
-        if bool(mount) == bool(device_url): raise setup.SetupError('Choose one Xteink connection method.')
+        spec = self.device_profile(model)
+        if not spec['capabilities']['progress']:
+            raise setup.SetupError('Reading-position sync is unavailable for this model.')
+        selected = device_profiles.saved_model(self.state.get('xteink'))
+        if selected and selected != model:
+            raise setup.SetupError('Choose the same model paired in reader setup before connecting positions.')
+        spec, client, mount = self.crosspoint_connection(model, mount, device_url)
         path = '/.crosspoint/koreader.json'
-        client = setup.Xteink(setup.private_url(device_url),self) if device_url else None
         if client:
-            if json.loads(client.get('/api/status')).get('device') != 'xteink_x4_pro':
-                raise setup.SetupError('The connected device is not an Xteink X4 Pro.')
             old = client.read_file(path)
         else:
-            mount = setup.guarded(Path(mount).expanduser())
-            if not (mount/'.crosspoint').is_dir(): raise setup.SetupError('Select the Xteink SD card with its .crosspoint folder.')
             local = setup.guarded(mount/path.lstrip('/'))
             old = local.read_bytes() if local.is_file() else None
         previous = json.loads(old) if old else {}
@@ -270,6 +271,6 @@ class ProgressSetup:
         if client: client.put_file(path,data,old)
         else: self.install_file(local,data)
         # Firmware imports the legacy password field and resaves it obfuscated.
-        self.state['progress_sync']['xteink'] = {'url':device_url or '', 'endpoint':endpoint, 'paired_at':datetime.now(timezone.utc).isoformat()}
+        self.state['progress_sync']['xteink'] = {'model':model, 'url':device_url or '', 'endpoint':endpoint, 'paired_at':datetime.now(timezone.utc).isoformat()}
         self.state['progress_sync']['verified'] = False
         self.save()

@@ -231,7 +231,7 @@ class DesktopTests(unittest.TestCase):
         with patch.object(self.bridge, 'authenticated', return_value=True), contextlib.redirect_stdout(io.StringIO()):
             for _ in range(2):
                 self.bridge.mutate('pair_kindle', {'mount': str(kindle), 'endpoint': 'http://mac.local:8084'})
-                self.bridge.mutate('pair_xteink', {'mount': str(card), 'endpoint': 'http://mac.local:8084', 'model_confirmed': True, 'firmware': False})
+                self.bridge.mutate('pair_xteink', {'mount': str(card), 'endpoint': 'http://mac.local:8084', 'model_confirmed': True, 'model': 'xteink_x4_pro', 'firmware': False})
         self.assertEqual(queue.read_bytes(), b'{"pending":"private"}')
         self.assertEqual((card / '.crosspoint/queue.json').read_bytes(), b'private')
         with patch.object(self.bridge, 'xteink') as pair:

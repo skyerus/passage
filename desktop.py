@@ -23,6 +23,7 @@ from urllib.error import HTTPError
 sys.dont_write_bytecode = True
 
 import setup
+import device_profiles
 import archive_backup
 from progress_setup import ProgressSetup
 from collector import Store, initialize, item_key
@@ -543,11 +544,12 @@ class Desktop(ProgressSetup, setup.Bridge):
         mode = 'github' if service.get('archive') and not service.get('backup_disabled') else 'local'
         return {'local_progress': self.progress_status(), 'cloud_backup': self.cloud_backup_status(), 'existing_setup': existing, 'service': {'installed': existing['connected'] or self.owned('collector'), 'healthy': healthy, 'port': port, 'mode': mode, 'archive': service.get('archive', '') if mode == 'github' else '', 'pending_backup': pending if mode == 'github' else 0},
                 'kindle': {'paired': bool(kindle.get('installed')), 'connected': bool(kindle.get('mount') and any((Path(kindle['mount']) / p / 'reader.lua').is_file() for p in ('koreader', '.adds/koreader'))), 'mount': kindle.get('mount', '')},
-                'xteink': {'paired': bool(xteink.get('paired')), 'firmware_staged': bool(xteink.get('firmware_staged')), 'url': xteink.get('device_url') or ''},
+                'supported_devices': device_profiles.public_profiles(),
+                'xteink': {'model': device_profiles.saved_model(xteink), 'model_verification': xteink.get('model_verification', 'legacy' if xteink.get('paired') else ''), 'paired': bool(xteink.get('paired')), 'firmware_staged': bool(xteink.get('firmware_staged')), 'url': xteink.get('device_url') or ''},
                 'mounts': mounts, 'highlights': rows[:HIGHLIGHTS_LIMIT], 'highlight_count': count, 'highlights_matches': len(rows), 'highlights_limit': HIGHLIGHTS_LIMIT,
                 'books': sorted(books.values(), key=lambda b: (b['title'].casefold(), b['author'].casefold())),
                 'highlights_order': 'newest_first' if undated < len(rows) else 'book_title', 'highlights_undated': undated,
-                'progress_verified': bool(self.state.get('progress_sync', {}).get('verified') and self.state.get('progress_sync', {}).get('kindle',{}).get('guard_version') == 1 if self.state.get('progress_sync', {}).get('enabled') else self.state.get('progress', {}).get('verified')), 'endpoint': endpoint or (addresses[0] if addresses else ''), 'addresses': addresses, 'warnings': warnings,
+                'progress_verified': bool(self.state.get('progress_sync', {}).get('verified') and (not self.state.get('progress_sync', {}).get('kindle') or self.state.get('progress_sync', {}).get('kindle',{}).get('guard_version') == 1) if self.state.get('progress_sync', {}).get('enabled') else self.state.get('progress', {}).get('verified')), 'endpoint': endpoint or (addresses[0] if addresses else ''), 'addresses': addresses, 'warnings': warnings,
                 'library': {'installed': self.owned('library'), 'port': library.get('port', 8083), 'books': library.get('books', '')}}
 
     def endpoint(self, value):
@@ -588,12 +590,14 @@ class Desktop(ProgressSetup, setup.Bridge):
             self.kindle(text_arg(args.get('mount'), 'Kindle volume'), self.endpoint(args.get('endpoint')))
         elif command == 'pair_xteink':
             if args.get('model_confirmed') is not True:
-                raise setup.SetupError('Confirm that the device is an Xteink X4 Pro before pairing or staging firmware.')
+                raise setup.SetupError('Confirm your exact CrossPoint model before pairing or staging firmware.')
+            model = text_arg(args.get('model'), 'CrossPoint model')
+            spec = self.device_profile(model)
             firmware = bool_arg(args.get('firmware', False), 'firmware')
             mount, url = args.get('mount'), args.get('device_url')
             if bool(mount) == bool(url):
                 raise setup.SetupError('Select either an SD card volume or an Xteink LAN address.')
-            self.xteink(mount=text_arg(mount, 'SD volume') if mount else None, device_url=text_arg(url, 'Xteink LAN address') if url else None, url=self.endpoint(args.get('endpoint')), firmware=firmware, model='xteink_x4_pro')
+            self.xteink(mount=text_arg(mount, 'SD volume') if mount else None, device_url=text_arg(url, 'Xteink LAN address') if url else None, url=self.endpoint(args.get('endpoint')) if spec['capabilities']['highlights'] else None, firmware=firmware, model=model)
         elif command == 'import_clippings':
             path = setup.guarded(Path(text_arg(args.get('path'), 'clippings file')).expanduser())
             if not path.is_file() or path.stat().st_size > MAX_IMPORT:
@@ -726,11 +730,12 @@ class Desktop(ProgressSetup, setup.Bridge):
         elif command == 'pair_progress_kindle':
             self.pair_progress_kindle(text_arg(args.get('mount'), 'Kindle volume'))
         elif command == 'pair_progress_xteink':
-            self.pair_progress_xteink(args.get('mount'), args.get('device_url'))
+            self.pair_progress_xteink(args.get('mount'), args.get('device_url'), text_arg(args.get('model'), 'CrossPoint model'))
         elif command == 'verify_local_progress':
-            if not self.progress_status()['kindle_paired'] or not self.progress_status()['xteink_paired'] or not self.progress_authenticated():
-                raise setup.SetupError('Connect both readers to the running progress service before confirming the test.')
-            if self.state['progress_sync']['kindle'].get('guard_version') != 1:
+            progress = self.progress_status()
+            if not (progress['kindle_paired'] or progress['xteink_paired']) or not self.progress_authenticated():
+                raise setup.SetupError('Connect a reader to the running progress service before confirming the test.')
+            if progress['kindle_paired'] and self.state['progress_sync']['kindle'].get('guard_version') != 1:
                 raise setup.SetupError('Reconnect Kindle to install stale-upload protection before confirming the test.')
             self.state['progress_sync']['verified'] = bool_arg(args.get('verified'), 'verified')
             self.save()
