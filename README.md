@@ -8,7 +8,7 @@ Formerly Reader Bridge. Existing archives and reader connections keep their iden
 
 [Get started](docs/MAC-APP.md) · [Releases](https://github.com/skyerus/reader-bridge/releases) · [Reading positions](docs/PROGRESS-SYNC.md)
 
-**Download status:** the latest published release, v0.1.0, contains command-line source. A signed, notarized Passage Mac installer has not been published yet. The app and its release checks are being prepared; a development build is not a finished consumer download. [Release requirements](docs/RELEASING.md).
+**Downloads:** use [Releases](https://github.com/skyerus/reader-bridge/releases) for installer availability. A release marked **Pre-release** is a test candidate; its notes list the available Mac architecture and remaining acceptance checks. The older v0.1.0 release contains command-line source only. [Release requirements](docs/RELEASING.md).
 
 ![Passage book library with sample highlights and covers](docs/images/mac-books-dark.png)
 

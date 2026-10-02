@@ -2,7 +2,7 @@
 
 Passage collects your reading highlights in a searchable local library. Use a Kindle with KOReader, a supported CrossPoint reader, or both. Backups and reading-position sync are optional.
 
-**Current release status:** there is no published signed, notarized Passage installer yet. The latest public v0.1.0 release is command-line source. These are the first-install instructions for the app package being prepared; download availability and physically accepted models must be stated in its release notes.
+**Installer availability:** check [Releases](https://github.com/skyerus/reader-bridge/releases) for a signed, notarized `.dmg`. A release marked **Pre-release** is a test candidate and may still need clean-Mac or physical-reader acceptance. Read its notes for the available Mac architecture, tested devices and outstanding checks. The older v0.1.0 release contains command-line source only.
 
 ## Before you start
 
