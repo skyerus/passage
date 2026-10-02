@@ -84,12 +84,15 @@ def main():
         shutil.copy2(ROOT / 'README.md', resources / 'README.md')
         shutil.copytree(ROOT / 'desktop/licenses', resources / 'licenses')
         shutil.copy2(ROOT / 'desktop/THIRD-PARTY-NOTICES.md', resources / 'THIRD-PARTY-NOTICES.md')
-        run('swift', ROOT / 'scripts/make-icon.swift', resources / 'ReaderBridge.icns')
+        icon_renderer = Path(temporary) / 'make-icon'
+        run('swiftc', ROOT / 'desktop/Sources/ReaderBridge/BrandMarkGeometry.swift',
+            ROOT / 'scripts/make-icon.swift', '-o', icon_renderer)
+        run(icon_renderer, resources / 'ReaderBridge.icns')
         info = {
             'CFBundleName': 'Reader Bridge', 'CFBundleDisplayName': 'Reader Bridge',
             'CFBundleIdentifier': 'com.readerbridge.desktop', 'CFBundleExecutable': 'ReaderBridge',
-            'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.6.4',
-            'CFBundleVersion': '18', 'LSMinimumSystemVersion': '13.0',
+            'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.6.5',
+            'CFBundleVersion': '19', 'LSMinimumSystemVersion': '13.0',
             'CFBundleIconFile': 'ReaderBridge', 'NSHighResolutionCapable': True,
             'NSLocalNetworkUsageDescription': 'Reader Bridge pairs your readers and syncs their highlights and reading positions on your home network.',
             'NSRemovableVolumesUsageDescription': 'Reader Bridge installs its plugin and pairing settings on the reader you choose.',
