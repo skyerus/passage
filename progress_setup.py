@@ -255,15 +255,20 @@ class ProgressSetup:
         previous = json.loads(old) if old else {}
         if not isinstance(previous,dict): raise setup.SetupError('Unrecognized Xteink settings. No reader files were changed.')
         account = self.progress_account()
-        if previous.get('username') and previous['username'] != account['username']:
+        if previous.get('username'):
             source = self.state['progress_sync'].get('migration_source',{})
             old_server = previous.get('serverUrl') or ('https://sync.koreader.rocks:443' if previous.get('cfgVersion',1) < 2 else 'https://sync.crosspointreader.com')
             if '://' not in old_server: old_server = 'http://' + old_server
             def origin(value):
                 url = urlsplit(value)
                 return (url.scheme,url.hostname,url.port or (443 if url.scheme == 'https' else 80),url.path.rstrip('/'))
-            if previous['username'] != source.get('username') or origin(old_server) != origin(source.get('server','')):
-                raise setup.SetupError('Xteink uses a different previous progress account than Kindle. Its settings are unchanged; sync both readers to the same old account before migrating.')
+            same_account = previous['username'] == account['username'] and origin(old_server) == origin(endpoint)
+            known_migration = previous['username'] == source.get('username') and origin(old_server) == origin(source.get('server',''))
+            if not same_account and not known_migration:
+                # KOSync has no account-wide export API. An SD card also cannot
+                # decode the reader's hardware-key-obfuscated password. Keep the
+                # old account intact until a complete migration is available.
+                raise setup.SetupError("Your reader already uses another progress account. Passage cannot safely copy its saved server positions from this connection yet. Choose Later and keep using the reader's current progress sync; its settings and saved positions are unchanged.")
         previous.pop('password_obf',None)
         previous.update(cfgVersion=2, username=account['username'], password=account['password'], serverUrl=endpoint,matchMethod=1,sendMetadata=True)
         previous.setdefault('syncBehavior',0)
