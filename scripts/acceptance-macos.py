@@ -65,6 +65,8 @@ def main():
         'macos_version': platform.mac_ver()[0],
         'developer_commands_on_path': False, 'host_python_used': False,
         'real_user_data_used': False, 'real_reader_used': False,
+        'firmware_staging_models': [model for model, profile in build.get('firmware', {}).get('devices', {}).items()
+                                   if (profile.get('prebuilt') or {}).get('bundled_path')],
         'checks': ['bundled_native_modules', 'read_only_first_status', 'local_collector',
                    'idempotent_install', 'occupied_port', 'upload_restart_token_retention',
                    'cover_export', 'folder_backup_restore_deletions', 'fixture_pairing_queues',

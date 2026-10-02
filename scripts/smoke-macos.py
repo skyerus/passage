@@ -155,6 +155,25 @@ def main():
             invoke('pair_kindle', mount=str(kindle), endpoint=endpoint)
             assert queue.read_text() == '{"fixture":"offline queue"}'
             assert (kindle / 'koreader/plugins/sharedhighlights.koplugin/cover.lua').read_bytes() == (bridge_source / 'koreader/sharedhighlights.koplugin/cover.lua').read_bytes()
+            # Exercise every actual bundled image through the desktop command,
+            # with developer tools unavailable and only disposable SD volumes.
+            # Source-only CI builds have no images; report that scope explicitly.
+            import device_profiles
+            staged_models = []
+            for model, profile in device_profiles.registry().items():
+                artifact = profile.get('prebuilt') or {}
+                if not artifact.get('bundled_path'):
+                    continue
+                volume = root / 'firmware-fixtures' / model
+                (volume / '.crosspoint').mkdir(parents=True)
+                staged = invoke('pair_xteink', mount=str(volume), endpoint=endpoint,
+                                firmware=True, model_confirmed=True, model=model)
+                assert staged['xteink']['model'] == model and staged['xteink']['firmware_staged']
+                assert (volume / profile['filename']).read_bytes() == (bridge_source / artifact['bundled_path']).read_bytes()
+                assert json.loads((volume / '.crosspoint/passage-device.json').read_text())['model'] == model
+                assert json.loads((volume / '.crosspoint/highlight-sync.json').read_text())['token'] == token
+                staged_models.append(model)
+            print('Bundled firmware staged on disposable volumes: ' + (', '.join(staged_models) or 'none in this build'))
             sd = root / 'sd'
             (sd / '.crosspoint').mkdir(parents=True)
             invoke('pair_xteink', mount=str(sd), endpoint=endpoint, firmware=False, model_confirmed=True, model='xteink_x4_pro')
