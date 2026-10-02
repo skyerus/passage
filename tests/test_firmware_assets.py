@@ -52,7 +52,7 @@ class FirmwareAssetsTests(unittest.TestCase):
             'chip_id': 9, 'filename': 'passage-example.bin', 'prebuilt': None}}}
         self.manifest.write_text(json.dumps(self.data))
         self.args = argparse.Namespace(source=self.source, manifest=self.manifest, output=self.root / 'output',
-            platformio_core=self.root / 'core', models=None, pio='fixture-pio')
+            platformio_core=self.root / 'core', models=None, pio='fixture-pio', jobs=4)
         inner = self.root / 'core/penv/bin/python'
         inner.parent.mkdir(parents=True)
         inner.touch()

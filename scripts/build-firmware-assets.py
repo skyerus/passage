@@ -155,7 +155,7 @@ def assemble(args):
     if version != 'PlatformIO Core, version 6.1.19':
         raise ValueError('Firmware builds require pinned PlatformIO 6.1.19')
     prepare_toolchain(args, source, environments)
-    command = [args.pio, 'run']
+    command = [args.pio, 'run', '-j', str(args.jobs)]
     for environment in environments:
         command.extend(['-e', environment])
     run(*command, cwd=source, env={**os.environ, 'PLATFORMIO_CORE_DIR': str(args.platformio_core.resolve())})
@@ -218,6 +218,7 @@ def main():
     parser.add_argument('--platformio-core', type=Path, default=Path.home() / '.platformio')
     parser.add_argument('--pio', default='pio')
     parser.add_argument('--models', nargs='+')
+    parser.add_argument('--jobs', type=int, choices=range(1, 17), default=4, help='Parallel compiler jobs (default: 4)')
     args = parser.parse_args()
     try:
         assemble(args)
