@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "scope": "clean-mac-without-developer-tools",
+  "commit": "REPLACE_WITH_EXACT_40_CHARACTER_COMMIT",
+  "version": "0.7.0",
+  "architecture": "arm64",
+  "artifact_sha256": "REPLACE_WITH_EXACT_FINAL_DMG_SHA256",
+  "macos_version": "RECORD_SEPARATE_CLEAN_MAC_OS_VERSION",
+  "tested_at": "RECORD_TEST_DATE",
+  "checks": {
+    "download_install_open": {"passed": false, "evidence": ""},
+    "no_developer_tools": {"passed": false, "evidence": ""},
+    "collector_login_restart": {"passed": false, "evidence": ""},
+    "offline_reconnect": {"passed": false, "evidence": ""},
+    "port_conflict": {"passed": false, "evidence": ""},
+    "backup_restore": {"passed": false, "evidence": ""},
+    "upgrade_runtime_path": {"passed": false, "evidence": ""},
+    "progress_roundtrip": {"passed": false, "evidence": "Only required when claiming more than one physically accepted reader."}
+  },
+  "readers": [
+    {"profile_id": "kindle", "passed": false, "evidence": "Record model, firmware, KOReader version and first-highlight/cover/offline results."}
+  ]
+}

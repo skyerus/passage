@@ -1,155 +1,64 @@
 # Passage for Mac
 
-Passage is the new name for Reader Bridge. Existing libraries, settings, backups, and reader pairings are retained. When upgrading an existing installation, replace the app at its current path and keep its existing filename so configured background services continue to find their runtime.
+Passage collects your reading highlights in a searchable local library. Use a Kindle with KOReader, a supported CrossPoint reader, or both. Backups and reading-position sync are optional.
 
-The native Mac app brings setup, connection status, and the shared highlight archive into one window. It includes its own Python runtime. Basic highlight collection does not require Terminal, Python, Git, GitHub, or a subscription.
+**Current release status:** there is no published signed, notarized Passage installer yet. The latest public v0.1.0 release is command-line source. These are the first-install instructions for the app package being prepared; download availability and physically accepted models must be stated in its release notes.
 
-Setup shows one step at a time, with device illustrations and extra connection settings under **Connection settings**. Already using Reading Highlights? Choose **Use existing setup** to keep your current reader connections.
+## Before you start
 
-This is a **development build**, not a notarized public download. Source builds are available now. A public installer still needs Developer ID signing, Apple notarization, and a clean-Mac/device acceptance pass. Do not describe the development disk image as a finished consumer release.
+You need macOS 13 or later, a reader charging/data cable, and your Mac and reader on the same trusted home Wi-Fi. Use an ordinary DRM-free EPUB to test. Basic app setup does not require developer tools or a GitHub account.
 
-![Guided first setup in Passage](images/mac-setup.jpg)
+For a Kindle, first complete a supported jailbreak and install KOReader. Follow the [KindleModding introduction](https://kindlemodding.org/jailbreaking/), [exact model and firmware picker](https://kindlemodding.org/jailbreak-wizard.html), and [KOReader Kindle installation guide](https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices). Complete the method's post-jailbreak steps. Open the test EPUB in KOReader before returning to Passage. If no method supports your Kindle, stop the pairing path; existing `My Clippings.txt` imports remain available.
 
-The app shows one next action. Device guides are labeled illustrations.
+For a CrossPoint reader, install CrossPoint for your exact hardware using the [official entry point](https://crosspointreader.com/) and [device picker](https://updates.crosspointreader.com/). Save a copy of the SD card, including `.crosspoint`, before a firmware update. Passage's matching custom image is also needed for automatic highlights; Setup offers it when this app package includes one. Select the exact model printed on your reader. Do not install an image for a similar-looking model.
 
-## What you need
+## Download and open
 
-- macOS 13 or later. Build on Apple Silicon for Apple Silicon; build on Intel for Intel. The first local acceptance run is on Apple Silicon.
-- A jailbroken Kindle with working KOReader. Start with the [KindleModding guide](https://kindlemodding.org/jailbreaking/), check your exact model and firmware in [Find My Jailbreak](https://kindlemodding.org/kindle-models), then follow the [KOReader installation guide](https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices). The Mac app does not jailbreak or downgrade a Kindle.
-- An Xteink **X4 Pro** running CrossPoint. Our shared-highlights firmware is required and is built locally from pinned source; Git and the downloaded build tools are needed unless that firmware is already installed. Installing an application firmware update still requires a confirmation on the reader.
-- Your readers and awake Mac on the same trusted local network.
+1. In [Releases](https://github.com/skyerus/reader-bridge/releases), select a release containing a `.dmg` installer. Its notes must say which Mac architecture, OS versions, and physical reader models passed acceptance. Source-code ZIPs and `-development.dmg` files are for developers.
+2. In **Apple menu → About This Mac**, a **Chip** such as Apple M1/M2/M3/M4 means choose **arm64**. An Intel **Processor** means choose **x86_64**.
+3. Open the disk image. Drag **Passage** onto **Applications**, wait for copying, and eject the image in Finder.
+4. Open **Applications → Passage**. Confirm macOS's normal downloaded-app prompt. Allow local-network and removable-volume access when Passage asks so it can reach and configure the selected reader. Allow its background service when macOS asks.
 
-## First setup
+If macOS says the developer cannot be verified, or the app is damaged, stop and check the release's signing/notarization status. A consumer download should pass Gatekeeper normally; disabling Gatekeeper or deleting quarantine attributes is not an installation step.
 
-1. Put **Passage.app** in Applications before starting its collector. Leave it at that location: the background service runs the interpreter inside the app.
-2. Open **Setup**. If it offers **Use existing setup**, select that to connect to your earlier Reading Highlights installation; your readers keep their existing settings. Otherwise follow the Mac step to start the local collector. Ports and the reader address are under **Connection settings**. The app checks for a conflicting port instead of replacing another service. An existing command-line Passage configuration is preserved.
-3. Exit KOReader and connect the Kindle in USB storage mode. Select the detected Kindle or its mounted folder, then install the plugin. Eject and reopen KOReader when prompted.
-4. On the X4 Pro, open File Transfer or connect its SD card. Confirm the device model in the app and pair it. The firmware build/staging option is selected by default. Keep it selected unless the Passage build is already installed, wait for verification, then complete **Settings → System → SD Card Firmware Update** on the reader.
-5. Enable the app's reading-position service and connect each reader using the [position-sync guide](PROGRESS-SYNC.md). Use an identical EPUB on both readers. You can choose **Later** and return to Setup when ready. Setup completes when both readers are paired; there is no manual sync-test checklist. Progress still requires **Upload Local** and **Apply Remote** on Xteink; this app does not change that firmware behavior.
-6. Make one highlight on each reader with Wi-Fi connected. Check both appear in **Highlights**. Import an English `My Clippings.txt` to bring your previous Kindle quotes into the same archive.
+Keep the app in Applications. Its background service uses the runtime inside it.
 
-Setup resumes from saved service and pairing state. A saved pairing is not proof that a disconnected or sleeping reader is currently reachable. The interface distinguishes these conditions.
+## Connect your reader
 
-## Already using Reading Highlights
+Choose **Set up your reader**, then answer **What will you read on?** with **Kindle**, **CrossPoint reader**, or **Both readers**. Select **Start Passage sync** when Setup reaches **Connect to your Mac**, then follow the next action shown. You can add another reader later. Existing verified installations offer **Use existing setup**.
 
-The app recognizes an earlier installation in `~/Library/Application Support/Reading Highlights` after checking its LaunchAgent, listening process, and authenticated collector response. Choose **Use existing setup** in Overview or Setup. There is no need to change the port or pair your readers again.
+**Kindle:** complete the prerequisite checklist, exit KOReader, then connect the Kindle in USB storage mode. Choose the detected Kindle and let Passage install its plugin and settings. Eject it safely, unplug, reopen KOReader, and enable Wi-Fi. Save a short highlight in your test book. Passage should show the quote and book in **Highlights**. The plugin uses an existing Wi-Fi connection; it does not enable Wi-Fi itself.
 
-This saves a connection in the app's own settings. The original service, credentials, archive, and device settings stay where they are. Highlights, search, import, and export use the existing collector. Its original LaunchAgent continues to manage startup and GitHub backup; the app does not offer stop or GitHub-reconfiguration controls for that service. You can add iCloud Drive or folder backups independently. Previously configured reading-progress sync and book-library services remain separate.
+**CrossPoint:** select your exact **Model** and complete its prerequisite checklist. Connect its SD card or use its File Transfer mode as Setup directs. Leave **Prepare Passage firmware** selected when updating and choose **Prepare firmware and connect**. Passage verifies and stages the included application image without downloading compilers. Finish the device's own SD-card firmware-update action shown in Setup, then confirm **I installed it and see Sync Highlights**. Leave File Transfer mode, reopen the EPUB, save a clipping, and check it appears in Passage. Button and touch controls differ by model; follow that model's guide. An image being staged is not proof that the reader installed it.
 
-The archive shows live highlights held in the collector's local inbox. Older quotes that exist only in a GitHub archive are not downloaded automatically. “Highlights received” indicates upload records from a reader, not that the reader is currently online or that reading-progress sync has been tested.
+The first highlight can also send the EPUB's original JPEG/PNG cover. A book without a supported embedded cover uses a placeholder. Keep the Mac awake and allow a brief upload attempt. If nothing arrives, use the reader's **Sync Highlights** action once, then check its Wi-Fi and Passage's status.
 
-If the original service is offline, the app retains its saved connection and reports it offline. Start the original service and refresh. A changed LaunchAgent or credential must be checked before reconnecting; the app will not trust an arbitrary process on the same port. For an unrelated occupied port on a fresh installation, choose an unused collector port before pairing.
+For two readers, repeat the highlight check on each. To continue at the same passage, enable the optional reading-position service and use the exact same EPUB file on both. Follow the [position-sync walkthrough](PROGRESS-SYNC.md), including a test in both directions. CrossPoint uses **Upload Local** when leaving and **Apply Remote** when returning. Choose **Finish without position sync** if you only want highlights. A single-reader archive does not need this service.
 
-## Everyday use
+## Back up and use your library
 
-The app opens in **Highlights**. The sidebar has **Highlights**, **Setup**, and **Settings**; setup appears only in its own tab. The menu-bar item reports whether the Mac is ready to receive highlights and opens the main window. Technical connection details, ports and additional GitHub backup information are under **Settings → Advanced**. The collector starts after Mac login once installed and keeps running when you close the window or quit the app. The app's **Open at login** setting controls whether its interface also starts at login. Use the collector's stop action to stop accepting uploads.
+In **Settings → Backup**, choose **Turn on iCloud backup** or **Another folder**. Passage saves a new snapshot when the archive changes. A saved folder copy and a completed iCloud upload are different: Finder shows cloud upload status. Backups include highlights, recorded dates, notes, deletion history, cached covers, and local reading positions. They exclude passwords, pairing tokens, and EPUB books.
 
-Highlights with recorded creation dates appear newest first. Undated highlights follow alphabetically by book, author and passage; an entirely undated archive is labeled **By book · dates unavailable**. Importing old quotes does not make them recent, and the app does not invent their original dates. Equivalent passages retain the earliest known recorded date across sources. Timezone offsets are normalized; dates without a timezone use their recorded wall time as UTC for deterministic ordering.
+Use **Highlights** to browse by book, search, and copy a quote. Its archive menu imports `My Clippings.txt`, supported Kindle JSON, and Passage exports; **Export highlights & covers** creates a portable JSON archive. Right-click a book to change its cover using an image or the book's EPUB. Export does not include private connection credentials.
 
-In **Highlights**, select a quote to read or copy it. Search covers book titles, authors, and quote text. The archive menu beside search contains highlight import, missing-cover downloads, and portable export. Switch between **Books** and **Highlights** with the control beside search. The bookshelf defaults to **Most recent**, using each book’s latest dated highlight. Its sort menu also offers **Title A–Z**, **Author A–Z**, and **Most highlights**, and remembers your choice. Books without recorded dates appear last in recent order. Click a book to see only its quotes; choose **All books** to return. Use **⌘F** to search, **⌘1–3** to move between sections, and **⌘R** to refresh. Routine status checks run quietly in the background.
+The collector continues after you close the window or quit Passage and starts after Mac login. The app's **Open at login** setting controls whether its window also opens. The Mac can sleep normally; it cannot receive uploads while asleep. Readers keep pending changes and retry when connected. Keep the Mac awake for initial setup and tests.
 
-![Passage highlight archive with public-domain sample quotes](images/mac-highlights-dark.jpg)
+Restore with **Settings → Backup → Restore a backup**, using a downloaded `.readerbridge` snapshot. Restore merges missing records and artwork, preserves existing edits and deletions, and saves a local recovery snapshot first. A new Mac still needs fresh reader pairing. Earlier backups and Git history can retain previously deleted text.
 
-Sample archive shown; these screenshots contain no personal highlights or connection details.
+## Upgrading Reader Bridge
 
-The interface follows the Mac's light or dark appearance and accessibility preferences. Builds made with a current Apple SDK use native Liquid Glass controls on macOS 26 and later; older systems use standard materials. Quote-reading surfaces stay opaque for readability.
+Back up or export your archive first, then quit the app. For a fresh Passage installation, replace the app in Applications at the same location. Keep `~/Library/Application Support/Reader Bridge`; it contains your existing library and pairing state.
 
-Highlights remain local under `~/Library/Application Support/Reader Bridge`. In **Settings → Backup**, choose **Turn on iCloud backup**. No GitHub account or Terminal is needed. If iCloud Drive is unavailable, enable it in System Settings or choose **Another folder**, including a folder managed by your preferred cloud service.
+An earlier Reader Bridge installation may run its background service from a different app location or filename. Replace the app at that existing location and retain the filename **Reader Bridge.app** for this upgrade so its configured runtime path remains valid. Do not delete or move the original runtime while its service still uses it. The display name becomes Passage, while the application identifier, data directory, service labels, and reader connections remain compatible.
 
-The background service checks for changes every minute and saves a new `.readerbridge` snapshot only when the archive changes. It starts at login and continues after you quit the app. Backups contain highlights, original recorded dates, notes, deletion history, locally available covers and locally synced reading positions. Credentials, pairing tokens, EPUB books and reading-progress service settings are excluded. Covers held only as remote URLs must be downloaded before they can be included as images.
+If the app offers **Use existing setup**, it checks the earlier service's ownership and authenticated response before connecting. Keep the original service's settings; Passage does not take control of unrelated listeners. Reinstall the updated Kindle plugin and matching reader firmware when release notes require it, preserving queued changes and `.crosspoint` settings.
 
-**Show in Finder**, available in Highlights and Settings → Backup, opens your backup folder and selects the latest `.readerbridge` snapshot. If that file is unavailable, it opens the folder instead. The backup summary uses your enabled iCloud/folder destination even when an earlier GitHub backup also runs.
+## If setup pauses
 
-Each Mac uses its own backup subfolder. Snapshots are immutable and earlier versions are retained; they consume storage until you remove old snapshots yourself. A missing drive, full destination or offline cloud service does not block uploads from your readers. The app reports **saved to the folder**, not confirmed cloud delivery. [macOS manages iCloud Drive uploads](https://support.apple.com/guide/mac-help/store-files-in-icloud-drive-mchle5a61431/mac); use Finder to check upload status. A local save can succeed while cloud quota or connectivity delays the upload.
+Check the Mac is awake and logged in, the reader is using the same Wi-Fi, and macOS allows Passage's network access. Guest networks can isolate devices. Reconnect a USB device or leave and re-enter File Transfer mode when requested. A saved pairing describes configuration; it does not prove that a sleeping or unplugged reader is online.
 
-To recover on another Mac, start the local bridge, then choose **Settings → Backup → Restore a backup** and select a downloaded snapshot. Restore merges missing records and covers, preserves existing edits and deletions, and first saves a local recovery snapshot. Pair the readers again on a new installation. Restore does not bring back intentionally deleted highlights or reinstall firmware. Limits are 256 MiB per uncompressed snapshot, 64 MiB of archive metadata and 5 MiB per cover. Keep a separate copy of large book libraries.
+If Passage reports an occupied port, use an unused one in **Connection settings** before first pairing. It leaves an unknown service alone. For an existing paired setup, keep the original address and port or deliberately reconnect the readers after changing them. Do not erase books, reset a reader, or delete offline queues to solve a connection problem.
 
-**GitHub remains optional**, alongside folder backups. Under **Settings → Advanced → Connection details & optional services**, sign in through the GitHub CLI and explicitly choose your private repository. The app never creates a repository without your selection. Existing collector installations keep their GitHub configuration while using folder backups. GitHub currently archives highlight text, dates and cover URLs; the folder snapshot also includes local cover image bytes. The native app is macOS-only; these changes do not introduce a Windows or Linux app.
+Keep pairing files, archives, and diagnostic logs private. Highlight requests use a dedicated token over HTTP on your LAN; use a trusted network and do not forward service ports through the router. Support reports should contain redacted status only.
 
-The optional Calibre-Web library uses a Calibre library folder containing `metadata.db`. This advanced step installs Calibre-Web and downloads its dependencies. See [library setup](SETUP.md#5-add-the-home-book-library) for its generated administrator credentials and reader account setup.
-
-The Mac can sleep normally; it will not receive uploads while asleep. Readers keep their offline queues. The app does not change device Wi-Fi or sleep policies. KOReader uploads when already connected; the Xteink firmware manages its own brief upload attempts. Highlight text is collected into one archive; underlines are not mirrored into the other device's book.
-
-## Book covers and importing highlights
-
-![Book library with labeled sample artwork](images/mac-books-dark.png)
-
-Sample artwork shown; screenshots contain no personal highlights.
-
-With the updated Shared Highlights plugin and Xteink firmware, the first highlight from a book also queues its cover automatically. Both readers send the original embedded JPEG/PNG, preserving colour even on a monochrome screen. No cover import is needed. The Mac stores the artwork locally and uses it for matching title/author entries. Reader highlights upload first; artwork failures retry separately. Books with no supported cover keep a placeholder, and you can choose custom artwork below.
-
-The transfer reuses the highlight connection and credentials. It does not keep Wi-Fi on or wake the Mac. Updating Passage alone does not update software already installed on readers: reinstall the bundled KOReader plugin and the matching firmware as part of the upgrade. Device-delivered covers are included in portable exports; GitHub quote backup does not contain local images.
-
-For older archives, in **Highlights → … → Import highlights**, choose one of:
-
-- **My Clippings.txt** from a Kindle. Text and recorded dates are imported; this file does not contain covers.
-- **Kindle highlights JSON** containing `book_title`, `author`, `highlight`, and optional `created_at` and `cover_url` fields. Existing `kindle-highlights` archives work directly.
-- **Passage export JSON**, including quotes, recorded dates, cached covers, and deletion history.
-
-For archives with cover links, Passage downloads a cover once per book during import, then displays it from the Mac’s local cache. Refreshing or browsing the archive does not contact image servers. Supported remote cover sources are Amazon’s public image CDNs and Open Library’s cover service, over HTTPS. Only the image URL is requested; quote text is not sent. Unsupported links and failed downloads do not prevent highlights from being imported. Choose **Download missing covers** to retry. Reader Wi-Fi and sleep behavior are unchanged.
-
-To add or replace a cover, right-click a book and choose **Change cover**, or use **Add cover / Change cover** above a quote. Choose a JPEG or PNG (up to 5 MiB), or that book’s DRM-free EPUB (up to 128 MiB). Passage reads its declared EPUB 2 or EPUB 3 cover without extracting the book onto disk. The image applies to all existing and future highlights with the same normalized book title and author. A book with no image gets a readable placeholder; Passage does not guess editions or silently search third-party catalogs by title.
-
-**Export highlights & covers** creates a versioned JSON archive. It embeds each cached cover once per book, includes deletion hashes, and omits local file paths. Importing it on another Mac does not need a cover download. It accepts older list-format Passage exports too. If the local cover cache is damaged, export still saves highlights and deletion history and reports that artwork was omitted. Deleted quotes stay deleted when a new-format archive is restored into an updated collector; an older collector must be updated before it can accept deletion history. Imports preserve recorded creation dates and do not invent dates for undated quotes.
-
-Covers you add manually are stored in the app’s local cover library and portable exports. GitHub quote backup preserves remote `cover_url` metadata; it does not upload local cover images. Keep a portable export if you want to move the complete library. The app does not scrape Amazon directly or import an unexamined Amazon personal-data ZIP; the supported JSON format is a separate input.
-
-## Build the app
-
-Development requires Xcode command line tools and Python 3.12+ on the build machine:
-
-```sh
-python3 -m unittest discover -s tests -v
-swift test --package-path desktop
-python3 scripts/build-macos.py --dmg
-```
-
-The build downloads the checksum-pinned Python runtime, compiles SwiftUI, generates the icon, bundles only allowlisted source files, signs the result ad hoc, verifies the signature, and runs the bundled helper against an empty temporary data directory. It writes the app and an architecture-specific disk image to `dist/`. A repeated build requires a fresh `--output` directory so it cannot silently replace a previous app.
-
-For desktop development without packaging:
-
-```sh
-READER_BRIDGE_PYTHON="$(command -v python3)" \
-READER_BRIDGE_BACKEND="$PWD/desktop.py" \
-READER_BRIDGE_APP_DIR="$PWD/.build-cache/development-data" \
-swift run --package-path desktop ReaderBridge
-```
-
-Use a separate data directory during tests. Do not install test services into an existing real Passage configuration. Device operations must target disposable fixtures during automated tests; do physical device acceptance separately.
-
-## Public distribution
-
-Build with `--sign-identity 'Developer ID Application: …'` on the matching architecture, then submit the app archive or disk image with Apple's `notarytool`, wait for acceptance, and staple the ticket. Verify Gatekeeper assessment and installation on a clean Mac before publishing. Keep account credentials in the macOS keychain, not in repository files or command logs. This repository does not ship an Apple signing certificate or notarization credential.
-
-Test both upgrade and fresh install, including Mac logout/login, service restart, port conflicts, unavailable network/GitHub, incomplete pairing, queued uploads after reconnecting, and deletion replay. Intel builds and the full physical first-run walkthrough must be independently verified before claiming support.
-
-The app package bundles third-party runtime notices under Resources. Firmware remains a source build until its separate dependency redistribution review is complete.
-
-## Cover-library development build 0.4.0
-
-The cover library adds a book grid, thumbnails in the quote list, a cover in the reading pane, explicit cover replacement, and offline portable archives. The development build passed 92 Python tests and 25 Swift tests. Automated coverage includes safe image URLs/redirects, EPUB 2/3 covers, per-book deduplication, malformed imports, failed-download retry, recorded dates, deletion-history transfer, book filtering before the 500-quote display limit, and stale selection responses. Public distribution still requires the signing, notarization and clean-install checks above.
-
-## Ordering correction in 0.3.1
-
-The ordering fix passed 74 Python tests and 22 Swift tests. Regression coverage includes timezone offsets, fractional seconds, missing/invalid dates, date-preserving deduplication and labels for undated archives. Both dated and undated layouts were checked in an isolated native preview. No stored highlight or deletion data is rewritten by this change.
-
-## Development acceptance on 1 October 2026
-
-The 0.3.0 Apple Silicon development build passed 71 Python tests and 20 native Swift tests, covering pairing prerequisites, staged-firmware acknowledgement, setup recovery, archive selection and background refresh races. Its bundled runtime was exercised with a disposable launchd service: authenticated uploads from both source types, duplicate merging, full-archive search, JSON export, deletion replay, collector restart, stable credentials, and pairing into fake Kindle/SD volumes all passed.
-
-Native visual checks used an isolated preview with sample data: fresh setup, an existing-service candidate, required X4 Pro firmware choices, failed-pairing recovery, staged firmware, optional position setup, keyboard navigation/search, dark-mode contrast and long-quote scrolling. The documented screenshots come from that preview. The full minimum-size, light-appearance, Reduce Transparency and Increase Contrast matrix remains to be checked on supported systems; those paths have code-level fallbacks. Personal reader settings and collector services were not changed by the UI work.
-
-Repeat the packaged acceptance check with the built runtime:
-
-```sh
-"dist/Passage.app/Contents/Resources/runtime/bin/python3" -E -s -B \
-  scripts/smoke-macos.py "dist/Passage.app"
-```
-
-It uses random temporary service labels and an unused port, and unloads those jobs on exit. This checks launchd restart, not an actual logout/login or reboot. Public notarization, Intel execution, clean-Mac installation, login-item approval, and the complete setup on physical devices remain unverified for this app build. The previously tested reader firmware/plugin behavior is not a substitute for those app acceptance checks.
-
-### Reading positions and highlight sync
-
-Passage includes a private reading-position service. Enable **Settings → Reading positions → Turn on position sync**, then connect Kindle by USB and Xteink through File Transfer in **Setup**. The app copies existing positions for books on Kindle, saves recovery copies of the reader settings, and includes positions in iCloud/folder backups. No public sync account is needed. See [the connection and recovery guide](PROGRESS-SYNC.md).
-
-The Mac must be awake and reachable. KOReader keeps its automatic-sync preferences; Xteink continues to use Upload Local and Apply Remote. Pairing and actual device-upload receipts are shown separately. Setup completion uses the saved reader pairings; it does not ask you to run or confirm a sync test. A received timestamp records an upload, not a continuously online reader or confirmation that the other reader applied it.
+GitHub backup and a Calibre-Web book catalog are advanced optional services with their own account or dependency setup. See the [command-line guide](SETUP.md) and [maintainer build/release guide](RELEASING.md). They are not required for the basic highlight archive.

@@ -1,0 +1,115 @@
+name: Prepare notarized Mac candidate
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Exact current default-branch commit to package
+        required: true
+        type: string
+      architecture:
+        description: Architecture to test independently
+        required: true
+        default: arm64
+        type: choice
+        options: [arm64, x86_64]
+permissions:
+  contents: read
+concurrency:
+  group: passage-notarization-${{ inputs.architecture }}
+  cancel-in-progress: false
+jobs:
+  candidate:
+    environment: macos-release
+    runs-on: ${{ inputs.architecture == 'arm64' && 'macos-15' || 'macos-15-intel' }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+          fetch-depth: 0
+      - name: Require the current default-branch commit
+        env:
+          REQUESTED_COMMIT: ${{ inputs.commit }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          revision = os.environ['REQUESTED_COMMIT']
+          if not re.fullmatch(r'[a-f0-9]{40}', revision):
+              raise SystemExit('Supply the full default-branch commit SHA')
+          try:
+              default = subprocess.check_output(['git', 'symbolic-ref', 'refs/remotes/origin/HEAD'], text=True, stderr=subprocess.DEVNULL).strip()
+          except subprocess.CalledProcessError:
+              default = 'refs/remotes/origin/main'
+          actual = subprocess.check_output(['git', 'rev-parse', default], text=True).strip()
+          if revision != actual or subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() != actual:
+              raise SystemExit('Candidate must match the fetched current default branch')
+          PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python3 -m unittest discover -s tests -v
+      - run: swift test --package-path desktop
+      - name: Build pinned firmware, dependency notices and corresponding source
+        run: |
+          python3 -m pip install platformio==6.2.0
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess, setup
+          specs = json.loads(pathlib.Path('firmware.json').read_text())['devices'].values()
+          repositories = {spec['repository'] for spec in specs}
+          commits = {spec['commit'] for spec in specs}
+          if len(repositories) != 1 or len(commits) != 1:
+              raise SystemExit('Firmware package requires a single pinned source checkout')
+          source = pathlib.Path(os.environ['RUNNER_TEMP']) / 'passage-firmware-source'
+          subprocess.run(['git', 'clone', '--no-checkout', repositories.pop(), str(source)], check=True)
+          subprocess.run(['git', '-C', str(source), 'checkout', '--detach', commits.pop()], check=True)
+          subprocess.run(['git', '-C', str(source), 'submodule', 'update', '--init', '--recursive'], check=True)
+          (source / 'platformio.local.ini').write_bytes(setup.BUILD_OVERRIDE)
+          PY
+          python3 scripts/build-firmware-assets.py --source "$RUNNER_TEMP/passage-firmware-source" --output "$RUNNER_TEMP/passage-firmware-bundle" --platformio-core "$RUNNER_TEMP/passage-platformio"
+      - name: Import credentials into a temporary runner keychain
+        env:
+          CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          NOTARY_PRIVATE_KEY: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$CERTIFICATE_P12"
+          test -n "$CERTIFICATE_PASSWORD"
+          test -n "$NOTARY_PRIVATE_KEY"
+          test -n "$NOTARY_KEY_ID"
+          test -n "$NOTARY_ISSUER_ID"
+          signing_password=$(openssl rand -hex 32)
+          echo "::add-mask::$signing_password"
+          printf '%s' "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/passage-signing.p12"
+          printf '%s' "$NOTARY_PRIVATE_KEY" > "$RUNNER_TEMP/passage-notary.p8"
+          security create-keychain -p "$signing_password" "$RUNNER_TEMP/passage-signing.keychain-db"
+          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/passage-signing.keychain-db"
+          security unlock-keychain -p "$signing_password" "$RUNNER_TEMP/passage-signing.keychain-db"
+          security import "$RUNNER_TEMP/passage-signing.p12" -k "$RUNNER_TEMP/passage-signing.keychain-db" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$signing_password" "$RUNNER_TEMP/passage-signing.keychain-db" >/dev/null
+          security list-keychains -d user -s "$RUNNER_TEMP/passage-signing.keychain-db"
+          xcrun notarytool store-credentials passage-ci --key "$RUNNER_TEMP/passage-notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --keychain "$RUNNER_TEMP/passage-signing.keychain-db"
+      - name: Sign, notarize, staple and assess the installed candidate
+        env:
+          SIGN_IDENTITY: ${{ vars.MACOS_SIGN_IDENTITY }}
+        run: |
+          test -n "$SIGN_IDENTITY"
+          python3 scripts/release-macos.py --output dist --sign-identity "$SIGN_IDENTITY" --keychain "$RUNNER_TEMP/passage-signing.keychain-db" --notary-profile passage-ci --firmware-bundle "$RUNNER_TEMP/passage-firmware-bundle"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: passage-notarized-candidate-${{ inputs.architecture }}
+          path: |
+            dist/*.dmg
+            dist/*.sha256
+            dist/*.json
+            dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove runner credentials
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/passage-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/passage-signing.p12" "$RUNNER_TEMP/passage-notary.p8"

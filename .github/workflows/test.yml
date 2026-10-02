@@ -24,11 +24,26 @@ jobs:
       - run: for test in koreader/sharedhighlights.koplugin/tests/*_test.lua; do lua5.1 "$test"; done
       - run: for test in koreader/progress-tests/*_test.lua; do lua5.1 "$test"; done
   mac-app:
-    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - run: swift test --package-path desktop
-      - run: python scripts/build-macos.py
+      - run: python scripts/build-macos.py --dmg
+      - name: Exercise bundled app in a disposable namespace
+        run: dist/Passage.app/Contents/Resources/runtime/bin/python3 -I -B scripts/acceptance-macos.py dist/Passage.app --report dist/automated-acceptance.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: passage-development-${{ matrix.runner }}
+          path: |
+            dist/*-development.dmg
+            dist/*.sha256
+            dist/automated-acceptance.json
+          if-no-files-found: error
+          retention-days: 7
