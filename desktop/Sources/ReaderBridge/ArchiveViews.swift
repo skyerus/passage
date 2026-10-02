@@ -37,7 +37,7 @@ struct HighlightsView: View {
             }
             if status.highlightCount == 0 {
                 VStack(spacing: 0) {
-                    BridgeEmptyState(symbol: "books.vertical", title: "Your reading, collected", detail: "Import your Kindle highlights, or save your first quote on either reader.")
+                    BridgeEmptyState(symbol: "books.vertical", title: "No highlights yet", detail: "Import Kindle highlights or highlight a passage on either reader.")
                     HStack {
                         if !status.kindle.paired || !status.xteink.paired {
                             Button("Connect your readers") { model.selection = .setup }.buttonStyle(.borderedProminent)
@@ -64,8 +64,6 @@ struct HighlightsView: View {
                     }
                 }
             }
-            Text("Quotes are shared here. Underlines stay in their original book.")
-                .font(.system(size: 11)).foregroundStyle(.secondary).frame(maxWidth: .infinity)
         }
         .onAppear { reconcileSelection() }
         .onChange(of: filtered.map(\.id)) { _ in reconcileSelection() }
@@ -330,11 +328,11 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 20) {
             CloudBackupView(status: status)
             Card(title: "Everyday") {
-                BridgeSettingRow(title: "Open at login", detail: "Show this app when you sign in to your Mac.") {
+                BridgeSettingRow(title: "Open at login") {
                     Toggle("Open at login", isOn: Binding(get: { loginEnabled }, set: updateLogin)).labelsHidden().toggleStyle(.switch)
                 }
                 Divider()
-                BridgeSettingRow(title: "Receive highlights", detail: "Works in the background while your Mac is awake.") {
+                BridgeSettingRow(title: "Highlight sync") {
                     BridgeStatusBadge(title: model.error != nil ? "Unable to check" : status.service.healthy ? "Ready" : "Paused", healthy: model.error == nil && status.service.healthy)
                 }
                 if loginNeedsApproval {
@@ -347,8 +345,6 @@ struct SettingsView: View {
             Card(title: "Advanced") {
                 DisclosureGroup("Connection details & optional services") {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("The collector is the local background service that receives highlights from your readers.")
-                            .font(.caption).foregroundStyle(.secondary)
                         LabeledContent("Server address", value: status.endpoint).textSelection(.enabled)
                         LabeledContent("Port", value: String(status.service.port))
                         if let progress = status.localProgress, progress.enabled {
@@ -357,7 +353,6 @@ struct SettingsView: View {
                                 Task { await model.perform("start_progress", ["endpoint": progressAddress, "port": progress.port], activity: "Updating position sync address…", success: "Address saved. Reconnect both readers in Setup if the address changed.") }
                             }.disabled(model.busy || !SetupInput.validLANAddress(progressAddress))
                             Text("Changing this address requires reconnecting each reader.").font(.caption).foregroundStyle(.secondary)
-                            Text("Uses the KOSync protocol on your trusted LAN. Account registration is disabled; pairing is managed by this app.").font(.caption).foregroundStyle(.secondary)
                         }
                         if status.usesExistingSetup {
                             Text("Your original Reading Highlights installation manages this service.").font(.caption).foregroundStyle(.secondary)
@@ -388,8 +383,6 @@ struct SettingsView: View {
                     Spacer()
                     Link("Documentation & source ↗", destination: URL(string: "https://github.com/skyerus/reader-bridge")!).font(.system(size: 12))
                 }
-                Text("Highlights stay local by default. The bridge receives uploads while your Mac is awake.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(3)
             }.padding(.horizontal, 4).padding(.top, 5)
         }
         .onChange(of: status.localProgress?.endpoint) { progressAddress = $0 ?? "" }
@@ -397,7 +390,7 @@ struct SettingsView: View {
     }
     private var backupSettings: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sign in through the GitHub CLI first, then choose a repository for your reading archive.").font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("Sign in with the GitHub CLI, then choose a repository.").font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             TextField("Repository · OWNER/REPO", text: $archive).textFieldStyle(.roundedBorder).accessibilityLabel("GitHub archive repository")
             Toggle("Create a private repository if it is missing", isOn: $createPrivate).font(.callout)
             HStack {

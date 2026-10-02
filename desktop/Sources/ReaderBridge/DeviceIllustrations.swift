@@ -9,13 +9,7 @@ struct DeviceIllustration: View {
     let guide: Guide
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Spacer()
-                Text("ILLUSTRATION").font(.system(size: 9, weight: .semibold)).tracking(1.3).foregroundStyle(.secondary)
-            }
-            content.frame(maxWidth: .infinity).padding(.vertical, 6)
-        }
+        content.frame(maxWidth: .infinity).padding(.vertical, 6)
         .padding(18).background(teal.opacity(0.045)).clipShape(RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .ignore).accessibilityLabel(accessibilityDescription)
     }
@@ -55,7 +49,7 @@ struct DeviceIllustration: View {
         case .sameBook:
             HStack(spacing: 22) {
                 device("Kindle", symbol: "book.closed", detail: "Same file")
-                VStack(spacing: 7) { Image(systemName: "doc").font(.system(size: 28)); Text("EPUB").font(.caption.weight(.medium)); Text("Identical bytes").font(.caption2) }.foregroundStyle(teal)
+                VStack(spacing: 7) { Image(systemName: "doc").font(.system(size: 28)); Text("EPUB").font(.caption.weight(.medium)) }.foregroundStyle(teal)
                 device("X4 Pro", symbol: "book.closed", detail: "Same file")
             }
         case .xteinkAccount:

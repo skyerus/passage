@@ -14,6 +14,8 @@ struct BridgeStatus: Decodable {
         var enabled: Bool; var healthy: Bool; var endpoint: String; var port: Int
         var kindlePaired: Bool; var xteinkPaired: Bool; var bookCount: Int
         var uploads: [Upload]; var error: String; var verified: Bool
+        // Pairing is configuration, not proof of a device being online or applying a position.
+        var isConfigured: Bool { enabled && kindlePaired && xteinkPaired && error.isEmpty }
     }
     var localProgress: LocalProgress?
     var service: Service; var kindle: Kindle; var xteink: Xteink
@@ -36,7 +38,7 @@ struct BridgeStatus: Decodable {
         }
         return service.mode == "github" ? "GitHub backup on" : "Saved on this Mac"
     }
-    var setupStep: Int { !service.healthy ? 1 : !kindle.paired ? 2 : !xteink.paired ? 3 : !progressVerified ? 4 : 5 }
+    var setupStep: Int { !service.healthy ? 1 : !kindle.paired ? 2 : !xteink.paired ? 3 : localProgress?.isConfigured != true ? 4 : 5 }
 }
 struct Highlight: Decodable, Identifiable {
     var id: String; var title: String; var author: String; var text: String; var source: String; var createdAt: String

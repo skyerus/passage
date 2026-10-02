@@ -14,12 +14,25 @@ final class ModelTests: XCTestCase {
         XCTAssertTrue(status.xteink.firmwareStaged)
         XCTAssertEqual(status.highlights.first?.createdAt, "2026-10-01")
     }
-    func testSetupRequiresHealthAndExplicitRoundtrip() throws {
+    func testSetupUsesPairingsInsteadOfManualTestConfirmation() throws {
         XCTAssertEqual(try Backend.decode(fixture()).setupStep, 1)
         XCTAssertEqual(try Backend.decode(fixture(healthy: true)).setupStep, 2)
         XCTAssertEqual(try Backend.decode(fixture(healthy: true, kindle: true)).setupStep, 3)
         XCTAssertEqual(try Backend.decode(fixture(healthy: true, kindle: true, xteink: true)).setupStep, 4)
-        XCTAssertEqual(try Backend.decode(fixture(healthy: true, kindle: true, xteink: true, verified: true)).setupStep, 5)
+        XCTAssertEqual(try Backend.decode(fixture(healthy: true, kindle: true, xteink: true, verified: true)).setupStep, 4)
+        var paired = try Backend.decode(fixture(healthy: true, kindle: true, xteink: true))
+        paired.localProgress = .init(enabled: true, healthy: true, endpoint: "http://reader.local:8085", port: 8085, kindlePaired: true, xteinkPaired: true, bookCount: 0, uploads: [], error: "", verified: false)
+        XCTAssertEqual(paired.setupStep, 5)
+        XCTAssertFalse(paired.progressVerified)
+        XCTAssertEqual(paired.localProgress?.uploads.count, 0)
+        paired.localProgress?.xteinkPaired = false
+        XCTAssertEqual(paired.setupStep, 4)
+        paired.localProgress?.xteinkPaired = true
+        paired.localProgress?.error = "Reconnect Kindle to update its plugin."
+        XCTAssertEqual(paired.setupStep, 4)
+        paired.localProgress?.error = ""
+        paired.localProgress?.enabled = false
+        XCTAssertEqual(paired.setupStep, 4)
         XCTAssertEqual(try Backend.decode(fixture(kindle: true, xteink: true, verified: true)).setupStep, 1)
     }
     func testSearchMatchesBookAuthorAndText() throws {

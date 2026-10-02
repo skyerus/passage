@@ -10,7 +10,6 @@ struct ExistingSetupView: View {
         Card(title: status.usesExistingSetup ? "Your readers are set up" : "Connect your existing readers") {
             Label(model.error != nil ? "Unable to check connection" : collectorOnline ? "Ready to receive highlights" : "Highlight sync is paused", systemImage: model.error == nil && collectorOnline ? "checkmark.circle.fill" : "exclamationmark.triangle")
                 .font(.callout).foregroundStyle(model.error == nil && collectorOnline ? teal : .orange)
-            Text(status.usesExistingSetup ? "New highlights arrive here when your readers sync." : "Your existing highlight setup is ready to connect.").foregroundStyle(.secondary)
             if status.usesExistingSetup {
                 if !status.service.healthy { Text("Start your existing service, then refresh the connection.").font(.callout) }
                 HStack {
@@ -102,8 +101,6 @@ struct SetupView: View {
                     .accessibilityAddTraits(flow.step == step ? [.isSelected] : [])
                 }
             }
-            Text(flow.step == .complete ? "Pairings saved · positions confirmed by you" : "Step \(flow.step.rawValue + 1) of 4\(flow.step == .progress ? " · reading positions are optional" : "")")
-                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -118,9 +115,9 @@ struct SetupView: View {
     }
 
     private var bridgeStep: some View {
-        Card(title: model.error != nil ? "Check your bridge" : status.service.healthy ? "Ready to receive highlights" : "Start highlight sync") {
+        Card(title: "Highlight sync") {
             DeviceIllustration(guide: .bridge)
-            Text("Use the same trusted Wi-Fi. Keep your Mac awake while syncing.").foregroundStyle(.secondary)
+            Text("Connect both readers to the same Wi-Fi as your Mac.").foregroundStyle(.secondary)
             if model.error != nil {
                 Text("The latest check failed. Refresh before continuing.").font(.callout).foregroundStyle(.secondary)
                 action("Check again", "status", [:], "Checking your bridge…")
@@ -128,7 +125,6 @@ struct SetupView: View {
                 Label("Ready to receive highlights", systemImage: "checkmark.circle.fill").font(.callout).foregroundStyle(teal)
                 Button("Continue to Kindle") { flow.advance(readiness) }.buttonStyle(.borderedProminent).disabled(model.busy)
             } else {
-                if status.kindle.paired || status.xteink.paired { Text("Your saved pairings are kept. Start the bridge to continue.").font(.callout) }
                 action("Start highlight sync", "start_collector", ["port": Int(portText) ?? 8084], "Starting your bridge…", disabled: !SetupInput.validCollectorPort(portText), success: "Your bridge is online.")
             }
             connectionOptions
@@ -141,9 +137,8 @@ struct SetupView: View {
             if status.kindle.paired {
                 Text("Eject the Kindle, then open KOReader with Wi-Fi connected.").foregroundStyle(.secondary)
                 Button("Continue to X4 Pro") { flow.advance(readiness) }.buttonStyle(.borderedProminent).disabled(model.busy)
-                DisclosureGroup("Test or update the plugin") {
+                DisclosureGroup("Update pairing") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("In KOReader: Tools → More tools → Shared highlights → Sync highlights.").font(.callout)
                         mountPicker("Kindle", kind: "kindle", selection: $kindleMount)
                         action("Update Kindle pairing", "pair_kindle", ["mount": kindleMount, "endpoint": selectedEndpoint], "Updating Kindle pairing…", disabled: !status.service.healthy || kindleMount.isEmpty || !validEndpoint, success: "Pairing saved. Eject the Kindle and reopen KOReader.")
                     }.padding(.top, 10)
@@ -153,7 +148,7 @@ struct SetupView: View {
                 Toggle("KOReader already opens on my jailbroken Kindle", isOn: $kindleReady).font(.callout)
                 DisclosureGroup("Need KOReader first?") {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Check your exact model and firmware. Complete a supported jailbreak, then install KOReader. Reader Bridge cannot do these steps.").font(.callout).foregroundStyle(.secondary)
+                        Text("Check your model and firmware, jailbreak your Kindle, then install KOReader.").font(.callout).foregroundStyle(.secondary)
                         HStack(spacing: 16) {
                             Link("Check model", destination: URL(string: "https://kindlemodding.org/kindle-models")!)
                             Link("Jailbreak guide", destination: URL(string: "https://kindlemodding.org/jailbreaking/")!)
@@ -173,7 +168,7 @@ struct SetupView: View {
             if readiness.firmwareNeedsConfirmation && !showXteinkRepair {
                 if status.xteink.firmwareStaged {
                     DeviceIllustration(guide: .firmware)
-                    Text("Firmware is staged. Eject the card or leave File Transfer, then install the update on your reader.").foregroundStyle(.secondary)
+                    Text("Eject the card or leave File Transfer, then install the update on your reader.").foregroundStyle(.secondary)
                     Text("Choose reader-bridge-x4-pro.bin in Settings → System → SD Card Firmware Update. Keep the reader powered on until it finishes.").font(.callout)
                 } else {
                     DeviceIllustration(guide: .xteinkLAN)
@@ -183,14 +178,11 @@ struct SetupView: View {
                     firmwareConfirmedReference = SetupInput.firmwareConfirmationReference(status)
                     showXteinkRepair = false
                 }.buttonStyle(.borderedProminent).disabled(model.busy)
-                Text("Check More → Sync Highlights in a book. This confirmation comes from you.").font(.caption).foregroundStyle(.secondary)
                 Button("I need the Reader Bridge firmware") { firmware = true; modelConfirmed = false; showXteinkRepair = true }.disabled(model.busy)
                 firmwareHelp
             } else if status.xteink.paired && !showXteinkRepair {
                 DeviceIllustration(guide: .xteinkLAN)
                 Text("Leave File Transfer or eject the SD card. Open a book and save a clipping with Wi-Fi connected.").foregroundStyle(.secondary)
-                if status.xteink.firmwareStaged { Label("Firmware installation confirmed by you", systemImage: "person.crop.circle.badge.checkmark").font(.caption).foregroundStyle(.secondary) }
-                Text("Try one highlight on each reader. Pairing saves settings; a received highlight confirms the connection.").font(.callout)
                 HStack {
                     Button("View highlights") { model.selection = .highlights }.buttonStyle(.borderedProminent)
                     Button("Set up reading positions") { flow.advance(readiness) }.disabled(model.busy)
@@ -213,7 +205,7 @@ struct SetupView: View {
                 Toggle("I checked: this device is an Xteink X4 Pro", isOn: $modelConfirmed).font(.callout)
                 Toggle("Build and stage Reader Bridge firmware", isOn: $firmware).font(.callout)
                 if !firmware { Toggle("Reader Bridge firmware is already installed", isOn: $installedFirmwareConfirmed).font(.callout) }
-                Text(firmware ? "Built from source on this Mac. Allow several minutes and internet access; install the staged file on the reader yourself." : "Shared highlights need Reader Bridge firmware. Leave this off only if that build is already installed.").font(.caption).foregroundStyle(.secondary)
+                if firmware { Text("Requires internet and several minutes. You’ll install the update on your reader.").font(.caption).foregroundStyle(.secondary) }
                 action(firmware ? "Build firmware & pair" : "Pair X4 Pro", "pair_xteink", xteinkParameters, firmware ? "Building and staging firmware… This can take several minutes." : "Pairing your X4 Pro…", disabled: !SetupInput.canPairXteink(collectorOnline: status.service.healthy, endpoint: selectedEndpoint, connectionValid: xteinkConnectionValid, modelConfirmed: modelConfirmed, stageFirmware: firmware, installedFirmwareConfirmed: installedFirmwareConfirmed), success: firmware ? "Firmware staged. Complete the update on your X4 Pro." : "Pairing saved. Leave File Transfer or eject the card.", resetFirmwareConfirmation: firmware)
                 firmwareHelp
                 if !validEndpoint || model.error != nil { connectionOptions }
@@ -224,16 +216,14 @@ struct SetupView: View {
     private var progressStep: some View {
         VStack(alignment: .leading, spacing: 12) {
             ReadingProgressView(status: status, pairing: true)
-            Button("Later") { model.selection = .highlights }.font(.callout)
+            if !readiness.progressConfigured { Button("Later") { model.selection = .highlights }.font(.callout) }
         }
     }
 
     private var completedStep: some View {
-        Card(title: "Your pairings are saved") {
+        Card(title: "Setup complete") {
             DeviceIllustration(guide: .bridge)
-            Text("Reading positions were confirmed by you. Save a highlight on each reader and check the shared archive.").foregroundStyle(.secondary)
             Button("View highlights") { model.selection = .highlights }.buttonStyle(.borderedProminent)
-            Text("Keep the Mac awake to receive highlights. X4 Pro progress still uses Upload Local and Apply Remote.").font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -251,13 +241,13 @@ struct SetupView: View {
         DisclosureGroup("Connection settings", isExpanded: $connectionSettings) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Collector port").font(.callout)
-                    TextField("8084", text: $portText).frame(width: 90).textFieldStyle(.roundedBorder).disabled(status.service.healthy).accessibilityLabel("Collector port")
+                    Text("Port").font(.callout)
+                    TextField("8084", text: $portText).frame(width: 90).textFieldStyle(.roundedBorder).disabled(status.service.healthy).accessibilityLabel("Highlight sync port")
                 }
                 if !SetupInput.validCollectorPort(portText) { Text("Choose a port from 1024 to 65535.").font(.caption).foregroundStyle(.orange) }
                 TextField("Mac LAN address", text: $endpoint).textFieldStyle(.roundedBorder).accessibilityLabel("Mac collector LAN address")
                 if !status.addresses.isEmpty { Menu("Choose a Mac address") { ForEach(status.addresses, id: \.self) { address in Button(address) { endpoint = address } } } }
-                Text(validEndpoint ? "Both readers need to reach this address on your trusted LAN. Use the Mac’s private IP if .local fails." : "Use http:// with a private IP or a .local name, without a path. Start the bridge and check Wi-Fi or the firewall if pairing fails.").font(.caption).foregroundStyle(validEndpoint ? Color.secondary : Color.orange)
+                Text(validEndpoint ? "Use the Mac’s private IP if .local fails." : "Use http:// with a private IP or a .local name, without a path.").font(.caption).foregroundStyle(validEndpoint ? Color.secondary : Color.orange)
                 if status.service.healthy {
                     Button("Stop bridge") { Task { await model.perform("stop_collector", activity: "Stopping your bridge…", success: "Bridge stopped. Readers will retain queued highlights.") } }.disabled(model.busy)
                 }
