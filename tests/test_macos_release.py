@@ -113,7 +113,7 @@ class FirmwareBundleTests(unittest.TestCase):
         self.write('passage-firmware-source.tar.gz', source.getvalue())
         self.receipt = {
             'schema_version': 1, 'source_commit': self.profile['commit'],
-            'build_succeeded': True, 'platformio': 'PlatformIO Core, version 6.2.0',
+            'build_succeeded': True, 'platformio': 'PlatformIO Core, version 6.1.19',
             'models': {self.profile['id']: self.artifact}, 'environments': [self.profile['environment']],
             'source_archive': {'filename': 'passage-firmware-source.tar.gz',
                                'sha256': hashlib.sha256(source.getvalue()).hexdigest(), 'size': len(source.getvalue())}}
@@ -151,7 +151,7 @@ class FirmwareBundleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'successful build'):
                     builder.firmware_bundle(self.bundle, self.root)
         self.receipt['build_succeeded'] = True
-        for value in (None, '6.2.0', 'PlatformIO Core, version 6.1.18'):
+        for value in (None, '6.1.19', 'PlatformIO Core, version 6.1.18'):
             with self.subTest(platformio=value):
                 self.receipt['platformio'] = value
                 if value is None:

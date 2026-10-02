@@ -51,9 +51,15 @@ jobs:
       - run: swift test --package-path desktop
       - name: Build pinned firmware, dependency notices and corresponding source
         run: |
-          python3 -m pip install platformio==6.2.0
+          python3 -m pip install pioarduino==6.1.19
+          # Match the pinned firmware's release workflow: the platform imports
+          # these build helpers before its nested environment is bootstrapped.
+          python3 -m pip install 'littlefs-python>=0.16.0' 'fatfs-ng>=0.1.14' 'pyyaml>=6.0.2' \
+            'rich-click>=1.8.6' 'zopfli>=0.2.2' 'intelhex>=2.3.0' 'rich>=14.0.0' 'urllib3<2' \
+            'cryptography>=45.0.3' 'certifi>=2025.8.3' 'ecdsa>=0.19.1' 'bitstring>=4.3.1' \
+            'reedsolo>=1.5.3,<1.8' 'esp-idf-size>=2.0.0' 'esp-coredump>=1.14.0'
           python3 - <<'PY'
-          import json, os, pathlib, subprocess, setup
+          import json, os, pathlib, subprocess
           specs = json.loads(pathlib.Path('firmware.json').read_text())['devices'].values()
           repositories = {spec['repository'] for spec in specs}
           commits = {spec['commit'] for spec in specs}
@@ -63,7 +69,6 @@ jobs:
           subprocess.run(['git', 'clone', '--no-checkout', repositories.pop(), str(source)], check=True)
           subprocess.run(['git', '-C', str(source), 'checkout', '--detach', commits.pop()], check=True)
           subprocess.run(['git', '-C', str(source), 'submodule', 'update', '--init', '--recursive'], check=True)
-          (source / 'platformio.local.ini').write_bytes(setup.BUILD_OVERRIDE)
           PY
           python3 scripts/build-firmware-assets.py --source "$RUNNER_TEMP/passage-firmware-source" --output "$RUNNER_TEMP/passage-firmware-bundle" --platformio-core "$RUNNER_TEMP/passage-platformio"
       - name: Import credentials into a temporary runner keychain

@@ -406,7 +406,7 @@ class Bridge:
         directory.mkdir(parents=True, exist_ok=True)
         if not (venv / 'bin/python').exists():
             run([sys.executable, '-m', 'venv', str(venv)], timeout=120)
-        run([venv / 'bin/python', '-m', 'pip', 'install', 'platformio==6.2.0'], timeout=600)
+        run([venv / 'bin/python', '-m', 'pip', 'install', 'pioarduino==6.1.19'], timeout=600)
         if not source.exists():
             staging = Path(tempfile.mkdtemp(prefix='checkout-', dir=directory))
             try:
@@ -429,7 +429,7 @@ class Bridge:
         submodules = run(['git', '-C', source, 'submodule', 'status', '--recursive'])
         if any(line.startswith(('+', '-', 'U')) for line in submodules.splitlines()):
             raise SetupError('Firmware submodule revision mismatch; refusing an unpinned build.')
-        fingerprint = {'commit': commit, 'environment': environment, 'platformio': '6.2.0', 'override_sha256': hashlib.sha256(override_data).hexdigest()}
+        fingerprint = {'commit': commit, 'environment': environment, 'platformio': '6.1.19', 'override_sha256': hashlib.sha256(override_data).hexdigest()}
         if output.exists() and receipt.exists():
             data = output.read_bytes()
             cached = json.loads(receipt.read_text())
@@ -437,6 +437,13 @@ class Bridge:
                 return data
         build_log = directory / 'build.log'
         print('Build progress log: ' + str(build_log), flush=True)
+        build_environment = {**os.environ, 'PLATFORMIO_CORE_DIR': str(self.app / 'platformio')}
+        run([venv / 'bin/pio', 'pkg', 'install', '-e', environment], cwd=source, env=build_environment, timeout=900)
+        inner_python = self.app / 'platformio/penv/bin/python'
+        run([inner_python, '-m', 'pip', 'install', 'pioarduino==6.1.19'], env=build_environment, timeout=600)
+        for core in (venv / 'bin/pio', inner_python.with_name('pio')):
+            if run([core, '--version'], env=build_environment).strip() != 'PlatformIO Core, version 6.1.19':
+                raise SetupError('Firmware toolchains must both use the pinned PlatformIO 6.1.19.')
         with build_log.open('w') as log:
             os.chmod(build_log, 0o600)
             result = subprocess.run([str(venv / 'bin/pio'), 'run', '-e', environment], cwd=source, stdout=log, stderr=subprocess.STDOUT, timeout=1800, env={**os.environ, "PLATFORMIO_CORE_DIR": str(self.app / "platformio")})
