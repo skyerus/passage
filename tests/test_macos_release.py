@@ -1,5 +1,6 @@
 """Release boundary regressions; no keys, network, launchd, or real app data."""
 import copy
+from contextlib import nullcontext
 import hashlib
 import importlib.util
 import io
@@ -257,7 +258,8 @@ class DistributionGateTests(unittest.TestCase):
                 with self.subTest(source=changed):
                     candidate['firmware_source'] = changed
                     path.write_text(json.dumps(candidate))
-                    with patch.object(release, 'assess') as assess:
+                    with patch.object(release, 'installed_from_dmg', return_value=nullcontext(root / 'Passage.app')), \
+                            patch.object(release, 'assess') as assess:
                         with self.assertRaisesRegex(ValueError, 'firmware source differs'):
                             release.finalize(path, acceptance)
                         assess.assert_not_called()
@@ -277,6 +279,101 @@ class DistributionGateTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'did not accept'):
                     release.notarize(root / 'image.dmg', 'fixture-profile', root / 'rejected.json')
                 self.assertFalse(any('stapler' in call.args for call in commands.call_args_list))
+
+
+class DownloadedCandidateTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.artifact = self.root / 'Passage.dmg'
+        self.artifact.write_bytes(b'Synthetic exact download')
+        self.build = {'commit': 'a' * 40, 'version': '0.7.0', 'architecture': 'arm64',
+                      'source_dirty': False, 'distribution': 'release-candidate', 'firmware_source': None}
+        self.signing = {'team_identifier': 'TESTTEAM12', 'cdhash': 'b' * 40,
+                        'hardened_runtime': True, 'secure_timestamp': True}
+        self.candidate = {key: self.build[key] for key in ('commit', 'version', 'architecture')}
+        self.candidate.update(schema_version=1, state='notarized-candidate', signing=self.signing,
+                              artifact={'filename': self.artifact.name, 'sha256': release.digest(self.artifact)},
+                              reader_profiles=release.profiles(self.build), firmware_source=None,
+                              automated_acceptance={**self.build, 'passed': True, 'scope': 'isolated-data-and-service-namespace'},
+                              notarization={'app': {'status': 'Accepted'}, 'dmg': {'status': 'Accepted'}})
+        self.acceptance = {key: self.build[key] for key in ('commit', 'version', 'architecture')}
+        self.acceptance.update(schema_version=1, scope='clean-mac-without-developer-tools',
+                               artifact_sha256=release.digest(self.artifact), macos_version='13.0', tested_at='2026-10-02',
+                               checks={name: {'passed': True, 'evidence': 'Synthetic evidence'} for name in release.CHECKS},
+                               readers=[{'profile_id': 'kindle', 'passed': True, 'evidence': 'Synthetic reader fixture'}])
+        self.path = self.root / 'release-candidate.json'
+        self.path.write_text(json.dumps(self.candidate))
+        self.acceptance_path = self.root / 'acceptance.json'
+        self.acceptance_path.write_text(json.dumps(self.acceptance))
+        self.copied = None
+        self.invalid_link = False
+        self.copy_failed = False
+
+    def mounted_command(self, *args, **kwargs):
+        if args[:2] == ('hdiutil', 'attach'):
+            self.assertIn('-readonly', args)
+            self.assertEqual(args[-1], self.artifact)
+            mounted = args[args.index('-mountpoint') + 1]
+            resources = mounted / 'Passage.app/Contents/Resources'
+            resources.mkdir(parents=True)
+            (resources / 'build.json').write_text(json.dumps(self.build))
+            (mounted / 'Applications').symlink_to('/invalid' if self.invalid_link else '/Applications')
+        elif args[0] == 'ditto':
+            if self.copy_failed:
+                raise subprocess.CalledProcessError(1, args)
+            destination = args[2]
+            destination.parent.mkdir(parents=True)
+            shutil.copytree(args[1], destination)
+            self.copied = destination
+        elif args[:2] != ('hdiutil', 'detach'):
+            self.fail('Unexpected real-command boundary: ' + str(args[0]))
+        return subprocess.CompletedProcess(args, 0)
+
+    def test_downloaded_candidate_without_sibling_app_finalizes_from_its_dmg(self):
+        self.assertFalse((self.root / 'Passage.app').exists())
+        with patch.object(release, 'run', side_effect=self.mounted_command) as commands, \
+                patch.object(release, 'assess') as assess, \
+                patch.object(release, 'signature', return_value=self.signing) as signature, \
+                patch('builtins.print'):
+            release.finalize(self.path, self.acceptance_path)
+            assess.assert_called_once_with(self.copied, self.artifact)
+            signature.assert_called_once_with(self.copied)
+        self.assertTrue(any(call.args[:2] == ('hdiutil', 'detach') for call in commands.call_args_list))
+        self.assertFalse(self.copied.exists())
+        self.assertFalse((self.root / 'Passage.app').exists())
+        manifest = json.loads((self.root / 'release-manifest.json').read_text())
+        self.assertTrue(manifest['ready'])
+        self.assertEqual(manifest['accepted_reader_profiles'], ['kindle'])
+
+    def test_changed_dmg_is_rejected_before_mount(self):
+        self.artifact.write_bytes(b'Changed download')
+        with patch.object(release, 'run') as commands:
+            with self.assertRaisesRegex(ValueError, 'disk image changed'):
+                release.finalize(self.path, self.acceptance_path)
+            commands.assert_not_called()
+        self.assertFalse((self.root / 'release-manifest.json').exists())
+
+    def test_dmg_metadata_mismatch_cleans_up_and_cannot_finalize(self):
+        self.build['commit'] = 'f' * 40
+        with patch.object(release, 'run', side_effect=self.mounted_command), patch.object(release, 'assess') as assess:
+            with self.assertRaisesRegex(ValueError, 'signed app: commit'):
+                release.finalize(self.path, self.acceptance_path)
+            assess.assert_not_called()
+        self.assertFalse(self.copied.exists())
+        self.assertFalse((self.root / 'release-manifest.json').exists())
+
+    def test_bad_installer_link_and_failed_copy_detach_without_finalizing(self):
+        for failure in ('invalid_link', 'copy_failed'):
+            with self.subTest(failure=failure):
+                setattr(self, failure, True)
+                with patch.object(release, 'run', side_effect=self.mounted_command) as commands:
+                    with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+                        release.finalize(self.path, self.acceptance_path)
+                self.assertTrue(any(call.args[:2] == ('hdiutil', 'detach') for call in commands.call_args_list))
+                self.assertFalse((self.root / 'release-manifest.json').exists())
+                setattr(self, failure, False)
 
 
 class SignatureGateTests(unittest.TestCase):

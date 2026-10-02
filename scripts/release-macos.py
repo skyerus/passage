@@ -6,6 +6,7 @@ modifies an existing application or service. Credentials stay in a caller-owned
 keychain profile. See docs/RELEASING.md.
 """
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import importlib.util
@@ -99,6 +100,25 @@ def assess(app, dmg=None):
             '--verbose=4', dmg, capture_output=True)
 
 
+@contextmanager
+def installed_from_dmg(artifact):
+    """Copy the disk image's application into a disposable install location."""
+    with tempfile.TemporaryDirectory(prefix='passage-release-install-') as temporary:
+        root = Path(temporary)
+        mounted = root / 'mount'
+        mounted.mkdir()
+        run('hdiutil', 'attach', '-readonly', '-nobrowse', '-noautoopen', '-mountpoint', mounted, artifact,
+            capture_output=True)
+        try:
+            if not (mounted / 'Applications').is_symlink() or (mounted / 'Applications').readlink() != Path('/Applications'):
+                raise ValueError('Installer Applications link is invalid')
+            installed = root / 'Applications/Passage.app'
+            run('ditto', mounted / 'Passage.app', installed)
+        finally:
+            run('hdiutil', 'detach', mounted, capture_output=True)
+        yield installed
+
+
 def validate_acceptance(candidate, acceptance):
     if acceptance.get('schema_version') != 1 or acceptance.get('scope') != 'clean-mac-without-developer-tools':
         raise ValueError('A separate clean-Mac acceptance report is required')
@@ -144,30 +164,31 @@ def finalize(path, acceptance_path):
     artifact = path.parent / candidate['artifact']['filename']
     if artifact.parent.resolve() != path.parent.resolve() or digest(artifact) != candidate['artifact']['sha256']:
         raise ValueError('Candidate disk image changed or is missing')
-    app = path.parent / 'Passage.app'
-    build = json.loads((app / 'Contents/Resources/build.json').read_text())
-    for field in ('commit', 'version', 'architecture'):
-        if candidate.get(field) != build.get(field):
-            raise ValueError('Candidate differs from the signed app: ' + field)
-        if candidate['automated_acceptance'].get(field) != build.get(field):
-            raise ValueError('Automated acceptance differs from the signed app: ' + field)
-    if build.get('source_dirty') or build.get('distribution') != 'release-candidate':
-        raise ValueError('Finalization requires a clean committed release build')
-    if candidate.get('reader_profiles') != profiles(build):
-        raise ValueError('Candidate reader availability differs from the signed app')
-    if candidate.get('firmware_source') != build.get('firmware_source'):
-        raise ValueError('Candidate firmware source differs from the signed app')
-    accepted = validate_acceptance(candidate, json.loads(acceptance_path.read_text()))
-    assess(app, artifact)
-    if signature(app) != candidate.get('signing'):
-        raise ValueError('Signed candidate changed after automated acceptance')
-    source = candidate.get('firmware_source')
-    if source:
-        source_file = path.parent / source['filename']
-        if source_file.parent.resolve() != path.parent.resolve() or digest(source_file) != source['sha256']:
-            raise ValueError('Corresponding firmware source release asset changed or is missing')
+    acceptance = json.loads(acceptance_path.read_text())
+    with installed_from_dmg(artifact) as app:
+        build = json.loads((app / 'Contents/Resources/build.json').read_text())
+        for field in ('commit', 'version', 'architecture'):
+            if candidate.get(field) != build.get(field):
+                raise ValueError('Candidate differs from the signed app: ' + field)
+            if candidate['automated_acceptance'].get(field) != build.get(field):
+                raise ValueError('Automated acceptance differs from the signed app: ' + field)
+        if build.get('source_dirty') or build.get('distribution') != 'release-candidate':
+            raise ValueError('Finalization requires a clean committed release build')
+        if candidate.get('reader_profiles') != profiles(build):
+            raise ValueError('Candidate reader availability differs from the signed app')
+        if candidate.get('firmware_source') != build.get('firmware_source'):
+            raise ValueError('Candidate firmware source differs from the signed app')
+        accepted = validate_acceptance(candidate, acceptance)
+        assess(app, artifact)
+        if signature(app) != candidate.get('signing'):
+            raise ValueError('Signed candidate changed after automated acceptance')
+        source = candidate.get('firmware_source')
+        if source:
+            source_file = path.parent / source['filename']
+            if source_file.parent.resolve() != path.parent.resolve() or digest(source_file) != source['sha256']:
+                raise ValueError('Corresponding firmware source release asset changed or is missing')
     candidate.update(state='distribution-ready', ready=True, accepted_reader_profiles=accepted,
-                     clean_mac_acceptance=json.loads(acceptance_path.read_text()), blockers=[])
+                     clean_mac_acceptance=acceptance, blockers=[])
     write_json(path.parent / 'release-manifest.json', candidate)
     print('Distribution verified for ' + ', '.join(accepted) + '. No assets were published.')
 
@@ -223,19 +244,7 @@ def prepare(args):
     dmg_notary = notarize(dmg, args.notary_profile, output / 'notary-dmg.json', args.keychain)
     assess(app, dmg)
     # Exercise the copy users install from the actual signed disk image.
-    with tempfile.TemporaryDirectory(prefix='passage-release-install-') as temporary:
-        root = Path(temporary)
-        mounted = root / 'mount'
-        mounted.mkdir()
-        run('hdiutil', 'attach', '-readonly', '-nobrowse', '-noautoopen', '-mountpoint', mounted, dmg,
-            capture_output=True)
-        try:
-            if not (mounted / 'Applications').is_symlink() or (mounted / 'Applications').readlink() != Path('/Applications'):
-                raise ValueError('Installer Applications link is invalid')
-            installed = root / 'Applications/Passage.app'
-            run('ditto', mounted / 'Passage.app', installed)
-        finally:
-            run('hdiutil', 'detach', mounted, capture_output=True)
+    with installed_from_dmg(dmg) as installed:
         run('xattr', '-w', 'com.apple.quarantine', '0083;00000000;PassageAcceptance;', installed)
         assess(installed)
         run(installed / 'Contents/Resources/runtime/bin/python3', '-I', '-B',

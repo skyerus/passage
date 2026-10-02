@@ -65,7 +65,7 @@ python3 scripts/release-macos.py \
   --acceptance /path/to/completed-clean-mac-acceptance.json
 ```
 
-Finalization requires matching artifact SHA-256, commit, version and architecture, all required physical checks, and verified firmware availability for accepted CrossPoint profiles. It rechecks the signed app, disk image and Gatekeeper. Only then does `release-manifest.json` contain `state: distribution-ready`, `ready: true`, and the accepted reader profiles. Neither stage publishes anything.
+Run finalization on a maintainer Mac using the downloaded candidate artifacts: keep its disk image, JSON evidence and firmware source archive together. A separate app bundle is not required. Finalization verifies the disk image's SHA-256, mounts it read-only, and copies its app into a disposable directory. It checks that app's signed metadata, signature and Gatekeeper assessment against the candidate, plus the physical acceptance report and corresponding firmware source. Only then does `release-manifest.json` contain `state: distribution-ready`, `ready: true`, and the accepted reader profiles. Neither stage publishes anything.
 
 ## Publish only the verified scope
 
