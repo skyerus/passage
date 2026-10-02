@@ -245,11 +245,21 @@ def prepare(args):
     assess(app, dmg)
     # Exercise the copy users install from the actual signed disk image.
     with installed_from_dmg(dmg) as installed:
+        if signature(installed) != signed:
+            raise ValueError('Disk image app signature differs from the approved signed app')
+        installed_build = json.loads((installed / 'Contents/Resources/build.json').read_text())
+        if installed_build != build:
+            raise ValueError('Disk image app build metadata differs from the approved signed app')
         run('xattr', '-w', 'com.apple.quarantine', '0083;00000000;PassageAcceptance;', installed)
         assess(installed)
         run(installed / 'Contents/Resources/runtime/bin/python3', '-I', '-B',
             ROOT / 'scripts/acceptance-macos.py', installed, '--report', output / 'automated-acceptance.json')
         assess(installed)
+    acceptance = json.loads((output / 'automated-acceptance.json').read_text())
+    if (acceptance.get('schema_version') != 1 or acceptance.get('passed') is not True
+            or acceptance.get('scope') != 'isolated-data-and-service-namespace'
+            or any(acceptance.get(field) != build.get(field) for field in ('commit', 'version', 'architecture'))):
+        raise ValueError('Automated acceptance does not match the approved signed app')
     checksum = digest(dmg)
     dmg.with_suffix('.dmg.sha256').write_text(f'{checksum}  {dmg.name}\n')
     source = build.get('firmware_source')
@@ -265,7 +275,7 @@ def prepare(args):
               'artifact': {'filename': dmg.name, 'sha256': checksum}, 'signing': signed,
               'firmware_source': source,
               'notarization': {'app': app_notary, 'dmg': dmg_notary},
-              'automated_acceptance': json.loads((output / 'automated-acceptance.json').read_text()),
+              'automated_acceptance': acceptance,
               'reader_profiles': profiles(build),
               'blockers': ['Separate clean-Mac and physical-reader acceptance has not been recorded.']}
     write_json(output / 'release-candidate.json', record)

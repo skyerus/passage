@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -470,6 +471,91 @@ class DownloadedCandidateTests(unittest.TestCase):
                 self.assertTrue(any(call.args[:2] == ('hdiutil', 'detach') for call in commands.call_args_list))
                 self.assertFalse((self.root / 'release-manifest.json').exists())
                 setattr(self, failure, False)
+
+
+class CandidatePreparationTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.output = self.root / 'candidate'
+        self.installed = self.root / 'installed/Passage.app'
+        self.build = {'schema_version': 1, 'commit': 'a' * 40, 'version': '0.7.0', 'architecture': 'arm64',
+                      'distribution': 'release-candidate', 'source_dirty': False, 'firmware_source': None}
+        self.installed_build = copy.deepcopy(self.build)
+        self.signing = {'team_identifier': 'TESTTEAM12', 'cdhash': 'b' * 40,
+                        'hardened_runtime': True, 'secure_timestamp': True}
+        self.installed_signing = copy.deepcopy(self.signing)
+        self.acceptance = {'schema_version': 1, 'passed': True, 'scope': 'isolated-data-and-service-namespace',
+                           **{key: self.build[key] for key in ('commit', 'version', 'architecture')}}
+        self.acceptance_calls = 0
+
+    def command(self, *args, **kwargs):
+        if len(args) > 1 and Path(args[1]).name == 'build-macos.py':
+            resources = self.output / 'Passage.app/Contents/Resources'
+            resources.mkdir(parents=True)
+            (resources / 'build.json').write_text(json.dumps(self.build))
+        elif args[:3] == ('ditto', '-c', '-k'):
+            Path(args[-1]).write_bytes(b'Synthetic submission archive')
+        elif len(args) > 3 and Path(args[3]).name == 'acceptance-macos.py':
+            self.acceptance_calls += 1
+            Path(args[-1]).write_text(json.dumps(self.acceptance))
+        elif args[0] not in ('codesign', 'xattr'):
+            self.fail('Unexpected command boundary: ' + str(args[0]))
+        return subprocess.CompletedProcess(args, 0)
+
+    def prepare(self):
+        resources = self.installed / 'Contents/Resources'
+        resources.mkdir(parents=True, exist_ok=True)
+        (resources / 'build.json').write_text(json.dumps(self.installed_build))
+        def create_dmg(app, dmg, **kwargs):
+            dmg.write_bytes(b'Synthetic signed disk image')
+        builder = SimpleNamespace(validate_identity=lambda *args: None, create_dmg=create_dmg)
+        args = SimpleNamespace(output=self.output, sign_identity='Developer ID Application: Fixture (TESTTEAM12)',
+                               keychain=None, notary_profile='fixture-only', firmware_bundle=None)
+        def signature(app):
+            return self.installed_signing if app == self.installed else self.signing
+        with patch.object(release, 'module', return_value=builder), patch.object(release, 'run', side_effect=self.command), \
+                patch.object(release, 'signature', side_effect=signature), patch.object(release, 'assess'), \
+                patch.object(release, 'notarize', return_value={'id': 'fixture', 'status': 'Accepted', 'stapled': True}), \
+                patch.object(release, 'installed_from_dmg', return_value=nullcontext(self.installed)), patch('builtins.print'):
+            release.prepare(args)
+
+    def test_matching_installed_copy_emits_only_a_candidate(self):
+        self.prepare()
+        candidate = json.loads((self.output / 'release-candidate.json').read_text())
+        self.assertFalse(candidate['ready'])
+        self.assertEqual(candidate['state'], 'notarized-candidate')
+        self.assertEqual(candidate['automated_acceptance'], self.acceptance)
+        self.assertEqual(self.acceptance_calls, 1)
+
+    def test_different_valid_signed_app_cannot_emit_a_candidate(self):
+        self.installed_signing['cdhash'] = 'c' * 40
+        with self.assertRaisesRegex(ValueError, 'signature differs'):
+            self.prepare()
+        self.assertEqual(self.acceptance_calls, 0)
+        self.assertFalse((self.output / 'release-candidate.json').exists())
+
+    def test_different_sealed_build_metadata_cannot_emit_a_candidate(self):
+        for field, value in (('commit', 'f' * 40), ('architecture', 'x86_64'),
+                             ('firmware_source', {'filename': 'different-source.tar.gz'})):
+            with self.subTest(field=field):
+                self.output = self.root / field
+                self.installed_build = {**self.build, field: value}
+                with self.assertRaisesRegex(ValueError, 'build metadata differs'):
+                    self.prepare()
+                self.assertEqual(self.acceptance_calls, 0)
+                self.assertFalse((self.output / 'release-candidate.json').exists())
+
+    def test_mismatched_or_incomplete_acceptance_cannot_emit_a_candidate(self):
+        original = copy.deepcopy(self.acceptance)
+        for field, value in (('commit', 'f' * 40), ('scope', 'clean-mac-without-developer-tools'), ('passed', False)):
+            with self.subTest(field=field):
+                self.output = self.root / field
+                self.acceptance = {**original, field: value}
+                with self.assertRaisesRegex(ValueError, 'acceptance does not match'):
+                    self.prepare()
+                self.assertFalse((self.output / 'release-candidate.json').exists())
 
 
 class SignatureGateTests(unittest.TestCase):
