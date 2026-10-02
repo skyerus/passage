@@ -29,6 +29,9 @@
   ],
   "documentation_files": [
     "README.md",
+    "SUPPORT.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
     "docs/MAC-APP.md",
     "docs/SETUP.md",
     "docs/PROGRESS-SYNC.md",
