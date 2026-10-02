@@ -133,6 +133,16 @@ def main():
                 sock.bind(('127.0.0.1',0)); progress_port = sock.getsockname()[1]
             progress = invoke('start_progress',endpoint=endpoint,port=progress_port)['local_progress']
             assert progress['healthy'] and not progress['kindle_paired'] and progress['book_count'] == 0
+            # Upgrade a real owned listener with the pre-guard health contract.
+            installed_service=data/'progress_sync/progress_sync.py'
+            installed_service.write_text(installed_service.read_text().replace(", 'revision_guard':1",''))
+            subprocess.run(['launchctl','kickstart','-k',f'gui/{os.getuid()}/{labels["progress_sync"]}'],check=True)
+            probe=desktop.Desktop(data,agent_dir=agents)
+            for _ in range(40):
+                if probe.progress_authenticated(require_guard=False) and not probe.progress_authenticated():break
+                time.sleep(.25)
+            assert probe.progress_authenticated(require_guard=False) and not probe.progress_authenticated()
+            assert invoke('start_progress',endpoint=endpoint,port=progress_port)['local_progress']['healthy']
             import progress_sync
             credentials = progress_sync.credentials(data / 'progress_sync')
             headers = {**progress_sync.auth_headers(credentials),'Content-Type':'application/json'}

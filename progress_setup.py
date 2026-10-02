@@ -48,13 +48,14 @@ class ProgressSetup:
         if not path.is_file(): raise setup.SetupError('Turn on reading-position sync first.')
         return json.loads(path.read_text())
 
-    def progress_authenticated(self, endpoint=None):
+    def progress_authenticated(self, endpoint=None, require_guard=True):
         saved = self.state.get('progress_sync', {})
         if not saved.get('port'): return False
         try:
             base = endpoint or f'http://127.0.0.1:{saved["port"]}'
             health = json.loads(setup.http(base + '/healthcheck', timeout=2, maximum=4096))
-            if health.get('service') != 'reader-bridge-progress' or health.get('revision_guard') != 1: return False
+            if health.get('service') != 'reader-bridge-progress': return False
+            if require_guard and health.get('revision_guard') != 1: return False
             account = self.progress_account()
             result = json.loads(setup.http(base + '/users/auth', headers=progress_sync.auth_headers(account), timeout=2, maximum=4096))
             return result.get('username') == account['username']

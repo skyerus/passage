@@ -274,3 +274,13 @@ class PairingTests(unittest.TestCase):
         self.assertFalse(empty.app.exists())
         with patch.object(setup,'available',return_value=False):
             with self.assertRaises(setup.SetupError):empty.check_port('progress_sync',8085)
+
+    def test_old_authenticated_service_can_upgrade_but_cannot_pair_guard_yet(self):
+        def http(url,**kwargs):
+            return json.dumps({'service':'reader-bridge-progress','state':'OK'} if url.endswith('/healthcheck') else {'username':self.account['username']}).encode()
+        with patch.object(setup,'http',side_effect=http):
+            self.assertFalse(self.bridge.progress_authenticated())
+            self.assertTrue(self.bridge.progress_authenticated(require_guard=False))
+            with self.assertRaises(setup.SetupError):self.bridge.paired_progress_endpoint()
+            with patch.object(setup,'available',return_value=False),patch.object(self.bridge,'assert_ownership'),patch.object(self.bridge,'owned',return_value=True):
+                self.bridge.check_port('progress_sync',8085)
