@@ -4,6 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import struct
 import tarfile
 import tempfile
 import unittest
@@ -12,6 +13,16 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location('firmware_assets', Path(__file__).resolve().parents[1] / 'scripts/build-firmware-assets.py')
 assets = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(assets)
+
+
+def macho_fixture(bits=64, kind=2):
+    if bits == 64:
+        header = struct.pack('<8I', 0xfeedfacf, 0x0100000c, 0, kind, 2, 96, 0, 0)
+        segment = struct.pack('<II64x', 0x19, 72)
+    else:
+        header = struct.pack('<7I', 0xfeedface, 7, 0, kind, 2, 80, 0)
+        segment = struct.pack('<II48x', 1, 56)
+    return header + segment + struct.pack('<IIQQ', 0x80000028, 24, len(header) + len(segment) + 24, 0) + b'fixture code'
 
 
 class FirmwareAssetsTests(unittest.TestCase):
@@ -91,6 +102,51 @@ class FirmwareAssetsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Invalid application'):
             assets.assemble(self.args)
         self.assertFalse(self.args.output.exists())
+
+    def test_jpegdec_compiled_example_is_excluded_but_source_and_artifacts_are_preserved(self):
+        dependency = self.source / '.pio/libdeps/example/JPEGDEC'
+        example = dependency / 'linux/examples/jpeg_perf_test'
+        example.mkdir(parents=True)
+        (example / 'jpeg_perf_test').write_bytes(macho_fixture())
+        preserved = {'jpeg_perf_test.cpp': b'// Synthetic JPEGDEC example source',
+                     'Makefile': b'jpeg_perf_test: jpeg_perf_test.cpp\n',
+                     'LICENSE': b'Synthetic JPEGDEC example terms',
+                     'firmware-required.bin': self.binary.read_bytes(),
+                     'image-data': b'\xcf\xfa\xed\xfeordinary fixture data',
+                     'java-class': b'\xca\xfe\xba\xbe\x00\x00\x00\x3dordinary Java fixture'}
+        for name, data in preserved.items():
+            (example / name).write_bytes(data)
+        tool = dependency / 'tools/required-build-helper'
+        tool.parent.mkdir()
+        tool.write_bytes(macho_fixture())
+        assets.assemble(self.args)
+        archive_path = self.args.output / 'passage-firmware-source.tar.gz'
+        prefix = 'source/.pio/libdeps/example/JPEGDEC/linux/examples/jpeg_perf_test/'
+        with tarfile.open(archive_path) as archive:
+            self.assertNotIn(prefix + 'jpeg_perf_test', archive.getnames())
+            for name, data in preserved.items():
+                self.assertEqual(archive.extractfile(prefix + name).read(), data)
+            self.assertEqual(archive.extractfile('source/.pio/libdeps/example/JPEGDEC/tools/required-build-helper').read(), tool.read_bytes())
+        manifest = json.loads((self.args.output / 'firmware.json').read_text())
+        artifact = manifest['devices']['example_reader']['prebuilt']
+        self.assertEqual((self.args.output / artifact['bundled_path']).read_bytes(), self.binary.read_bytes())
+        licenses = json.loads((self.args.output / 'desktop/licenses/firmware/licenses.json').read_text())
+        self.assertIn(prefix + 'LICENSE', [entry['source'] for entry in licenses])
+
+    def test_macho_detection_checks_headers_and_commands_including_universal_images(self):
+        path = self.root / 'host-example'
+        for bits in (32, 64):
+            path.write_bytes(macho_fixture(bits))
+            self.assertTrue(assets.macho_executable(path))
+        image = macho_fixture()
+        header = struct.pack('>II5I', 0xcafebabe, 1, 0x0100000c, 0, 4096, len(image), 12)
+        path.write_bytes(header + bytes(4096 - len(header)) + image)
+        self.assertTrue(assets.macho_executable(path))
+        for ordinary in (image[:32], macho_fixture(kind=6),
+                         b'\xcf\xfa\xed\xfeordinary fixture data',
+                         b'\xca\xfe\xba\xbe\x00\x00\x00\x3dordinary Java fixture'):
+            path.write_bytes(ordinary)
+            self.assertFalse(assets.macho_executable(path))
 
     def test_unrecognized_build_override_is_preserved(self):
         override = self.source / 'platformio.local.ini'

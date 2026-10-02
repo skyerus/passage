@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import struct
 import subprocess
 import tarfile
 import tempfile
@@ -46,6 +47,68 @@ def add_file(archive, path, name):
         archive.addfile(info, stream)
 
 
+def macho_executable(path):
+    """Recognize executable headers/load commands, including universal images.
+
+    Magic bytes alone also occur in ordinary data and Java class files.
+    """
+    thin = {b'\xce\xfa\xed\xfe': ('<', 28), b'\xfe\xed\xfa\xce': ('>', 28),
+            b'\xcf\xfa\xed\xfe': ('<', 32), b'\xfe\xed\xfa\xcf': ('>', 32)}
+    fat = {b'\xca\xfe\xba\xbe': ('>', 20), b'\xbe\xba\xfe\xca': ('<', 20),
+           b'\xca\xfe\xba\xbf': ('>', 32), b'\xbf\xba\xfe\xca': ('<', 32)}
+    cpus = {7, 12, 18, 0x01000007, 0x0100000c, 0x01000012, 0x0200000c}
+    with path.open('rb') as stream:
+        length = path.stat().st_size
+        def executable(offset, size, expected_cpu=None):
+            stream.seek(offset)
+            magic = stream.read(4)
+            if magic not in thin:
+                return False
+            endian, header_size = thin[magic]
+            header = magic + stream.read(header_size - 4)
+            if len(header) != header_size or size < header_size:
+                return False
+            fields = struct.unpack(endian + 'I' * (header_size // 4), header)
+            cpu, kind, commands, command_bytes = fields[1], fields[3], fields[4], fields[5]
+            if (cpu not in cpus or expected_cpu not in (None, cpu) or kind != 2
+                    or not 0 < commands <= 32768 or not commands * 8 <= command_bytes <= size - header_size):
+                return False
+            cursor, segment, entry = offset + header_size, False, False
+            limit = cursor + command_bytes
+            for _ in range(commands):
+                stream.seek(cursor)
+                data = stream.read(8)
+                if len(data) != 8:
+                    return False
+                command, count = struct.unpack(endian + 'II', data)
+                if count < 8 or count % 4 or cursor + count > limit:
+                    return False
+                segment |= command == 1 and count >= 56 or command == 0x19 and count >= 72
+                entry |= command in (4, 5) and count >= 16 or command == 0x80000028 and count >= 24
+                cursor += count
+            return cursor == limit and segment and entry
+        magic = stream.read(4)
+        if magic in thin:
+            return executable(0, length)
+        if magic not in fat or length < 8:
+            return False
+        endian, entry_size = fat[magic]
+        count = struct.unpack(endian + 'I', stream.read(4))[0]
+        if not 0 < count <= 32 or 8 + count * entry_size > length:
+            return False
+        slices = []
+        for _ in range(count):
+            entry = struct.unpack(endian + ('IIQQII' if entry_size == 32 else 'IIIII'), stream.read(entry_size))
+            cpu, _, offset, size, alignment = entry[:5]
+            if (cpu not in cpus or offset < 8 + count * entry_size or size < 28
+                    or offset + size > length or alignment > 31 or offset % (1 << alignment)):
+                return False
+            slices.append((offset, size, cpu))
+        if any(left[0] + left[1] > right[0] for left, right in zip(sorted(slices), sorted(slices)[1:])):
+            return False
+        return all(executable(*entry) for entry in slices)
+
+
 def source_bundle(source, environments, core, destination, notice_dir):
     notice_files = []
     seen_notices = set()
@@ -78,7 +141,13 @@ def source_bundle(source, environments, core, destination, notice_dir):
             for path in sorted(dependencies.rglob('*')):
                 if not path.is_file() or path.is_symlink() or '.git' in path.parts:
                     continue
-                include(archive, path, f'source/.pio/libdeps/{environment}/' + path.relative_to(dependencies).as_posix())
+                relative = path.relative_to(dependencies)
+                # JPEGDEC ships a compiled macOS jpeg_perf_test inside its
+                # Linux examples. Keep corresponding source, build files and
+                # notices, without shipping this unrelated host executable.
+                if 'examples' in relative.parts[1:-1] and macho_executable(path):
+                    continue
+                include(archive, path, f'source/.pio/libdeps/{environment}/' + relative.as_posix())
         for package in ('framework-arduinoespressif32', 'framework-espidf', 'framework-arduinoespressif32-libs'):
             framework = core / 'packages' / package
             if not framework.is_dir():
