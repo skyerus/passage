@@ -54,7 +54,7 @@ class ProgressSetup:
         try:
             base = endpoint or f'http://127.0.0.1:{saved["port"]}'
             health = json.loads(setup.http(base + '/healthcheck', timeout=2, maximum=4096))
-            if health.get('service') != 'reader-bridge-progress': return False
+            if health.get('service') != 'reader-bridge-progress' or health.get('revision_guard') != 1: return False
             account = self.progress_account()
             result = json.loads(setup.http(base + '/users/auth', headers=progress_sync.auth_headers(account), timeout=2, maximum=4096))
             return result.get('username') == account['username']
@@ -69,12 +69,14 @@ class ProgressSetup:
             uploads = progress_sync.read_uploads(path)
         except (OSError,ValueError,sqlite3.Error,setup.SetupError):
             error = 'Saved reading positions could not be read. Your files are retained.'
+        if not error and saved.get('kindle') and saved['kindle'].get('guard_version') != 1:
+            error = 'Reconnect Kindle in Setup once to install protection against stale position uploads.'
         return {'enabled':bool(saved.get('enabled')), 'healthy':bool(saved.get('enabled')) and self.progress_authenticated(),
                 'endpoint':saved.get('endpoint',''), 'port':saved.get('port',8085),
                 'kindle_paired':bool(saved.get('kindle')) and saved['kindle'].get('endpoint') == saved.get('endpoint'),
                 'xteink_paired':bool(saved.get('xteink')) and saved['xteink'].get('endpoint') == saved.get('endpoint'),
                 'book_count':len(rows), 'uploads':uploads, 'error':error,
-                'verified':bool(saved.get('verified'))}
+                'verified':bool(saved.get('verified')) and saved.get('kindle',{}).get('guard_version') == 1}
 
     def start_progress(self, endpoint, port=None):
         self.stable_installation()
@@ -180,6 +182,20 @@ class ProgressSetup:
         mount = setup.guarded(Path(mount).expanduser())
         root = next((p for p in [mount/'koreader',mount/'.adds/koreader'] if (p/'reader.lua').is_file()),None)
         if not root: raise setup.SetupError('Connect your Kindle in USB drive mode with KOReader closed, then select its folder.')
+        try:
+            reader_settings = lua_settings.loads(setup.guarded(root/'settings.reader.lua').read_text())
+            device_id = reader_settings.get('device_id')
+            if not isinstance(device_id,str) or not device_id or len(device_id.encode()) > 256 or '\x00' in device_id:
+                raise ValueError('Missing device identity')
+            patch_engine = setup.guarded(root/'frontend/userpatch.lua').read_text()
+            if 'registerPatchPluginFunc' not in patch_engine or setup.guarded(root/'patches/.patches_disabled').exists():
+                raise ValueError('User patches unavailable')
+            plugin = setup.guarded(root/'plugins/kosync.koplugin/main.lua').read_text()
+            for method in ('getMetadata','updateProgress','getProgress','syncToProgress','_onCloseDocument','_onNetworkConnected'):
+                if 'function KOSync:'+method+'(' not in plugin:
+                    raise ValueError('Unsupported KOSync plugin')
+        except (OSError,ValueError) as exc:
+            raise setup.SetupError('Use a current KOReader version with Progress sync and user patches enabled. Open it once, then close it and reconnect USB. No reader settings have changed.') from exc
         path = setup.guarded(root/'settings/kosync.lua')
         old = path.read_bytes() if path.is_file() else None
         try: previous = lua_settings.loads(old.decode()) if old else {'settings':{}}
@@ -194,21 +210,27 @@ class ProgressSetup:
         settings.setdefault('auto_sync', True)
         settings.setdefault('sync_forward',1); settings.setdefault('sync_backward',1)
         updates = [(path,lua_settings.dumps(previous).encode())]
+        updates.append((setup.guarded(root/'settings/readerbridge-progress-config.lua'),
+                        lua_settings.dumps({'version':1,'endpoint':endpoint,'username':account['username']}).encode()))
+        for name in ('2-reader-bridge-progress.lua','readerbridge-api.json'):
+            updates.append((setup.guarded(root/'patches'/name),(setup.SOURCE/'koreader/patches'/name).read_bytes()))
         if queue_path: updates.append((queue_path,b'return {}\n'))
         originals = [(p,p.read_bytes() if p.is_file() else None) for p,_ in updates]
         try:
             for p,data in updates: self.install_file(p,data)
+            progress_sync.Store(self.progress_directory()/'positions.sqlite3').require_guard(device_id)
         except BaseException:
             for p,data in originals:
-                if data is not None:
-                    try: setup.atomic_write(p,data)
-                    except OSError: pass
+                try:
+                    if data is not None: setup.atomic_write(p,data)
+                    else: p.unlink(missing_ok=True)
+                except OSError: pass
             raise
         if old:
             source = lua_settings.loads(old.decode())['settings']
             if source.get('username') and source.get('username') != account['username']:
                 self.state['progress_sync']['migration_source'] = {'username':source['username'],'server':remote_base(source)}
-        self.state['progress_sync']['kindle'] = {'mount':str(mount),'endpoint':endpoint,'paired_at':datetime.now(timezone.utc).isoformat()}
+        self.state['progress_sync']['kindle'] = {'mount':str(mount),'endpoint':endpoint,'paired_at':datetime.now(timezone.utc).isoformat(),'guard_version':1}
         self.state['progress_sync']['verified'] = False
         self.save()
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Private, single-account KOSync-compatible service. No remote registration.
 
-Clients use their existing Progress sync feature. Last accepted upload wins,
-including intentional rereading; receipt timestamps are never creation dates.
+Clients use their existing Progress sync feature. Paired KOReader uploads use
+revision checks; explicit user pushes may replace any position, including rereading.
 """
 import argparse
 from contextlib import closing
@@ -18,9 +18,16 @@ import secrets
 import sqlite3
 import threading
 import time
+import uuid
 
 MAX_BODY = 64 * 1024
 DOCUMENT = re.compile(r'[a-fA-F0-9]{32}')
+
+
+class Conflict(Exception):
+    """A reader tried to replace a position it has not acknowledged."""
+    def __init__(self, current):
+        self.current = current
 
 
 def validate(value, saved=False):
@@ -51,6 +58,11 @@ def validate(value, saved=False):
         if type(timestamp) not in (int,float) or not math.isfinite(timestamp) or not 0 <= timestamp <= 253402300799:
             raise ValueError('Invalid receipt timestamp')
         result['timestamp'] = int(timestamp)
+        if 'reader_bridge_revision' in value:
+            revision = value['reader_bridge_revision']
+            if not isinstance(revision,str) or not DOCUMENT.fullmatch(revision):
+                raise ValueError('Invalid progress revision')
+            result['reader_bridge_revision'] = revision
     return result
 
 
@@ -62,7 +74,16 @@ class Store:
             con.executescript('''PRAGMA journal_mode=WAL;
                 CREATE TABLE IF NOT EXISTS positions(document TEXT PRIMARY KEY, payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS uploads(device_id TEXT PRIMARY KEY, device TEXT NOT NULL, received_at INTEGER NOT NULL, count INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS guarded_devices(device_id TEXT PRIMARY KEY);
             ''')
+            # Upgrade in place without changing saved positions or receipt times.
+            with con:
+                con.execute('BEGIN IMMEDIATE')
+                for document, payload in con.execute('SELECT document,payload FROM positions').fetchall():
+                    item = json.loads(payload)
+                    if not item.get('reader_bridge_revision'):
+                        item['reader_bridge_revision'] = uuid.uuid4().hex
+                        con.execute('UPDATE positions SET payload=? WHERE document=?',(json.dumps(item,ensure_ascii=False),document))
         os.chmod(self.path, 0o600)
 
     def connect(self):
@@ -73,15 +94,38 @@ class Store:
     def put(self, value):
         item = validate(value)
         item['timestamp'] = int(time.time())
+        control = value.get('metadata',{}).get('reader_bridge') if isinstance(value.get('metadata'),dict) else None
+        if control is not None:
+            if (not isinstance(control,dict) or type(control.get('version')) is not int or control['version'] != 1
+                    or not isinstance(control.get('base_revision'),str)
+                    or control['base_revision'] not in ('unknown','missing') and not DOCUMENT.fullmatch(control['base_revision'])
+                    or type(control.get('force',False)) is not bool):
+                raise ValueError('Invalid progress guard')
         with closing(self.connect()) as con, con:
             con.execute('BEGIN IMMEDIATE')
             old = con.execute('SELECT payload FROM positions WHERE document=?', (item['document'],)).fetchone()
+            old = json.loads(old[0]) if old else None
+            guarded = control is not None or con.execute('SELECT 1 FROM guarded_devices WHERE device_id=?',(item['device_id'],)).fetchone()
+            if guarded:
+                if old and old['progress'] == item['progress'] and old['percentage'] == item['percentage']:
+                    # An echo must not steal ownership or make an old position look new.
+                    return {'document':item['document'],'timestamp':old['timestamp'],
+                            'reader_bridge_revision':old['reader_bridge_revision']}
+                if control is None or (not control.get('force') and old and control['base_revision'] != old['reader_bridge_revision']):
+                    raise Conflict(old)
             if 'metadata' not in item and old:
-                metadata = json.loads(old[0]).get('metadata')
+                metadata = old.get('metadata')
                 if metadata: item['metadata'] = metadata
+            item['reader_bridge_revision'] = uuid.uuid4().hex
             con.execute('INSERT INTO positions VALUES(?,?) ON CONFLICT(document) DO UPDATE SET payload=excluded.payload', (item['document'], json.dumps(item, ensure_ascii=False)))
             con.execute('INSERT INTO uploads VALUES(?,?,?,1) ON CONFLICT(device_id) DO UPDATE SET device=excluded.device,received_at=excluded.received_at,count=count+1', (item['device_id'], item['device'], item['timestamp']))
-        return {'document':item['document'], 'timestamp':item['timestamp']}
+        return {'document':item['document'], 'timestamp':item['timestamp'], 'reader_bridge_revision':item['reader_bridge_revision']}
+
+    def require_guard(self, device_id):
+        if not isinstance(device_id,str) or not device_id or len(device_id.encode()) > 256 or '\x00' in device_id:
+            raise ValueError('Invalid guarded device')
+        with closing(self.connect()) as con, con:
+            con.execute('INSERT OR IGNORE INTO guarded_devices VALUES(?)',(device_id,))
 
     def seed(self, rows, newer=False):
         items = [validate(item, saved=True) for item in rows]
@@ -91,6 +135,8 @@ class Store:
             for item in items:
                 old = con.execute('SELECT payload FROM positions WHERE document=?',(item['document'],)).fetchone()
                 if old and (not newer or json.loads(old[0])['timestamp'] >= item['timestamp']): continue
+                # Restores and migrations invalidate tokens held by earlier clients.
+                item['reader_bridge_revision'] = uuid.uuid4().hex
                 con.execute('INSERT INTO positions VALUES(?,?) ON CONFLICT(document) DO UPDATE SET payload=excluded.payload',(item['document'],json.dumps(item,ensure_ascii=False)))
             return con.total_changes - before
 
@@ -173,7 +219,7 @@ def server(store, account, host, port):
             return all(len(self.headers.get_all(k,[])) == 1 and hmac.compare_digest(self.headers[k].encode(),expected[k].encode()) for k in ('x-auth-user','x-auth-key'))
         def do_GET(self):
             if self.path == '/healthcheck':
-                return self.reply(200, {'state':'OK', 'service':'reader-bridge-progress'})
+                return self.reply(200, {'state':'OK', 'service':'reader-bridge-progress', 'revision_guard':1})
             if not self.authenticated(): return self.reply(401, {'message':'Unauthorized','code':2001})
             if self.path == '/users/auth': return self.reply(200, {'username':account['username']})
             document = self.path.removeprefix('/syncs/progress/')
@@ -181,7 +227,7 @@ def server(store, account, host, port):
                 return self.reply(404, {'message':'Not found'})
             try: value = store.get(document)
             except (sqlite3.Error,OSError): return self.reply(503, {'message':'Storage unavailable; retry'})
-            self.reply(200 if value else 404, value or {'message':'No progress saved'})
+            self.reply(200 if value else 404, value or {'message':'No progress saved','reader_bridge_revision':'missing'})
         def do_POST(self):
             # The app provisions one private account locally; readers use Login.
             self.reply(403, {'message':'Pair this reader in Reader Bridge; account registration is disabled'})
@@ -197,6 +243,9 @@ def server(store, account, host, port):
                 raw = self.rfile.read(size)
                 if len(raw) != size: raise ValueError('Incomplete request')
                 value = store.put(json.loads(raw))
+            except Conflict as exc:
+                return self.reply(409, {'message':'A newer position is available. Pull it, or explicitly push this device to replace it.',
+                                        'reader_bridge_conflict':True, 'current':exc.current})
             except (ValueError,UnicodeError,OverflowError): return self.reply(400, {'message':'Invalid progress'})
             except (sqlite3.Error,OSError): return self.reply(503, {'message':'Storage unavailable; retry'})
             self.reply(200, value)

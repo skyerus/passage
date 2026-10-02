@@ -4,6 +4,7 @@ import http.client
 import json
 from pathlib import Path
 import tempfile
+import sqlite3
 import threading
 import unittest
 from unittest.mock import patch
@@ -84,6 +85,90 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(sync.credentials(self.root),self.account)
         self.assertEqual((self.root/'credentials.json').stat().st_mode & 0o777,0o600)
 
+    def guarded(self, revision, **changes):
+        return {**self.item, 'metadata':{'reader_bridge':{'version':1,'base_revision':revision}}, **changes}
+
+    def test_delayed_kindle_upload_cannot_replace_xteink_position(self):
+        self.store.require_guard(self.item['device_id'])
+        original=self.request('PUT','/syncs/progress',self.guarded('missing'))[1]
+        remote={**self.item,'progress':'xteink-new','percentage':.6,'device':'CrossPoint','device_id':'xteink'}
+        self.request('PUT','/syncs/progress',remote)
+        before=self.store.get(self.item['document'])
+        code,result=self.request('PUT','/syncs/progress',self.guarded(original['reader_bridge_revision']))
+        self.assertEqual(code,409);self.assertTrue(result['reader_bridge_conflict'])
+        self.assertEqual(self.store.get(self.item['document']),before)
+        self.assertEqual(result['current']['device'],'CrossPoint')
+        self.assertEqual(next(x for x in sync.read_uploads(self.store.path) if x['device']=='Kindle')['count'],1)
+
+    def test_old_queue_without_revision_is_blocked_after_pairing(self):
+        self.store.put(dict(self.item,progress='new',device='CrossPoint',device_id='xteink'))
+        self.store.require_guard(self.item['device_id'])
+        self.assertEqual(self.request('PUT','/syncs/progress',self.item)[0],409)
+        self.assertEqual(self.store.get(self.item['document'])['progress'],'new')
+
+    def test_fetch_does_not_authorize_an_unacknowledged_old_position(self):
+        revision=self.store.put(self.item)['reader_bridge_revision']
+        self.store.put(dict(self.item,progress='new',device='CrossPoint',device_id='xteink'))
+        self.request('GET','/syncs/progress/'+self.item['document'])
+        self.assertEqual(self.request('PUT','/syncs/progress',self.guarded(revision))[0],409)
+
+    def test_backward_reading_after_pull_and_explicit_force_are_allowed(self):
+        revision=self.store.put(self.item)['reader_bridge_revision']
+        earlier=self.guarded(revision, progress='rereading',percentage=.1)
+        self.assertEqual(self.request('PUT','/syncs/progress',earlier)[0],200)
+        self.assertEqual(self.store.get(self.item['document'])['percentage'],.1)
+        force=self.guarded('unknown',progress='intentional',percentage=.05)
+        force['metadata']['reader_bridge']['force']=True
+        self.assertEqual(self.request('PUT','/syncs/progress',force)[0],200)
+        self.assertEqual(self.store.get(self.item['document'])['progress'],'intentional')
+
+    def test_echo_retains_remote_device_timestamp_and_revision(self):
+        before={**self.item,'device':'CrossPoint','device_id':'xteink'}
+        self.store.put(before)
+        before=self.store.get(self.item['document'])
+        self.assertEqual(self.request('PUT','/syncs/progress',self.guarded('unknown'))[0],200)
+        self.assertEqual(self.store.get(self.item['document']),before)
+
+    def test_revision_and_device_guard_survive_restart_and_same_second_updates(self):
+        self.store.require_guard(self.item['device_id'])
+        with patch.object(sync.time,'time',return_value=100):
+            first=self.store.put(self.guarded('missing'))
+            second=self.store.put(self.guarded(first['reader_bridge_revision'],progress='next'))
+        self.assertNotEqual(first['reader_bridge_revision'],second['reader_bridge_revision'])
+        restarted=sync.Store(self.store.path)
+        self.assertEqual(restarted.get(self.item['document'])['reader_bridge_revision'],second['reader_bridge_revision'])
+        with self.assertRaises(sync.Conflict): restarted.put(self.item)
+        with self.assertRaises(sync.Conflict): restarted.put(self.guarded(first['reader_bridge_revision']))
+
+    def test_only_one_concurrent_update_can_use_a_revision(self):
+        revision=self.store.put(self.item)['reader_bridge_revision']
+        barrier=threading.Barrier(2);results=[]
+        def worker(position):
+            barrier.wait()
+            try: self.store.put(self.guarded(revision,progress=position));results.append('accepted')
+            except sync.Conflict: results.append('conflict')
+        threads=[threading.Thread(target=worker,args=(str(n),)) for n in range(2)]
+        for thread in threads:thread.start()
+        for thread in threads:thread.join()
+        self.assertCountEqual(results,['accepted','conflict'])
+
+    def test_legacy_database_upgrades_without_faking_uploads(self):
+        legacy=self.root/'legacy.sqlite3'
+        item={**self.item,'timestamp':123}
+        with sqlite3.connect(legacy) as con:
+            con.execute('CREATE TABLE positions(document TEXT PRIMARY KEY,payload TEXT NOT NULL)')
+            con.execute('INSERT INTO positions VALUES(?,?)',(self.item['document'],json.dumps(item)))
+        upgraded=sync.Store(legacy).get(self.item['document'])
+        self.assertEqual({k:v for k,v in upgraded.items() if k!='reader_bridge_revision'},item)
+        self.assertEqual(sync.read_uploads(legacy),[])
+
+    def test_invalid_guard_cannot_bypass_protection(self):
+        self.store.put(self.item);self.store.require_guard(self.item['device_id'])
+        for control in [[],{'version':1,'base_revision':None},{'version':True,'base_revision':'unknown'},
+                        {'version':1,'base_revision':'unknown','force':'true'}]:
+            item={**self.item,'progress':'invalid','metadata':{'reader_bridge':control}}
+            self.assertEqual(self.request('PUT','/syncs/progress',item)[0],400)
+
 
 class LuaSettingsTests(unittest.TestCase):
     def test_roundtrip_preserves_literal_settings_without_executing_code(self):
@@ -101,6 +186,10 @@ class PairingTests(unittest.TestCase):
         self.bridge.state['progress_sync']={'enabled':True,'port':8085,'endpoint':'http://192.168.1.20:8085'}
         self.account=sync.credentials(self.bridge.progress_directory())
         self.kind=self.root/'Kindle';self.kor=self.kind/'koreader';(self.kor/'settings').mkdir(parents=True);(self.kor/'reader.lua').write_text('fixture')
+        (self.kor/'settings.reader.lua').write_text(lua_settings.dumps({'device_id':'kindle-fixture'}))
+        (self.kor/'frontend').mkdir();(self.kor/'frontend/userpatch.lua').write_text('-- registerPatchPluginFunc fixture')
+        (self.kor/'plugins/kosync.koplugin').mkdir(parents=True)
+        (self.kor/'plugins/kosync.koplugin/main.lua').write_text('\n'.join('function KOSync:'+name+'() end' for name in ('getMetadata','updateProgress','getProgress','syncToProgress','_onCloseDocument','_onNetworkConnected')))
         self.path=self.kor/'settings/kosync.lua'
         self.original={'settings':{'username':'old','userkey':'old-hash','custom_server':'https://sync.crosspointreader.com','auto_sync':False,'checksum_method':0,'sync_forward':2,'unknown':'keep'}}
         self.path.write_text(lua_settings.dumps(self.original))
@@ -118,6 +207,17 @@ class PairingTests(unittest.TestCase):
         self.assertEqual(sync.read_archive(self.bridge.progress_directory()/'positions.sqlite3')[0]['timestamp'],100)
         self.assertEqual((self.kind/'fixture.epub').read_bytes(),b'epub fixture bytes')
         self.assertTrue(any(self.original['settings']['userkey'] in p.read_text() for p in (self.bridge.app/'backups').glob('*kosync.lua')))
+        self.assertTrue((self.kor/'patches/2-reader-bridge-progress.lua').is_file())
+        self.assertEqual(self.bridge.state['progress_sync']['kindle']['guard_version'],1)
+        with self.assertRaises(sync.Conflict):
+            sync.Store(self.bridge.progress_directory()/'positions.sqlite3').put(dict(self.item,device_id='kindle-fixture',progress='old'))
+
+    def test_disabled_patches_refuse_pairing_without_changing_settings(self):
+        (self.kor/'patches').mkdir();(self.kor/'patches/.patches_disabled').touch()
+        before=self.path.read_bytes()
+        with patch.object(self.bridge,'progress_authenticated',return_value=True):
+            with self.assertRaises(setup.SetupError):self.bridge.pair_progress_kindle(str(self.kind))
+        self.assertEqual(self.path.read_bytes(),before)
     def test_failed_old_server_leaves_reader_settings_unchanged(self):
         before=self.path.read_bytes()
         with patch.object(self.bridge,'progress_authenticated',return_value=True),patch.object(setup,'http',side_effect=OSError('offline')):

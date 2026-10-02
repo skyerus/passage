@@ -113,6 +113,11 @@ def main():
             kindle = root / 'kindle'
             (kindle / 'koreader/settings').mkdir(parents=True)
             (kindle / 'koreader/reader.lua').write_text('-- fixture\n')
+            (kindle / 'koreader/settings.reader.lua').write_text('return {device_id="fixture-kindle"}\n')
+            (kindle / 'koreader/frontend').mkdir()
+            (kindle / 'koreader/frontend/userpatch.lua').write_text('-- registerPatchPluginFunc fixture\n')
+            (kindle / 'koreader/plugins/kosync.koplugin').mkdir(parents=True)
+            (kindle / 'koreader/plugins/kosync.koplugin/main.lua').write_text('\n'.join('function KOSync:'+name+'() end' for name in ('getMetadata','updateProgress','getProgress','syncToProgress','_onCloseDocument','_onNetworkConnected')))
             queue = kindle / 'koreader/settings/sharedhighlights-queue.json'
             queue.write_text('{"fixture":"offline queue"}')
             invoke('pair_kindle', mount=str(kindle), endpoint=endpoint)
@@ -143,6 +148,18 @@ def main():
             invoke('pair_progress_xteink',mount=str(sd))
             progress = invoke('status')['local_progress']
             assert progress['kindle_paired'] and progress['xteink_paired'] and not progress['verified']
+            # Real HTTP replay against the installed, paired background service.
+            from urllib.error import HTTPError
+            stale = dict(position, progress='stale-kindle-position', device='Kindle', device_id='fixture-kindle',
+                         metadata={'reader_bridge':{'version':1,'base_revision':pulled['reader_bridge_revision']}})
+            try:
+                setup.http(base+'/syncs/progress',json.dumps(stale).encode(),method='PUT',headers=headers)
+                raise AssertionError('Stale paired upload was accepted')
+            except HTTPError as exc:
+                assert exc.code == 409
+            retained=json.loads(setup.http(base+'/syncs/progress/'+'a'*32,headers=headers))
+            assert retained['percentage'] == .2 and retained['device'] == 'CrossPoint'
+            assert (kindle/'koreader/patches/2-reader-bridge-progress.lua').read_bytes() == (bridge_source/'koreader/patches/2-reader-bridge-progress.lua').read_bytes()
             assert queue.read_text() == '{"fixture":"offline queue"}'
             assert json.loads((sd / '.crosspoint/highlight-sync.json').read_text())['token'] == token
             spec = __import__('plistlib').loads((agents / (labels['progress_sync']+'.plist')).read_bytes())

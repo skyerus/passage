@@ -72,7 +72,7 @@ struct ReadingProgressView: View {
             Divider()
             Label(progress?.kindlePaired == true ? "Kindle settings saved" : "1. Connect your Kindle", systemImage: progress?.kindlePaired == true ? "checkmark.circle" : "cable.connector")
                 .font(.headline)
-            Text("Close KOReader and connect by USB. Your existing sync positions are copied before the server changes.")
+            Text("Close KOReader and connect by USB. Installs protection against old uploads and preserves your saved places.")
                 .font(.callout).foregroundStyle(.secondary)
             HStack {
                 TextField("Kindle USB folder", text: $kindleMount).textFieldStyle(.roundedBorder)
