@@ -280,6 +280,122 @@ class DesktopTests(unittest.TestCase):
         with patch.object(desktop.subprocess, 'run', return_value=Mock(returncode=0, stdout=good)):
             self.bridge.assert_loaded_ownership('collector')
 
+    def test_upgrade_replaces_prior_app_runtime_for_owned_progress_and_backup(self):
+        previous = '/Applications/Reader Bridge.app/Contents/Resources/runtime/bin/python3.13'
+        current = '/Applications/Passage.app/Contents/Resources/runtime/bin/python3'
+        for kind in ('progress_sync', 'cloud_backup'):
+            with self.subTest(kind=kind):
+                directory = self.app / kind
+                script = 'progress_sync.py' if kind == 'progress_sync' else 'archive_backup.py'
+                tail = [str(directory / script), '--state-dir', str(directory)]
+                if kind == 'progress_sync':
+                    tail += ['--port', '8085']
+                path = self.bridge.agent_path(kind)
+                self.bridge.state[kind] = {'agent': str(path), 'port': 8085, 'enabled': True}
+                self.bridge.save()
+                setup.atomic_write(path, plistlib.dumps({
+                    'Label': setup.LABELS[kind], 'WorkingDirectory': str(directory),
+                    'ProgramArguments': [previous, *tail]}))
+                retained = directory / 'retained-private-data'
+                setup.atomic_write(retained, b'Private fixture retained through runtime upgrade')
+                loaded = True
+                def command(args, **kwargs):
+                    nonlocal loaded
+                    if args[1] == 'print':
+                        return Mock(returncode=0 if loaded else 113, stdout=(
+                            f'path = {path}\nprogram = {previous}\nworking directory = {directory}\n'))
+                    self.assertEqual(args[1], 'bootout')
+                    loaded = False
+                    return Mock(returncode=0)
+                with patch.object(desktop.sys, 'platform', 'darwin'), \
+                        patch.object(desktop.sys, 'executable', current), \
+                        patch.object(desktop.subprocess, 'run', side_effect=command) as commands, \
+                        patch.object(setup, 'run', return_value='') as install:
+                    self.bridge.launch(kind, [current, *tail], directory)
+                self.assertEqual(plistlib.loads(path.read_bytes())['ProgramArguments'], [current, *tail])
+                self.assertEqual(sum(call.args[0][1] == 'bootout' for call in commands.call_args_list), 1)
+                self.assertEqual(install.call_args_list[-1].args[0],
+                                 ['launchctl', 'bootstrap', f'gui/{os.getuid()}', str(path)])
+                self.assertEqual(retained.read_bytes(), b'Private fixture retained through runtime upgrade')
+                self.assertTrue(self.bridge.state[kind]['enabled'])
+
+    def test_runtime_upgrade_refuses_unknown_interpreters_and_changed_commands(self):
+        directory = self.app / 'progress_sync'
+        path = self.bridge.agent_path('progress_sync')
+        self.bridge.state['progress_sync'] = {'agent': str(path), 'port': 8085}
+        self.bridge.save()
+        tail = [str(directory / 'progress_sync.py'), '--state-dir', str(directory), '--port', '8085']
+        previous = '/Applications/Reader Bridge.app/Contents/Resources/runtime/bin/python3'
+        invalid = [
+            ['/fixture/arbitrary-python', *tail],
+            ['/Applications/Other.app/Contents/Resources/runtime/bin/python3', *tail],
+            ['Reader Bridge.app/Contents/Resources/runtime/bin/python3', *tail],
+            ['/Applications/Reader Bridge.app/Contents/Resources/runtime/bin/../bin/python3', *tail],
+            [previous, *tail, '--unexpected'],
+            [previous, str(directory / 'another.py'), *tail[1:]],
+            [previous, *tail[:-1], '9999'],
+        ]
+        for arguments in invalid:
+            with self.subTest(arguments=arguments):
+                setup.atomic_write(path, plistlib.dumps({
+                    'Label': setup.LABELS['progress_sync'], 'WorkingDirectory': str(directory),
+                    'ProgramArguments': arguments}))
+                with patch.object(desktop.subprocess, 'run', side_effect=AssertionError('must not stop')):
+                    with self.assertRaises(setup.SetupError):
+                        self.bridge.launch('progress_sync', [sys.executable, *tail], directory)
+                self.assertEqual(plistlib.loads(path.read_bytes())['ProgramArguments'], arguments)
+
+    def test_runtime_upgrade_refuses_loaded_identity_mismatch_before_removal(self):
+        previous = '/Applications/Reader Bridge.app/Contents/Resources/runtime/bin/python3'
+        for kind in ('progress_sync', 'cloud_backup'):
+            directory = self.app / kind
+            script = 'progress_sync.py' if kind == 'progress_sync' else 'archive_backup.py'
+            tail = [str(directory / script), '--state-dir', str(directory)]
+            if kind == 'progress_sync':
+                tail += ['--port', '8085']
+            path = self.bridge.agent_path(kind)
+            self.bridge.state[kind] = {'agent': str(path), 'port': 8085}
+            self.bridge.save()
+            content = plistlib.dumps({'Label': setup.LABELS[kind], 'WorkingDirectory': str(directory),
+                                      'ProgramArguments': [previous, *tail]})
+            setup.atomic_write(path, content)
+            good = f'path = {path}\nprogram = {previous}\nworking directory = {directory}\n'
+            mismatches = (good.replace(str(path), '/fixture/another.plist'),
+                          good.replace(previous, '/fixture/another-python'),
+                          good.replace(str(directory), '/fixture/another-directory'))
+            for response in mismatches:
+                with self.subTest(kind=kind, response=response), \
+                        patch.object(desktop.subprocess, 'run', return_value=Mock(returncode=0, stdout=response)) as commands, \
+                        patch.object(setup, 'run', side_effect=AssertionError('must not install')):
+                    with self.assertRaisesRegex(setup.SetupError, 'loaded service differs'):
+                        self.bridge.launch(kind, [sys.executable, *tail], directory)
+                self.assertEqual(commands.call_count, 1)
+                self.assertEqual(commands.call_args.args[0][1], 'print')
+                self.assertEqual(path.read_bytes(), content)
+
+    def test_runtime_upgrade_refuses_unverified_launchd_status(self):
+        directory = self.app / 'progress_sync'
+        path = self.bridge.agent_path('progress_sync')
+        self.bridge.state['progress_sync'] = {'agent': str(path), 'port': 8085}
+        self.bridge.save()
+        content = plistlib.dumps({
+            'Label': setup.LABELS['progress_sync'], 'WorkingDirectory': str(directory),
+            'ProgramArguments': ['/Applications/Reader Bridge.app/Contents/Resources/runtime/bin/python3',
+                                 str(directory / 'progress_sync.py'), '--state-dir', str(directory), '--port', '8085']})
+        setup.atomic_write(path, content)
+        for failure in (Mock(returncode=1), Mock(returncode=5), OSError('fixture failure'),
+                        subprocess.TimeoutExpired('launchctl', 5)):
+            with self.subTest(failure=failure), patch.object(desktop.subprocess, 'run') as commands:
+                if isinstance(failure, Exception):
+                    commands.side_effect = failure
+                else:
+                    commands.return_value = failure
+                with self.assertRaisesRegex(setup.SetupError, 'status could not be verified'):
+                    self.bridge.stop_owned('progress_sync')
+            self.assertEqual(commands.call_count, 1)
+            self.assertEqual(commands.call_args.args[0][1], 'print')
+            self.assertEqual(path.read_bytes(), content)
+
     def test_lock_prevents_lost_update_and_reloads_state(self):
         with desktop.mutation_lock(self.app):
             with self.assertRaises(setup.SetupError):
@@ -368,6 +484,14 @@ class DesktopTests(unittest.TestCase):
     def test_dmg_service_install_blocked(self):
         with patch.object(setup, 'SOURCE', Path('/Volumes/Reader Bridge/Reader Bridge.app/Contents/Resources/backend')):
             with self.assertRaises(setup.SetupError):
+                self.bridge.start_local(8084)
+        self.assertFalse(self.app.exists())
+
+    def test_translocated_app_cannot_install_background_services(self):
+        source = Path('/private/var/folders/fixture/T/AppTranslocation/fixture/d/Passage.app/Contents/Resources/bridge')
+        with patch.object(setup, 'SOURCE', source), \
+                patch.object(self.bridge, 'check_port', side_effect=AssertionError('must reject before inspecting services')):
+            with self.assertRaisesRegex(setup.SetupError, 'Applications'):
                 self.bridge.start_local(8084)
         self.assertFalse(self.app.exists())
 

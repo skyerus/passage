@@ -202,6 +202,21 @@ class Desktop(ProgressSetup, setup.Bridge):
         with self.inbox_connection(path) as con:
             return {row[0] for row in con.execute("SELECT DISTINCT source FROM inbox WHERE device NOT IN ('kindle-clippings-import', 'reader-bridge-archive-import')")}
 
+    @staticmethod
+    def owned_runtime(program):
+        if program == sys.executable:
+            return True
+        if not isinstance(program, str):
+            return False
+        path = Path(program)
+        # A renamed or replaced application may have removed this interpreter.
+        # Recognize only our shipped bundle layout; the saved command, state
+        # directory and launchd identity must still match before replacement.
+        return (path.is_absolute() and '..' not in path.parts and len(path.parts) >= 7
+                and path.parts[-6] in {'Reader Bridge.app', 'Passage.app'}
+                and path.parts[-5:-1] == ('Contents', 'Resources', 'runtime', 'bin')
+                and re.fullmatch(r'python3(?:\.\d+)?', path.name) is not None)
+
     def owned(self, kind):
         path = self.agent_path(kind)
         if not path.exists() or self.state.get(kind, {}).get('agent') != str(path):
@@ -214,8 +229,8 @@ class Desktop(ProgressSetup, setup.Bridge):
             return (spec.get('Label') == setup.LABELS[kind]
                     and spec.get('WorkingDirectory') == str(directory)
                     and isinstance(args, list) and len(args) >= 2
-                    and (args == [sys.executable, str(directory / 'archive_backup.py'), '--state-dir', str(directory)] if kind == 'cloud_backup'
-                         else args == [sys.executable, str(directory / 'progress_sync.py'), '--state-dir', str(directory), '--port', str(self.state[kind].get('port'))] if kind == 'progress_sync'
+                    and (self.owned_runtime(args[0]) and args[1:] == [str(directory / 'archive_backup.py'), '--state-dir', str(directory)] if kind == 'cloud_backup'
+                         else self.owned_runtime(args[0]) and args[1:] == [str(directory / 'progress_sync.py'), '--state-dir', str(directory), '--port', str(self.state[kind].get('port'))] if kind == 'progress_sync'
                          else str(directory / 'collector.py') in args if kind == 'collector'
                          else args[0] == str(directory / 'venv/bin/cps')))
         except (OSError, ValueError, plistlib.InvalidFileException):
@@ -226,8 +241,8 @@ class Desktop(ProgressSetup, setup.Bridge):
             raise setup.SetupError('An unowned or changed Reader Bridge service exists. Resolve it before installing or stopping this service.')
 
     def assert_loaded_ownership(self, kind):
-        loaded = subprocess.run(['launchctl', 'print', f'gui/{os.getuid()}/{setup.LABELS[kind]}'], capture_output=True, text=True, timeout=5)
-        if loaded.returncode != 0:
+        loaded = self.loaded_service(f'gui/{os.getuid()}/{setup.LABELS[kind]}')
+        if loaded.returncode == 113:
             return
         if not self.owned(kind):
             raise setup.SetupError('An unowned Reader Bridge service is already loaded. Existing services were left alone.')
@@ -307,8 +322,8 @@ class Desktop(ProgressSetup, setup.Bridge):
 
     @staticmethod
     def stable_installation():
-        if str(setup.SOURCE).startswith('/Volumes/'):
-            raise setup.SetupError('Move Reader Bridge to Applications and reopen it before installing background services.')
+        if str(setup.SOURCE).startswith('/Volumes/') or 'AppTranslocation' in setup.SOURCE.parts:
+            raise setup.SetupError('Move Passage to Applications and reopen it before installing background services.')
 
     def collector(self, *args, **kwargs):
         self.assert_managed_collector()
