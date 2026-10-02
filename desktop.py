@@ -269,7 +269,9 @@ class Desktop(ProgressSetup, setup.Bridge):
         if self.owned(kind) and self.state.get(kind, {}).get('port') == port:
             if kind == 'collector' and self.authenticated(port):
                 return
-            if kind == 'progress_sync' and self.progress_authenticated():
+            # An authenticated older service is ours to upgrade even when it
+            # does not yet support the current pairing protocol.
+            if kind == 'progress_sync' and self.progress_authenticated(require_guard=False):
                 return
             if kind == 'library' and self.library_listener_owned(port):
                 return

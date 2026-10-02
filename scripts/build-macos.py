@@ -89,7 +89,7 @@ def main():
             'CFBundleName': 'Reader Bridge', 'CFBundleDisplayName': 'Reader Bridge',
             'CFBundleIdentifier': 'com.readerbridge.desktop', 'CFBundleExecutable': 'ReaderBridge',
             'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.6.2',
-            'CFBundleVersion': '15', 'LSMinimumSystemVersion': '13.0',
+            'CFBundleVersion': '16', 'LSMinimumSystemVersion': '13.0',
             'CFBundleIconFile': 'ReaderBridge', 'NSHighResolutionCapable': True,
             'NSLocalNetworkUsageDescription': 'Reader Bridge pairs your readers and syncs their highlights and reading positions on your home network.',
             'NSRemovableVolumesUsageDescription': 'Reader Bridge installs its plugin and pairing settings on the reader you choose.',

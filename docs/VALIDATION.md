@@ -115,3 +115,11 @@ The packaged macOS smoke test also sends a stale update over real HTTP to
 its disposable paired background service and requires HTTP 409 with the
 Xteink location retained. Physical wake/reconnect confirmation remains a
 separate checkpoint after the new app and Kindle patch are installed.
+
+The local installation check also exposed an upgrade boundary: ownership checks
+must authenticate the previous service before requiring its new revision-guard
+capability. The local app replacement also waits for the stopped service
+port to be fully released before starting it again. Existing port guards
+continue to reject unknown listeners and ports reserved by another process.
+The packaged smoke test includes upgrading an owned service that advertises
+the older health contract before pairing the guarded reader.
