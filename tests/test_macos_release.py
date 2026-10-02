@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import plistlib
 import shutil
 import subprocess
 import tarfile
@@ -112,6 +113,7 @@ class FirmwareBundleTests(unittest.TestCase):
         self.write('passage-firmware-source.tar.gz', source.getvalue())
         self.receipt = {
             'schema_version': 1, 'source_commit': self.profile['commit'],
+            'build_succeeded': True, 'platformio': 'PlatformIO Core, version 6.2.0',
             'models': {self.profile['id']: self.artifact}, 'environments': [self.profile['environment']],
             'source_archive': {'filename': 'passage-firmware-source.tar.gz',
                                'sha256': hashlib.sha256(source.getvalue()).hexdigest(), 'size': len(source.getvalue())}}
@@ -137,6 +139,34 @@ class FirmwareBundleTests(unittest.TestCase):
     def test_changed_image_is_rejected_before_packaging(self):
         self.write(self.artifact['bundled_path'], self.image[:-1] + b'X')
         with self.assertRaisesRegex(ValueError, 'checksum'):
+            builder.firmware_bundle(self.bundle, self.root)
+
+    def test_unsuccessful_and_unpinned_build_receipts_are_rejected(self):
+        for value in (None, False, 1, 'true'):
+            with self.subTest(build_succeeded=value):
+                self.receipt['build_succeeded'] = value
+                if value is None:
+                    del self.receipt['build_succeeded']
+                self.flush_manifest()
+                with self.assertRaisesRegex(ValueError, 'successful build'):
+                    builder.firmware_bundle(self.bundle, self.root)
+        self.receipt['build_succeeded'] = True
+        for value in (None, '6.2.0', 'PlatformIO Core, version 6.1.18'):
+            with self.subTest(platformio=value):
+                self.receipt['platformio'] = value
+                if value is None:
+                    del self.receipt['platformio']
+                self.flush_manifest()
+                with self.assertRaisesRegex(ValueError, 'pinned PlatformIO'):
+                    builder.firmware_bundle(self.bundle, self.root)
+
+    def test_profile_toolchain_cannot_contradict_the_release_pin(self):
+        baseline = json.loads((self.root / 'firmware.json').read_text())
+        baseline['devices'][self.profile['id']]['platformio'] = '6.3.0'
+        (self.root / 'firmware.json').write_text(json.dumps(baseline))
+        self.profile['platformio'] = '6.3.0'
+        self.flush_manifest()
+        with self.assertRaisesRegex(ValueError, 'release PlatformIO pin'):
             builder.firmware_bundle(self.bundle, self.root)
 
     def test_corresponding_source_and_license_corruption_are_rejected(self):
@@ -204,6 +234,35 @@ class DistributionGateTests(unittest.TestCase):
         self.acceptance['checks']['progress_roundtrip'] = {'passed': True, 'evidence': 'Fixture in both directions'}
         self.assertEqual(release.validate_acceptance(self.candidate, self.acceptance), ['kindle', 'xteink_x4_pro'])
 
+    def test_finalization_cannot_remove_or_change_signed_source_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            artifact = root / 'Passage.dmg'
+            artifact.write_bytes(b'Synthetic download')
+            source = {'filename': 'passage-firmware-source.tar.gz', 'sha256': 'f' * 64, 'size': 123}
+            build = {key: self.candidate[key] for key in ('commit', 'version', 'architecture')}
+            build.update(source_dirty=False, distribution='release-candidate', firmware_source=source)
+            resources = root / 'Passage.app/Contents/Resources'
+            resources.mkdir(parents=True)
+            (resources / 'build.json').write_text(json.dumps(build))
+            candidate = copy.deepcopy(self.candidate)
+            candidate.update(schema_version=1, state='notarized-candidate', reader_profiles=release.profiles(build),
+                             artifact={'filename': artifact.name, 'sha256': release.digest(artifact)},
+                             automated_acceptance={**build, 'passed': True, 'scope': 'isolated-data-and-service-namespace'},
+                             notarization={'app': {'status': 'Accepted'}, 'dmg': {'status': 'Accepted'}})
+            path = root / 'release-candidate.json'
+            acceptance = root / 'acceptance.json'
+            acceptance.write_text(json.dumps(self.acceptance))
+            for changed in (None, {**source, 'filename': 'other-source.tar.gz'}):
+                with self.subTest(source=changed):
+                    candidate['firmware_source'] = changed
+                    path.write_text(json.dumps(candidate))
+                    with patch.object(release, 'assess') as assess:
+                        with self.assertRaisesRegex(ValueError, 'firmware source differs'):
+                            release.finalize(path, acceptance)
+                        assess.assert_not_called()
+                    self.assertFalse((root / 'release-manifest.json').exists())
+
     def test_accepted_zip_staples_the_app_and_rejected_notary_never_staples(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -218,6 +277,41 @@ class DistributionGateTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'did not accept'):
                     release.notarize(root / 'image.dmg', 'fixture-profile', root / 'rejected.json')
                 self.assertFalse(any('stapler' in call.args for call in commands.call_args_list))
+
+
+class SignatureGateTests(unittest.TestCase):
+    def setUp(self):
+        self.details = ('Authority=Developer ID Application: Fixture (TESTTEAM12)\n'
+                        'CodeDirectory v=20500 flags=0x10000(runtime)\n'
+                        'Timestamp=Oct 2, 2026 at 12:00:00\n'
+                        'TeamIdentifier=TESTTEAM12\nCDHash=' + 'a' * 40 + '\n')
+        self.entitlements = {}
+
+    def command(self, *args, **kwargs):
+        if '--entitlements' in args:
+            return subprocess.CompletedProcess(args, 0, stdout=plistlib.dumps(self.entitlements))
+        return subprocess.CompletedProcess(args, 0, stdout='', stderr=self.details)
+
+    def test_developer_id_runtime_timestamp_and_identity_are_recorded(self):
+        with patch.object(release, 'run', side_effect=self.command):
+            self.assertEqual(release.signature(Path('Passage.app')), {
+                'team_identifier': 'TESTTEAM12', 'cdhash': 'a' * 40,
+                'hardened_runtime': True, 'secure_timestamp': True})
+
+    def test_debug_entitlement_is_rejected(self):
+        self.entitlements['com.apple.security.get-task-allow'] = True
+        with patch.object(release, 'run', side_effect=self.command):
+            with self.assertRaisesRegex(ValueError, 'Debug entitlement'):
+                release.signature(Path('Passage.app'))
+
+    def test_incomplete_distribution_signatures_are_rejected(self):
+        original = self.details
+        for marker in ('Authority=Developer ID Application:', 'flags=0x10000(runtime)', 'Timestamp='):
+            with self.subTest(missing=marker):
+                self.details = original.replace(marker, 'missing=')
+                with patch.object(release, 'run', side_effect=self.command):
+                    with self.assertRaisesRegex(ValueError, 'App lacks Developer ID'):
+                        release.signature(Path('Passage.app'))
 
 
 if __name__ == '__main__':

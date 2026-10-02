@@ -155,6 +155,8 @@ def finalize(path, acceptance_path):
         raise ValueError('Finalization requires a clean committed release build')
     if candidate.get('reader_profiles') != profiles(build):
         raise ValueError('Candidate reader availability differs from the signed app')
+    if candidate.get('firmware_source') != build.get('firmware_source'):
+        raise ValueError('Candidate firmware source differs from the signed app')
     accepted = validate_acceptance(candidate, json.loads(acceptance_path.read_text()))
     assess(app, artifact)
     if signature(app) != candidate.get('signing'):

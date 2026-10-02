@@ -100,13 +100,20 @@ def firmware_bundle(bundle, root=ROOT):
         raise ValueError('Firmware bundle changes the release-owned device registry or source pins')
     receipt_file = bundle_file(bundle, 'firmware-build.json')
     receipt = json.loads(receipt_file.read_text())
-    if receipt.get('schema_version') != 1 or not isinstance(receipt.get('models'), dict):
+    if (not isinstance(receipt, dict) or receipt.get('schema_version') != 1
+            or not isinstance(receipt.get('models'), dict)):
         raise ValueError('Firmware build receipt is invalid')
+    if receipt.get('build_succeeded') is not True:
+        raise ValueError('Firmware receipt must record a successful build')
+    if receipt.get('platformio') != 'PlatformIO Core, version 6.2.0':
+        raise ValueError('Firmware receipt must use the pinned PlatformIO Core 6.2.0')
     files = {'firmware.json': manifest_file}
     bundled_models = set()
     for model, profile in devices.items():
         if profile.get('prebuilt') is None:
             continue
+        if profile.get('platformio') != '6.2.0':
+            raise ValueError('Firmware profile differs from the release PlatformIO pin')
         artifact = images.prebuilt_spec(profile)
         if not artifact.get('bundled_path'):
             raise ValueError('Generated firmware bundles must supply local application images')

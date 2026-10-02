@@ -25,7 +25,7 @@ Automated acceptance uses explicit disposable app/service directories, a test-on
 
 Generate a bundle using `scripts/build-firmware-assets.py` against the exact firmware source pin. The output includes a schema-2 `firmware.json`, application images under `desktop/firmware`, a build receipt, dependency licenses and notices under `desktop/licenses/firmware`, and `passage-firmware-source.tar.gz`.
 
-Pass `--firmware-bundle PATH` when packaging. The app builder compares the injected registry with the release-owned profiles, verifies each image's SHA-256, size and ESP processor header, and checks the receipt, declared license hashes, and corresponding-source hash. Only declared files are copied. Binaries need not be committed to Git. A bundle cannot change hardware routing or source pins.
+Pass `--firmware-bundle PATH` when packaging. The app builder compares the injected registry with the release-owned profiles, verifies each image's SHA-256, size and ESP processor header, and checks the receipt, declared license hashes, and corresponding-source hash. The receipt must confirm a successful build using the pinned PlatformIO Core 6.2.0. Only declared files are copied. Binaries need not be committed to Git. A bundle cannot change hardware routing or source pins.
 
 Firmware goes into `Contents/Resources/bridge/desktop/firmware`; dependency notices retain the matching relative paths. Corresponding source and its build receipt go into `Contents/Resources/firmware-source`. The release candidate also exports the source archive beside the disk image. Keep that archive and its checksum available with every distributed image. The inventory retains third-party terms; do not describe a top-level MIT license as clearing every dependency.
 
