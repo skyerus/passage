@@ -301,4 +301,21 @@ final class SetupFlowTests: XCTestCase {
         XCTAssertFalse(SetupInput.canPairXteink(collectorOnline: true, endpoint: "http://reader.local:8084", connectionValid: true, modelConfirmed: true, stageFirmware: prepare, installedFirmwareConfirmed: false, firmwareAvailable: device.firmwareAvailable))
     }
 
+    func testLegacyPositionGuardRepairCanReconnectWithoutClaimingSetupComplete() throws {
+        var saved = try status(online: true, kindle: true, xteink: true)
+        saved.localProgress = .init(enabled: true, healthy: true, endpoint: "http://reader.local:8085", port: 8085, kindlePaired: true, xteinkPaired: true, bookCount: 0, uploads: [], error: "Reconnect Kindle in Setup once to install protection against stale position uploads.", verified: false)
+        // The service is running; the reader still needs its guard installed.
+        XCTAssertTrue(SetupInput.canConnectReadingPositions(saved.localProgress))
+        XCTAssertFalse(SetupReadiness(status: saved, firmwareConfirmedByUser: true).progressConfigured)
+        XCTAssertEqual(SetupReadiness(status: saved, firmwareConfirmedByUser: true).recommendedStep, .progress)
+        saved.localProgress?.error = ""
+        XCTAssertTrue(SetupReadiness(status: saved, firmwareConfirmedByUser: true).progressConfigured)
+        saved.localProgress?.healthy = false
+        XCTAssertFalse(SetupInput.canConnectReadingPositions(saved.localProgress))
+        saved.localProgress?.healthy = true
+        saved.localProgress?.enabled = false
+        XCTAssertFalse(SetupInput.canConnectReadingPositions(saved.localProgress))
+        XCTAssertFalse(SetupInput.canConnectReadingPositions(nil))
+    }
+
 }

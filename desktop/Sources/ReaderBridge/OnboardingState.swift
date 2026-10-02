@@ -164,6 +164,11 @@ enum SetupInput {
         status.offersExistingSetup ? status.existingSetup?.healthy == true : status.service.healthy
     }
 
+    /// A healthy service can repair a reader's settings even when status asks for that repair.
+    static func canConnectReadingPositions(_ progress: BridgeStatus.LocalProgress?) -> Bool {
+        progress?.enabled == true && progress?.healthy == true
+    }
+
     static func shouldPrepareFirmware(requested: Bool, device: BridgeStatus.SupportedDevice?) -> Bool {
         requested && device?.capabilities.highlights == true && device?.firmwareAvailable == true
     }

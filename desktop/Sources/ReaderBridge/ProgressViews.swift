@@ -21,7 +21,8 @@ struct ReadingProgressView: View {
     @State private var deviceURL = ""
     @State private var useCard = false
     private var progress: BridgeStatus.LocalProgress? { status.localProgress }
-    private var ready: Bool { progress?.healthy == true && progress?.error.isEmpty == true }
+    private var canConnectReader: Bool { SetupInput.canConnectReadingPositions(progress) }
+    private var ready: Bool { canConnectReader && progress?.error.isEmpty == true }
 
     var body: some View {
         Card(title: "Reading positions") {
@@ -36,7 +37,7 @@ struct ReadingProgressView: View {
                     }
                 }
                 if let error = progress?.error, !error.isEmpty { Text(error).font(.caption).foregroundStyle(.orange) }
-                if !ready { startButton }
+                if !canConnectReader { startButton }
                 if pairing { pairingSteps }
                 else {
                     Text("\(progress?.bookCount ?? 0) saved positions")
@@ -99,7 +100,7 @@ struct ReadingProgressView: View {
                     Button("Choose…") { if let path = chooseFolder() { kindleMount = path } }
                     Button(progress?.kindlePaired == true ? "Reconnect Kindle" : "Connect Kindle") {
                         Task { await model.perform("pair_progress_kindle", ["mount": kindleMount], activity: "Copying positions and connecting Kindle…", success: "Kindle settings saved. Eject it and reopen KOReader.") }
-                    }.disabled(!ready || kindleMount.isEmpty)
+                    }.disabled(!canConnectReader || kindleMount.isEmpty)
                 }
             }
             if choice.includesCrossPoint {
@@ -120,7 +121,7 @@ struct ReadingProgressView: View {
                             parameters[useCard ? "mount" : "device_url"] = useCard ? xteinkMount : deviceURL
                             await model.perform("pair_progress_xteink", parameters, activity: "Connecting reader positions…", success: "Reader settings saved. Restart the reader to apply them.")
                         }
-                    }.disabled(!ready || selectedDevice?.pairingSupported != true || selectedDevice?.capabilities.progress != true || (useCard ? xteinkMount.isEmpty : !SetupInput.validLANAddress(deviceURL)))
+                    }.disabled(!canConnectReader || selectedDevice?.pairingSupported != true || selectedDevice?.capabilities.progress != true || (useCard ? xteinkMount.isEmpty : !SetupInput.validLANAddress(deviceURL)))
                 }
                 Toggle("Use its SD card instead", isOn: $useCard).font(.caption)
             }
