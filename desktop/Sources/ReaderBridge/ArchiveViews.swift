@@ -114,7 +114,7 @@ struct HighlightsView: View {
                 Menu {
                     Picker("Sort books", selection: $bookSort) {
                         ForEach(BookSort.allCases) { order in Text(order.label).tag(order) }
-                    }
+                    }.pickerStyle(.inline)
                 } label: {
                     Label(bookSort.label, systemImage: "arrow.up.arrow.down").font(.system(size: 11))
                 }
