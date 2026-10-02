@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a self-contained Reader Bridge.app; no Python required on the user's Mac."""
+"""Build a self-contained Passage.app; no Python required on the user's Mac."""
 import argparse
 import hashlib
 import json
@@ -55,7 +55,7 @@ def main():
     spec = manifest['architectures'][architecture]
     output = args.output.expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
-    app = output / 'Reader Bridge.app'
+    app = output / 'Passage.app'
     if app.exists():
         parser.error(f'{app} already exists. Choose a fresh --output directory to preserve the previous build.')
     cache = ROOT / '.build-cache'
@@ -89,13 +89,14 @@ def main():
             ROOT / 'scripts/make-icon.swift', '-o', icon_renderer)
         run(icon_renderer, resources / 'ReaderBridge.icns')
         info = {
-            'CFBundleName': 'Reader Bridge', 'CFBundleDisplayName': 'Reader Bridge',
+            'CFBundleName': 'Passage', 'CFBundleDisplayName': 'Passage',
+            # Keep the existing identity: settings, login items and reader pairing survive upgrades.
             'CFBundleIdentifier': 'com.readerbridge.desktop', 'CFBundleExecutable': 'ReaderBridge',
-            'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.6.5',
-            'CFBundleVersion': '19', 'LSMinimumSystemVersion': '13.0',
+            'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.6.6',
+            'CFBundleVersion': '20', 'LSMinimumSystemVersion': '13.0',
             'CFBundleIconFile': 'ReaderBridge', 'NSHighResolutionCapable': True,
-            'NSLocalNetworkUsageDescription': 'Reader Bridge pairs your readers and syncs their highlights and reading positions on your home network.',
-            'NSRemovableVolumesUsageDescription': 'Reader Bridge installs its plugin and pairing settings on the reader you choose.',
+            'NSLocalNetworkUsageDescription': 'Passage pairs your readers and syncs their highlights and reading positions on your home network.',
+            'NSRemovableVolumesUsageDescription': 'Passage installs its plugin and pairing settings on the reader you choose.',
         }
         (contents / 'Info.plist').write_bytes(plistlib.dumps(info))
         revision = run('git', '-C', ROOT, 'rev-parse', 'HEAD', capture_output=True, text=True).stdout.strip()
@@ -123,7 +124,7 @@ def main():
         run('codesign', '--verify', '--deep', '--strict', staging)
         staging.rename(app)
     if args.dmg:
-        dmg = output / f'Reader-Bridge-{info["CFBundleShortVersionString"]}-{architecture}.dmg'
+        dmg = output / f'Passage-{info["CFBundleShortVersionString"]}-{architecture}.dmg'
         if dmg.exists():
             parser.error('DMG destination exists; choose a fresh output directory')
         with tempfile.TemporaryDirectory(prefix='reader-bridge-dmg-') as directory:
@@ -131,8 +132,8 @@ def main():
             shutil.copytree(app, install / app.name, symlinks=True)
             (install / 'Applications').symlink_to('/Applications')
             distribution = 'This development build is not notarized for public distribution.\n' if args.sign_identity == '-' else 'See the release notes for notarization and compatibility status.\n'
-            (install / 'READ ME.txt').write_text('Drag Reader Bridge to Applications, then open it.\n' + distribution + 'Kindle jailbreaking and KOReader installation remain prerequisites.\n')
-            run('hdiutil', 'create', '-volname', 'Reader Bridge', '-srcfolder', install, '-format', 'UDZO', dmg)
+            (install / 'READ ME.txt').write_text('Drag Passage to Applications, then open it.\n' + distribution + 'Kindle jailbreaking and KOReader installation remain prerequisites.\n')
+            run('hdiutil', 'create', '-volname', 'Passage', '-srcfolder', install, '-format', 'UDZO', dmg)
         digest = hashlib.sha256(dmg.read_bytes()).hexdigest()
         dmg.with_suffix('.dmg.sha256').write_text(f'{digest}  {dmg.name}\n')
     print(f'Built {app}')

@@ -172,13 +172,13 @@ struct SetupView: View {
                     Text("Choose reader-bridge-x4-pro.bin in Settings → System → SD Card Firmware Update. Keep the reader powered on until it finishes.").font(.callout)
                 } else {
                     DeviceIllustration(guide: .xteinkLAN)
-                    Text("Shared highlights need Reader Bridge firmware. Open a book and check More → Sync Highlights.").foregroundStyle(.secondary)
+                    Text("Shared highlights need Passage firmware. Open a book and check More → Sync Highlights.").foregroundStyle(.secondary)
                 }
-                Button(status.xteink.firmwareStaged ? "I installed it and see Sync Highlights" : "Reader Bridge firmware is already installed") {
+                Button(status.xteink.firmwareStaged ? "I installed it and see Sync Highlights" : "Passage firmware is already installed") {
                     firmwareConfirmedReference = SetupInput.firmwareConfirmationReference(status)
                     showXteinkRepair = false
                 }.buttonStyle(.borderedProminent).disabled(model.busy)
-                Button("I need the Reader Bridge firmware") { firmware = true; modelConfirmed = false; showXteinkRepair = true }.disabled(model.busy)
+                Button("I need the Passage firmware") { firmware = true; modelConfirmed = false; showXteinkRepair = true }.disabled(model.busy)
                 firmwareHelp
             } else if status.xteink.paired && !showXteinkRepair {
                 DeviceIllustration(guide: .xteinkLAN)
@@ -203,8 +203,8 @@ struct SetupView: View {
                     if !deviceURL.isEmpty && !SetupInput.validLANAddress(deviceURL) { Text("Use the reader’s http:// LAN address, without a path.").font(.caption).foregroundStyle(.orange) }
                 }
                 Toggle("I checked: this device is an Xteink X4 Pro", isOn: $modelConfirmed).font(.callout)
-                Toggle("Build and stage Reader Bridge firmware", isOn: $firmware).font(.callout)
-                if !firmware { Toggle("Reader Bridge firmware is already installed", isOn: $installedFirmwareConfirmed).font(.callout) }
+                Toggle("Build and stage Passage firmware", isOn: $firmware).font(.callout)
+                if !firmware { Toggle("Passage firmware is already installed", isOn: $installedFirmwareConfirmed).font(.callout) }
                 if firmware { Text("Requires internet and several minutes. You’ll install the update on your reader.").font(.caption).foregroundStyle(.secondary) }
                 action(firmware ? "Build firmware & pair" : "Pair X4 Pro", "pair_xteink", xteinkParameters, firmware ? "Building and staging firmware… This can take several minutes." : "Pairing your X4 Pro…", disabled: !SetupInput.canPairXteink(collectorOnline: status.service.healthy, endpoint: selectedEndpoint, connectionValid: xteinkConnectionValid, modelConfirmed: modelConfirmed, stageFirmware: firmware, installedFirmwareConfirmed: installedFirmwareConfirmed), success: firmware ? "Firmware staged. Complete the update on your X4 Pro." : "Pairing saved. Leave File Transfer or eject the card.", resetFirmwareConfirmation: firmware)
                 firmwareHelp
@@ -232,7 +232,7 @@ struct SetupView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("CrossPoint must already start on an X4 Pro. Preserve its SD card and hidden .crosspoint folder. Building needs Git and downloaded build tools; staging does not flash the reader.").font(.callout).foregroundStyle(.secondary)
                 Link("CrossPoint installation", destination: URL(string: "https://crosspointreader.com/")!)
-                Link("Reader Bridge firmware instructions", destination: URL(string: "https://github.com/skyerus/reader-bridge/blob/main/docs/SETUP.md#xteink")!)
+                Link("Passage firmware instructions", destination: URL(string: "https://github.com/skyerus/reader-bridge/blob/main/docs/SETUP.md#xteink")!)
             }.padding(.top, 8)
         }.font(.callout)
     }

@@ -48,32 +48,16 @@ import AppKit
         context.fillPath()
         context.restoreGState()
 
-        context.saveGState()
         context.addPath(tile)
-        context.clip()
-        let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                  colors: [color(0.16, 0.36, 0.32), color(0.055, 0.19, 0.18)] as CFArray,
-                                  locations: [0, 1])!
-        context.drawLinearGradient(gradient, start: CGPoint(x: 190, y: 50),
-                                   end: CGPoint(x: 800, y: 950), options: [])
-        context.restoreGState()
+        context.setFillColor(color(23.0 / 255, 63.0 / 255, 56.0 / 255))
+        context.fillPath()
         context.addPath(tile)
-        context.setStrokeColor(CGColor(gray: 1, alpha: 0.12))
+        context.setStrokeColor(CGColor(gray: 1, alpha: 0.10))
         context.setLineWidth(2)
         context.strokePath()
 
-        context.saveGState()
-        context.setShadow(offset: CGSize(width: 0, height: 4), blur: 5,
-                          color: CGColor(gray: 0, alpha: 0.13))
-        context.addPath(BrandMarkGeometry.page)
-        context.setFillColor(color(0.96, 0.93, 0.85))
-        context.fillPath()
-        context.addPath(BrandMarkGeometry.otherPage)
-        context.setFillColor(color(1.0, 0.98, 0.92))
-        context.fillPath()
-        context.restoreGState()
-        context.addPath(BrandMarkGeometry.bookmark)
-        context.setFillColor(color(0.88, 0.68, 0.36))
+        context.addPath(BrandMarkGeometry.mark)
+        context.setFillColor(color(245.0 / 255, 240.0 / 255, 227.0 / 255))
         context.fillPath()
 
         NSGraphicsContext.restoreGraphicsState()

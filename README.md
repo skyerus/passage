@@ -1,14 +1,18 @@
-# Reader Bridge: Kindle and Xteink highlight sync
+# Passage: Kindle and Xteink highlight sync
+
+<img src="docs/images/passage-icon.png" alt="Passage open-book icon" width="96">
+
+Formerly Reader Bridge. The repository URL, archive formats, and existing reader connections remain compatible.
 
 Collect highlights from **KOReader on a Kindle** and **CrossPoint on an Xteink X4 Pro** in one personal archive. Set up reading-progress sync between the readers, import existing Kindle highlights, and optionally serve the same EPUB books to both devices from your Mac.
 
-Reader Bridge is an open-source macOS setup wizard for this workflow. It brings together the reader plugins, custom CrossPoint firmware, local highlight collector, and device instructions. **Shared highlights means one quote collection; it does not copy highlight underlines into the book on the other reader.**
+Passage is an open-source macOS setup wizard for this workflow. It brings together the reader plugins, custom CrossPoint firmware, local highlight collector, and device instructions. **Shared highlights means one quote collection; it does not copy highlight underlines into the book on the other reader.**
 
 [Setup guide](docs/SETUP.md) · [Download the release](https://github.com/skyerus/reader-bridge/releases/latest) · [Common questions](#common-questions) · [Compatibility](#compatibility)
 
-**Native Mac app in development:** Reader Bridge includes a SwiftUI app with guided device pairing and a searchable local highlight archive with book covers. Browse by book with covers sent automatically by the updated readers, or choose artwork from an EPUB or image. **iCloud Drive is the recommended backup option on Mac**; another folder or optional GitHub backup also works. The build bundles Python, so basic setup needs no Terminal, Python installation or GitHub account. See [build and use the Mac app](docs/MAC-APP.md). The existing v0.1.0 release is the command-line setup; a notarized public app installer is not available yet.
+**Native Mac app in development:** Passage includes a SwiftUI app with guided device pairing and a searchable local highlight archive with book covers. Browse by book with covers sent automatically by the updated readers, or choose artwork from an EPUB or image. **iCloud Drive is the recommended backup option on Mac**; another folder or optional GitHub backup also works. The build bundles Python, so basic setup needs no Terminal, Python installation or GitHub account. See [build and use the Mac app](docs/MAC-APP.md). The existing v0.1.0 release is the command-line setup; a notarized public app installer is not available yet.
 
-![Reader Bridge book library with offline covers and highlights](docs/images/mac-books-dark.png)
+![Passage book library with offline covers and highlights](docs/images/mac-books-dark.png)
 
 The Mac app offers one-step-at-a-time setup, visual device guides, and a local archive. [See setup screenshots and instructions](docs/MAC-APP.md).
 
@@ -18,25 +22,25 @@ You have a Kindle, a collection of highlighted passages, and a new Xteink X4 Pro
 
 Getting there takes several separate pieces: a supported Kindle jailbreak, KOReader, CrossPoint, a shared reading-progress account, a way to collect highlights from both readers, and identical book files. Each piece has its own installation, credentials, menus, and restart steps. An existing Amazon highlight collection also needs an import path.
 
-Reader Bridge packages that setup into a guided, resumable workflow. The wizard installs and pairs the components it can control, preserves queued highlights and credentials when rerun, and gives you the on-device steps for the parts that need a tap, eject, or restart. The Mac services start after login, so you do not need to keep a Terminal window open.
+Passage packages that setup into a guided, resumable workflow. The wizard installs and pairs the components it can control, preserves queued highlights and credentials when rerun, and gives you the on-device steps for the parts that need a tap, eject, or restart. The Mac services start after login, so you do not need to keep a Terminal window open.
 
-## What Reader Bridge does
+## What Passage does
 
 | What you want | How it works |
 | --- | --- |
 | Keep Kindle and Xteink highlights together | KOReader highlights and CrossPoint clippings upload automatically to a local collector. Add iCloud Drive, a backup folder or GitHub for another copy. Offline changes wait for a connection. |
 | Continue reading on the other device | The Mac app hosts a private KOReader-compatible position service and connects both readers. KOReader can sync automatically; Xteink uses manual **Upload Local** and **Apply Remote** actions. |
-| Bring your existing Kindle highlights | Import `My Clippings.txt` or Kindle highlights JSON in the Mac app, preserving recorded dates and cover links without an Amazon login in Reader Bridge. |
+| Bring your existing Kindle highlights | Import `My Clippings.txt` or Kindle highlights JSON in the Mac app, preserving recorded dates and cover links without an Amazon login in Passage. |
 | Browse the books behind your quotes | A visual book library with offline covers automatically sent by updated readers; portable exports include the artwork. |
 | Highlight across pages on the X4 Pro | Custom CrossPoint firmware keeps a selection active when you drag to a page edge, within the current chapter. |
 | Download the same EPUB to both readers | Optional Calibre-Web setup provides a local OPDS book catalog, preserving the downloaded EPUB bytes needed for binary progress matching. |
 | Run it from your Mac | Highlight sync, position sync and the optional library run after login. Your Mac needs to be awake and reachable for those services; downloaded books remain readable offline. |
 
-Progress sync uses the existing KOReader/CrossPoint client capabilities with a service included in the Mac app. Reader Bridge adds the setup workflow, shared-highlight collection, KOReader plugin, and custom CrossPoint highlighting and upload behavior. It does not replace Amazon's stock reader or automatically migrate DRM-protected books.
+Progress sync uses the existing KOReader/CrossPoint client capabilities with a service included in the Mac app. Passage adds the setup workflow, shared-highlight collection, KOReader plugin, and custom CrossPoint highlighting and upload behavior. It does not replace Amazon's stock reader or automatically migrate DRM-protected books.
 
 ## Prerequisite: jailbreak your Kindle and install KOReader
 
-**Your Kindle must already be jailbroken and able to open books in KOReader before setting up Reader Bridge.** Reader Bridge does not jailbreak your Kindle.
+**Your Kindle must already be jailbroken and able to open books in KOReader before setting up Passage.** Passage does not jailbreak your Kindle.
 
 1. Read the [KindleModding jailbreak guide](https://kindlemodding.org/jailbreaking/), then use [Find My Jailbreak](https://kindlemodding.org/kindle-models) to check your exact Kindle model and firmware version.
 2. Follow the method the wizard recommends, including its post-jailbreak steps. If no supported method is available for your device, stop here.
@@ -79,7 +83,7 @@ python3 setup.py status
 
 Run the wizard again to resume skipped steps. Each component also has a subcommand; use `python3 setup.py COMMAND --help`. The wizard never erases books, factory-resets readers, or flashes a Kindle.
 
-Reader Bridge keeps local data under `~/Library/Application Support/Reader Bridge`. Highlight sync and the optional library use ports 8084 and 8083; the Mac app's position service normally uses 8085. Occupied ports are checked. Its own LaunchAgents include `com.readerbridge.collector`, `com.readerbridge.progress` and `com.readerbridge.library`. An asleep Mac cannot receive uploads; devices retain their local reading data.
+Passage keeps local data under `~/Library/Application Support/Reader Bridge`. Highlight sync and the optional library use ports 8084 and 8083; the Mac app's position service normally uses 8085. Occupied ports are checked. Its own LaunchAgents include `com.readerbridge.collector`, `com.readerbridge.progress` and `com.readerbridge.library`. An asleep Mac cannot receive uploads; devices retain their local reading data.
 
 ```sh
 python3 setup.py uninstall
@@ -106,7 +110,7 @@ Yes, when you read in KOReader on the Kindle and use the custom CrossPoint firmw
 
 ### Can KOReader and CrossPoint sync reading progress?
 
-Yes. In the Mac app, enable **Settings → Reading positions → Use Reader Bridge for positions**, then connect each reader in Setup. Use the exact same EPUB file on both readers. See [local progress setup](docs/PROGRESS-SYNC.md). KOReader supports automatic progress sync. On Xteink, use **Upload Local** before switching away and **Apply Remote** when returning. The [progress setup instructions](docs/SETUP.md#6-connect-reading-progress) include a test in both directions.
+Yes. In the Mac app, enable **Settings → Reading positions → Use Passage for positions**, then connect each reader in Setup. Use the exact same EPUB file on both readers. See [local progress setup](docs/PROGRESS-SYNC.md). KOReader supports automatic progress sync. On Xteink, use **Upload Local** before switching away and **Apply Remote** when returning. The [progress setup instructions](docs/SETUP.md#6-connect-reading-progress) include a test in both directions.
 
 ### Does this use Amazon Whispersync?
 
@@ -118,7 +122,7 @@ No. The shared archive contains the passages you saved on either reader. Each re
 
 ### Do I need a hosted server or a Readwise account?
 
-You can run the highlight collector and optional EPUB library on your Mac without renting a server. Reader Bridge does not require Readwise or GitHub for the Mac app. Choose iCloud Drive or another folder for automatic snapshots; GitHub remains optional. The Mac app includes its own reading-position service; readers connect through their existing KOReader-compatible sync settings. The Mac-hosted services are unavailable while the Mac is asleep or shut down.
+You can run the highlight collector and optional EPUB library on your Mac without renting a server. Passage does not require Readwise or GitHub for the Mac app. Choose iCloud Drive or another folder for automatic snapshots; GitHub remains optional. The Mac app includes its own reading-position service; readers connect through their existing KOReader-compatible sync settings. The Mac-hosted services are unavailable while the Mac is asleep or shut down.
 
 ### Can one script jailbreak my Kindle and install everything?
 
@@ -126,7 +130,7 @@ The wizard automates Mac setup, plugin pairing, and building and transferring th
 
 ### Can I read my Amazon purchases in this setup?
 
-KOReader and CrossPoint need supported, DRM-free book files for this EPUB workflow. Reader Bridge does not download Amazon purchases, remove DRM, or include books. Importing old Kindle highlights transfers the exported quote text, not the purchased ebook.
+KOReader and CrossPoint need supported, DRM-free book files for this EPUB workflow. Passage does not download Amazon purchases, remove DRM, or include books. Importing old Kindle highlights transfers the exported quote text, not the purchased ebook.
 
 ## Privacy and limits
 
@@ -151,4 +155,4 @@ python3 -m unittest discover -s tests -v
 for test in koreader/sharedhighlights.koplugin/tests/*_test.lua; do lua5.1 "$test"; done
 ```
 
-Tests use temporary files and mocked external commands; collector HTTP tests bind localhost. They never install live services, create a GitHub repository or modify a device. Reader Bridge's original code is MIT licensed; external applications retain their own licenses.
+Tests use temporary files and mocked external commands; collector HTTP tests bind localhost. They never install live services, create a GitHub repository or modify a device. Passage's original code is MIT licensed; external applications retain their own licenses.
