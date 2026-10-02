@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 MACHO = {b'\xcf\xfa\xed\xfe', b'\xce\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xfe\xed\xfa\xce', b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca'}
@@ -173,24 +174,43 @@ def validate_identity(identity, keychain=None):
 
 
 def create_dmg(app, dmg, *, development=True):
-    if dmg.exists():
+    if dmg.exists() or dmg.is_symlink():
         raise ValueError('Disk image destination already exists; choose a fresh output directory')
-    with tempfile.TemporaryDirectory(prefix='passage-dmg-') as directory:
-        install = Path(directory)
-        shutil.copytree(app, install / app.name, symlinks=True)
-        (install / 'Applications').symlink_to('/Applications')
-        warning = 'Development build: not notarized for public distribution.\n' if development else ''
-        source_note = ('Firmware source: Passage.app/Contents/Resources/firmware-source/.\n'
-                       'Firmware notices: Passage.app/Contents/Resources/bridge/desktop/licenses/firmware/.\n'
-                       if (app / 'Contents/Resources/firmware-source').is_dir() else
-                       'This package does not include application firmware images.\n')
-        (install / 'READ ME.txt').write_text(
-            'Drag Passage to Applications, eject this disk image, then open Passage.\n'
-            + warning + 'Choose the reader you use; a second reader is optional.\n'
-            'Kindle requires a supported jailbreak and working KOReader.\n'
-            'Xteink requires CrossPoint and the matching Passage firmware.\n'
-            'See the included setup guide before changing reader software.\n' + source_note)
-        run('hdiutil', 'create', '-volname', 'Passage', '-srcfolder', install, '-format', 'UDZO', dmg)
+    for attempt in range(3):
+        with tempfile.TemporaryDirectory(prefix='passage-dmg-', dir=dmg.parent) as directory:
+            staging = Path(directory)
+            install = staging / 'install'
+            install.mkdir()
+            image = staging / 'image.dmg'
+            shutil.copytree(app, install / app.name, symlinks=True)
+            (install / 'Applications').symlink_to('/Applications')
+            warning = 'Development build: not notarized for public distribution.\n' if development else ''
+            source_note = ('Firmware source: Passage.app/Contents/Resources/firmware-source/.\n'
+                           'Firmware notices: Passage.app/Contents/Resources/bridge/desktop/licenses/firmware/.\n'
+                           if (app / 'Contents/Resources/firmware-source').is_dir() else
+                           'This package does not include application firmware images.\n')
+            (install / 'READ ME.txt').write_text(
+                'Drag Passage to Applications, eject this disk image, then open Passage.\n'
+                + warning + 'Choose the reader you use; a second reader is optional.\n'
+                'Kindle requires a supported jailbreak and working KOReader.\n'
+                'Xteink requires CrossPoint and the matching Passage firmware.\n'
+                'See the included setup guide before changing reader software.\n' + source_note)
+            try:
+                run('hdiutil', 'create', '-volname', 'Passage', '-srcfolder', install, '-format', 'UDZO', image,
+                    capture_output=True, text=True)
+            except subprocess.CalledProcessError as error:
+                diagnostic = error.stderr or ''
+                if isinstance(diagnostic, bytes):
+                    diagnostic = diagnostic.decode('utf-8', errors='replace')
+                if (attempt == 2 or not re.search(r'^hdiutil: create failed - Resource busy\s*$', diagnostic, re.MULTILINE)):
+                    raise
+            else:
+                # A hard link publishes the completed image without replacing a
+                # deliverable that appeared while hdiutil was running.
+                os.link(image, dmg)
+                return
+        print('Disk image resource busy; retrying with fresh staging…', flush=True)
+        time.sleep(2 * (attempt + 1))
 
 
 def runtime(cache, spec):

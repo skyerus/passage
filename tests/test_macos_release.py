@@ -76,6 +76,102 @@ class PackageBoundaryTests(unittest.TestCase):
                 builder.release_settings(root)
 
 
+class DiskImageCreationTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.app = self.root / 'Passage.app'
+        self.app.mkdir()
+        (self.app / 'fixture.txt').write_text('Synthetic application fixture')
+        self.dmg = self.root / 'Passage.dmg'
+        self.images = []
+        self.installs = []
+
+    def image_command(self, args):
+        self.assertEqual(args[:2], ('hdiutil', 'create'))
+        image = args[-1]
+        self.assertNotEqual(image, self.dmg)
+        self.images.append(image)
+        self.installs.append(args[args.index('-srcfolder') + 1])
+        image.write_bytes(b'Synthetic image')
+        return image
+
+    def test_resource_busy_retries_three_times_with_fresh_staging_then_publishes(self):
+        def transient(*args, **kwargs):
+            self.image_command(args)
+            if len(self.images) < 3:
+                raise subprocess.CalledProcessError(1, args, stderr='hdiutil: create failed - Resource busy\n')
+            return subprocess.CompletedProcess(args, 0)
+        with patch.object(builder, 'run', side_effect=transient) as commands, \
+                patch.object(builder.time, 'sleep') as sleep, patch('builtins.print'):
+            builder.create_dmg(self.app, self.dmg)
+        self.assertEqual(commands.call_count, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4])
+        self.assertEqual(len(set(self.images)), 3)
+        self.assertEqual(len(set(self.installs)), 3)
+        self.assertTrue(all(not path.parent.exists() for path in self.images))
+        self.assertEqual(self.dmg.read_bytes(), b'Synthetic image')
+
+    def test_resource_busy_is_bounded_and_leaves_no_partial_deliverable(self):
+        def busy(*args, **kwargs):
+            self.image_command(args)
+            raise subprocess.CalledProcessError(1, args, stderr=b'hdiutil: create failed - Resource busy\n')
+        with patch.object(builder, 'run', side_effect=busy) as commands, \
+                patch.object(builder.time, 'sleep') as sleep, patch('builtins.print'):
+            with self.assertRaises(subprocess.CalledProcessError):
+                builder.create_dmg(self.app, self.dmg)
+        self.assertEqual(commands.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+        self.assertTrue(all(not path.parent.exists() for path in self.images))
+        self.assertFalse(self.dmg.exists())
+
+    def test_other_failures_propagate_without_retry(self):
+        for diagnostic in ('hdiutil: create failed - Permission denied\n',
+                           'another-tool: Resource busy\n', 'hdiutil: create failed - No space left on device\n'):
+            with self.subTest(diagnostic=diagnostic):
+                error = subprocess.CalledProcessError(1, ['hdiutil'], stderr=diagnostic)
+                def failed(*args, **kwargs):
+                    self.image_command(args)
+                    raise error
+                with patch.object(builder, 'run', side_effect=failed) as commands, patch.object(builder.time, 'sleep') as sleep:
+                    with self.assertRaises(subprocess.CalledProcessError) as raised:
+                        builder.create_dmg(self.app, self.dmg)
+                self.assertIs(raised.exception, error)
+                self.assertEqual(commands.call_count, 1)
+                sleep.assert_not_called()
+                self.assertFalse(self.dmg.exists())
+        self.assertTrue(all(not path.parent.exists() for path in self.images))
+
+    def test_existing_deliverable_or_symlink_is_never_replaced(self):
+        self.dmg.write_bytes(b'Existing deliverable')
+        with patch.object(builder, 'run') as commands:
+            with self.assertRaisesRegex(ValueError, 'already exists'):
+                builder.create_dmg(self.app, self.dmg)
+            commands.assert_not_called()
+        self.assertEqual(self.dmg.read_bytes(), b'Existing deliverable')
+        self.dmg.unlink()
+        self.dmg.symlink_to(self.root / 'missing-image')
+        with patch.object(builder, 'run') as commands:
+            with self.assertRaisesRegex(ValueError, 'already exists'):
+                builder.create_dmg(self.app, self.dmg)
+            commands.assert_not_called()
+        self.assertTrue(self.dmg.is_symlink())
+
+    def test_deliverable_created_during_hdiutil_is_preserved(self):
+        def racing(*args, **kwargs):
+            self.image_command(args)
+            self.dmg.write_bytes(b'Concurrent deliverable')
+            return subprocess.CompletedProcess(args, 0)
+        with patch.object(builder, 'run', side_effect=racing) as commands, patch.object(builder.time, 'sleep') as sleep:
+            with self.assertRaises(FileExistsError):
+                builder.create_dmg(self.app, self.dmg)
+        self.assertEqual(commands.call_count, 1)
+        sleep.assert_not_called()
+        self.assertEqual(self.dmg.read_bytes(), b'Concurrent deliverable')
+        self.assertTrue(all(not path.parent.exists() for path in self.images))
+
+
 class FirmwareBundleTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
