@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Setup and troubleshooting
+    url: https://github.com/skyerus/reader-bridge/blob/main/SUPPORT.md
+    about: Start here for installation, missing highlights, and connection problems.
+  - name: Report a security vulnerability privately
+    url: https://github.com/skyerus/reader-bridge/security/advisories/new
+    about: Keep vulnerability details and private data out of public issues.

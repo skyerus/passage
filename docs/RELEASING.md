@@ -69,6 +69,8 @@ Run finalization on a maintainer Mac using the downloaded candidate artifacts: k
 
 ## Publish only the verified scope
 
-Retain the candidate evidence, accepted notary logs, clean-Mac report and final manifest. Publish the unchanged disk image, its final checksum, the matching firmware source archive/checksum, and the redacted release manifest. State which architecture, macOS versions and reader models were physically tested, and whether position sync passed. Keep candidate/development downloads distinct. Once assets are published, update the README and first-install guide's download-status paragraphs and independently check the public download and its digest.
+A signed, notarized candidate may be published as a GitHub **Pre-release** while the separate clean-Mac and exact-artifact physical tests remain open. Publish its unchanged disk image/checksum, matching firmware source archive/checksum, and redacted `release-candidate.json` with `ready: false`. Name the tag as a release candidate and state the tested architecture, automated evidence, prior integration models, and outstanding acceptance work. A compiled profile must not be described as physically accepted. Never publish an ad-hoc development package through this path.
+
+For stable promotion, retain the candidate evidence, accepted notary logs, clean-Mac report and final manifest. Publish the unchanged disk image, its final checksum, the matching firmware source archive/checksum, and the redacted distribution-ready release manifest. State which architecture, macOS versions and reader models were physically tested, and whether position sync passed. Keep candidate/development downloads distinct. Once assets are published, update the README and first-install guide's download links and independently check the public download and its digest.
 
 Do not label a source ZIP, private upload, signed-only package, or isolated namespace test as a finished Mac release.
