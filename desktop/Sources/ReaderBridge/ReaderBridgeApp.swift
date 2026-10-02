@@ -15,7 +15,8 @@ import AppKit
         MenuBarExtra {
             MenuContent().environmentObject(model)
         } label: {
-            Image(systemName: model.error == nil && model.status?.service.healthy == true ? "book.closed.fill" : "book.closed")
+            Image(nsImage: model.error == nil && model.status?.service.healthy == true ? BrandMenuIcon.ready : BrandMenuIcon.offline)
+                .accessibilityLabel("Reader Bridge: \(model.serviceLabel)")
         }
     }
 }
@@ -132,8 +133,7 @@ struct BridgeSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 13) {
-                Image(systemName: "books.vertical").font(.system(size: 27, weight: .light)).foregroundStyle(teal)
-                    .accessibilityHidden(true)
+                BrandMark().frame(width: 48, height: 29)
                 Text("Reader Bridge").font(.system(size: 22, weight: .medium, design: .serif))
             }.padding(.horizontal, 15).padding(.top, 25).padding(.bottom, 32)
             VStack(spacing: 5) {
