@@ -11,10 +11,13 @@ if not sys.dont_write_bytecode:
     raise SystemExit('Run the packaged interpreter with -B to preserve the app signature.')
 
 import base64
+import ctypes
 import json
 import os
 from pathlib import Path
 import socket
+import sqlite3
+import ssl
 import subprocess
 import tempfile
 import time
@@ -25,6 +28,20 @@ def main():
     app = Path(sys.argv[1]).resolve()
     subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
     bridge_source = app / 'Contents/Resources/bridge'
+    assert Path(sys.executable).resolve().is_relative_to(app / 'Contents/Resources/runtime')
+    assert ssl.OPENSSL_VERSION and ctypes.sizeof(ctypes.c_void_p) in (4, 8)
+    native_database = sqlite3.connect(':memory:')
+    try:
+        assert native_database.execute('SELECT 1').fetchone() == (1,)
+    finally:
+        native_database.close()
+    forbidden = {'git', 'gh', 'pip', 'pip3', 'pio', 'platformio', 'swift', 'swiftc', 'xcrun', 'xcodebuild', 'clang', 'make'}
+    def reject_developer_process(event, args):
+        if event == 'subprocess.Popen':
+            executable = Path(args[0])
+            if executable.name in forbidden or (executable.name.startswith('python') and executable.resolve() != Path(sys.executable).resolve()):
+                raise RuntimeError('Basic packaged acceptance attempted to use a developer tool')
+    sys.addaudithook(reject_developer_process)
     sys.path.insert(0, str(bridge_source))
     import desktop
     import setup
@@ -48,6 +65,21 @@ def main():
             spec = __import__('plistlib').loads((agents / (labels['collector'] + '.plist')).read_bytes())
             assert spec['RunAtLoad'] and spec['KeepAlive']
             assert spec['ProgramArguments'][0] == sys.executable
+            # The system helper is in the app; a host Python is never selected.
+            assert Path(spec['ProgramArguments'][0]).resolve().is_relative_to(app / 'Contents/Resources/runtime')
+            again = invoke('start_collector', port=port)
+            assert again['service']['healthy']
+            assert (data / 'collector/data/token').read_text().strip() == token
+            with socket.socket() as occupied:
+                occupied.bind(('0.0.0.0', 0))
+                occupied.listen()
+                try:
+                    invoke('start_collector', port=occupied.getsockname()[1])
+                    raise AssertionError('An unrelated occupied port was accepted')
+                except setup.SetupError:
+                    pass
+            assert invoke('status')['service']['healthy']
+            assert (data / 'collector/data/token').read_text().strip() == token
             sample = {'id': 'one', 'book_title': 'Acceptance Fixture', 'author': 'Reader Bridge', 'text': 'A test passage that belongs only to the temporary acceptance archive.'}
             def upload(source, record):
                 body = json.dumps({'source': source, 'device_id': 'acceptance-' + source, 'highlights': [record]}).encode()
@@ -68,7 +100,7 @@ def main():
             assert invoke('status', query='temporary acceptance')['highlights_matches'] == 1
             # Relaunch through launchd, then verify both the token and inbox survive.
             subprocess.run(['launchctl', 'kickstart', '-k', f'gui/{os.getuid()}/{labels["collector"]}'], check=True)
-            for _ in range(40):
+            for _ in range(120):
                 if invoke('status')['service']['healthy']:
                     break
                 time.sleep(.25)
@@ -93,12 +125,12 @@ def main():
             upload('koreader', sample)
             assert invoke('status')['highlight_count'] == 0
             subprocess.run(['launchctl', 'kickstart', '-k', f'gui/{os.getuid()}/{labels["cloud_backup"]}'], check=True)
-            for _ in range(40):
+            for _ in range(120):
                 receipt = json.loads((data / 'cloud_backup/receipt.json').read_text())
                 if receipt.get('digest') != first_receipt['digest']:
                     break
                 time.sleep(.25)
-            assert receipt['digest'] != first_receipt['digest']
+            assert receipt['digest'] != first_receipt['digest'], 'Restarted backup worker did not save a changed archive within 30 seconds'
             assert Path(first_receipt['path']).is_file()
             invoke('restore_backup', path=first_receipt['path'])
             assert invoke('status')['highlight_count'] == 0, 'Old backups must not resurrect deleted quotes'
@@ -123,9 +155,28 @@ def main():
             invoke('pair_kindle', mount=str(kindle), endpoint=endpoint)
             assert queue.read_text() == '{"fixture":"offline queue"}'
             assert (kindle / 'koreader/plugins/sharedhighlights.koplugin/cover.lua').read_bytes() == (bridge_source / 'koreader/sharedhighlights.koplugin/cover.lua').read_bytes()
+            # Exercise every actual bundled image through the desktop command,
+            # with developer tools unavailable and only disposable SD volumes.
+            # Source-only CI builds have no images; report that scope explicitly.
+            import device_profiles
+            staged_models = []
+            for model, profile in device_profiles.registry().items():
+                artifact = profile.get('prebuilt') or {}
+                if not artifact.get('bundled_path'):
+                    continue
+                volume = root / 'firmware-fixtures' / model
+                (volume / '.crosspoint').mkdir(parents=True)
+                staged = invoke('pair_xteink', mount=str(volume), endpoint=endpoint,
+                                firmware=True, model_confirmed=True, model=model)
+                assert staged['xteink']['model'] == model and staged['xteink']['firmware_staged']
+                assert (volume / profile['filename']).read_bytes() == (bridge_source / artifact['bundled_path']).read_bytes()
+                assert json.loads((volume / '.crosspoint/passage-device.json').read_text())['model'] == model
+                assert json.loads((volume / '.crosspoint/highlight-sync.json').read_text())['token'] == token
+                staged_models.append(model)
+            print('Bundled firmware staged on disposable volumes: ' + (', '.join(staged_models) or 'none in this build'))
             sd = root / 'sd'
             (sd / '.crosspoint').mkdir(parents=True)
-            invoke('pair_xteink', mount=str(sd), endpoint=endpoint, firmware=False, model_confirmed=True)
+            invoke('pair_xteink', mount=str(sd), endpoint=endpoint, firmware=False, model_confirmed=True, model='xteink_x4_pro')
             assert json.loads((sd / '.crosspoint/highlight-sync.json').read_text())['token'] == token
             # The app provisions a private KOSync service independently of the
             # highlight collector, including for legacy collector installations.
@@ -138,7 +189,7 @@ def main():
             installed_service.write_text(installed_service.read_text().replace(", 'revision_guard':1",''))
             subprocess.run(['launchctl','kickstart','-k',f'gui/{os.getuid()}/{labels["progress_sync"]}'],check=True)
             probe=desktop.Desktop(data,agent_dir=agents)
-            for _ in range(40):
+            for _ in range(120):
                 if probe.progress_authenticated(require_guard=False) and not probe.progress_authenticated():break
                 time.sleep(.25)
             assert probe.progress_authenticated(require_guard=False) and not probe.progress_authenticated()
@@ -155,7 +206,7 @@ def main():
             setup.http(base+'/syncs/progress',json.dumps(position).encode(),method='PUT',headers=headers)
             assert json.loads(setup.http(base+'/syncs/progress/'+'a'*32,headers=headers))['percentage'] == .2
             invoke('pair_progress_kindle',mount=str(kindle))
-            invoke('pair_progress_xteink',mount=str(sd))
+            invoke('pair_progress_xteink',mount=str(sd),model='xteink_x4_pro')
             progress = invoke('status')['local_progress']
             assert progress['kindle_paired'] and progress['xteink_paired'] and not progress['verified']
             # Real HTTP replay against the installed, paired background service.
@@ -175,7 +226,7 @@ def main():
             spec = __import__('plistlib').loads((agents / (labels['progress_sync']+'.plist')).read_bytes())
             assert spec['RunAtLoad'] and spec['KeepAlive']
             subprocess.run(['launchctl','kickstart','-k',f'gui/{os.getuid()}/{labels["progress_sync"]}'],check=True)
-            for _ in range(40):
+            for _ in range(120):
                 if invoke('status')['local_progress']['healthy']: break
                 time.sleep(.25)
             assert invoke('status')['local_progress']['healthy']
@@ -202,4 +253,14 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    fixture_home = os.environ.get('PASSAGE_ACCEPTANCE_HOME')
+    if fixture_home:
+        # Test-only lookup substitution. Never repurpose the user's HOME.
+        from unittest.mock import patch
+        fixture = Path(fixture_home).resolve()
+        if not fixture.is_dir() or fixture.is_symlink():
+            raise SystemExit('Invalid disposable acceptance home')
+        with patch.object(Path, 'home', return_value=fixture):
+            main()
+    else:
+        main()

@@ -238,10 +238,65 @@ class PairingTests(unittest.TestCase):
         card=self.root/'card';(card/'.crosspoint').mkdir(parents=True)
         config=card/'.crosspoint/koreader.json';config.write_text(json.dumps({'password_obf':'old','syncBehavior':0,'extra':'keep'}))
         highlights=card/'.crosspoint/highlight-sync.json';highlights.write_text('unchanged highlight token')
-        with patch.object(self.bridge,'progress_authenticated',return_value=True):self.bridge.pair_progress_xteink(mount=str(card))
+        with patch.object(self.bridge,'progress_authenticated',return_value=True):self.bridge.pair_progress_xteink(mount=str(card),model='xteink_x4_pro')
         value=json.loads(config.read_text());self.assertEqual(value['syncBehavior'],0);self.assertEqual(value['extra'],'keep')
         self.assertNotIn('password_obf',value);self.assertEqual(value['password'],self.account['password']);self.assertEqual(value['matchMethod'],1)
         self.assertEqual(highlights.read_text(),'unchanged highlight token')
+
+    def test_crosspoint_only_positions_pair_without_kindle(self):
+        card=self.root/'card';(card/'.crosspoint').mkdir(parents=True)
+        with patch.object(self.bridge,'progress_authenticated',return_value=True):
+            self.bridge.pair_progress_xteink(mount=str(card),model='xteink_x4')
+            status=self.bridge.progress_status()
+            self.assertTrue(status['xteink_paired'])
+            self.assertFalse(status['kindle_paired'])
+            self.assertEqual(status['xteink_model'],'xteink_x4')
+            self.bridge.mutate('verify_local_progress', {'verified':True})
+            self.assertTrue(self.bridge.progress_status()['verified'])
+        self.assertEqual(json.loads((card/'.crosspoint/koreader.json').read_text())['serverUrl'],self.bridge.state['progress_sync']['endpoint'])
+
+    def test_progress_model_must_match_highlight_reader(self):
+        self.bridge.state['xteink']={'paired':True} # historical X4 Pro
+        card=self.root/'card';(card/'.crosspoint').mkdir(parents=True)
+        with patch.object(self.bridge,'progress_authenticated',return_value=True):
+            with self.assertRaisesRegex(setup.SetupError,'same model'):
+                self.bridge.pair_progress_xteink(mount=str(card),model='xteink_x4')
+        self.assertFalse((card/'.crosspoint/koreader.json').exists())
+
+    def test_crosspoint_only_existing_remote_account_is_preserved(self):
+        card=self.root/'card';(card/'.crosspoint').mkdir(parents=True)
+        config=card/'.crosspoint/koreader.json'
+        original=json.dumps({'cfgVersion':2,'username':'previous','password_obf':'private','serverUrl':'https://sync.crosspointreader.com'})
+        config.write_text(original)
+        with patch.object(self.bridge,'progress_authenticated',return_value=True):
+            with self.assertRaisesRegex(setup.SetupError,'Choose Finish setup for now') as error:
+                self.bridge.pair_progress_xteink(mount=str(card),model='xteink_x4')
+        self.assertNotIn('Kindle',str(error.exception))
+        self.assertNotIn('private',str(error.exception))
+        self.assertEqual(config.read_text(),original)
+        self.assertNotIn('xteink',self.bridge.state['progress_sync'])
+
+    def test_same_username_on_another_server_does_not_silently_switch(self):
+        card=self.root/'card';(card/'.crosspoint').mkdir(parents=True)
+        config=card/'.crosspoint/koreader.json'
+        original=json.dumps({'cfgVersion':2,'username':self.account['username'],'password_obf':'private','serverUrl':'https://sync.crosspointreader.com'})
+        config.write_text(original)
+        with patch.object(self.bridge,'progress_authenticated',return_value=True):
+            with self.assertRaisesRegex(setup.SetupError,'Choose Finish setup for now'):
+                self.bridge.pair_progress_xteink(mount=str(card),model='xteink_x4')
+        self.assertEqual(config.read_text(),original)
+        self.assertNotIn('xteink',self.bridge.state['progress_sync'])
+
+    def test_same_local_account_repair_preserves_reader_preferences(self):
+        card=self.root/'card';(card/'.crosspoint').mkdir(parents=True)
+        config=card/'.crosspoint/koreader.json'
+        config.write_text(json.dumps({'cfgVersion':2,'username':self.account['username'],'password_obf':'reader-obfuscation',
+                                     'serverUrl':self.bridge.state['progress_sync']['endpoint'],'syncBehavior':1,'extra':'keep'}))
+        with patch.object(self.bridge,'progress_authenticated',return_value=True),patch.object(setup,'http',side_effect=AssertionError('No remote migration on repair')):
+            self.bridge.pair_progress_xteink(mount=str(card),model='xteink_x4')
+        value=json.loads(config.read_text())
+        self.assertEqual(value['extra'],'keep');self.assertEqual(value['syncBehavior'],1)
+        self.assertEqual(value['password'],self.account['password'])
 
     def test_different_xteink_account_cannot_silently_lose_its_remote_positions(self):
         self.bridge.state['progress_sync']['kindle']={'endpoint':self.bridge.state['progress_sync']['endpoint']}
@@ -251,7 +306,7 @@ class PairingTests(unittest.TestCase):
         original=json.dumps({'cfgVersion':2,'username':'different-account','password_obf':'private','serverUrl':'https://sync.crosspointreader.com'})
         config.write_text(original)
         with patch.object(self.bridge,'progress_authenticated',return_value=True):
-            with self.assertRaises(setup.SetupError):self.bridge.pair_progress_xteink(mount=str(card))
+            with self.assertRaises(setup.SetupError):self.bridge.pair_progress_xteink(mount=str(card),model='xteink_x4_pro')
         self.assertEqual(config.read_text(),original)
 
     def test_filename_matching_migrates_to_matching_binary_ids(self):

@@ -5,7 +5,7 @@ Checked 2026-09-29. Links below were opened directly; do not use third-party mir
 | Primary source | Supports |
 | --- | --- |
 | https://kindlemodding.org/jailbreaking/ | Read first; jailbreak method varies, live wizard, method-specific update prevention and post-jailbreak work. |
-| https://kindlemodding.org/kindle-models | Exact model/variant/firmware gate. No universal Paperwhite jailbreak recommendation. |
+| https://kindlemodding.org/jailbreak-wizard.html | Exact model/variant/firmware gate. No universal Paperwhite jailbreak recommendation. |
 | https://kindlemodding.org/jailbreaking/jailbreak-faq.html | If incompatible, wait; stock downgrading is not a general workaround. |
 | https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices | Current KPM, manual/scriptlet, KUALA and legacy paths. KPM only when supported by that jailbreak; kindlehf >=5.16.3. Exit KOReader before USB storage. EPUB supported, DRM/KFX unsupported. |
 | https://github.com/koreader/koreader/releases | Upstream packages; select device/firmware variant per guide, not merely newest filename. |

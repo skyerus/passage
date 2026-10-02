@@ -12,11 +12,10 @@ Upstream was rechecked on 2026-09-29: the firmware source includes CrossPoint's 
 
 ## Automatic cover delivery candidate (2026-10-01)
 
-The automatic-cover implementation is available in development builds. Physical
-first-highlight and original-colour delivery passed on both readers; offline
-device recovery checks and a new firmware source pin remain pending. It is not included in
-the old firmware revision currently recorded in `firmware.json`; do not publish
-an app release until that pin and the device acceptance are complete.
+At this checkpoint, physical first-highlight and original-colour delivery passed
+on both readers, while the installer still referenced an older firmware pin.
+The 0.7.0 candidate now pins the cover-capable source described below. Fresh
+installation and offline device recovery remain separate acceptance checks.
 
 Verified in isolated fixtures: 102 Python tests, 25 Swift tests, seven Lua suites,
 and the packaged app's real launchd/HTTP smoke test. Tests cover first-highlight
@@ -47,8 +46,8 @@ from the Mac's archive. Observe the source-tagged quote and its embedded artwork
 in Reader Bridge, without desktop artwork import or manual Sync. Repeat an
 offline/restart/reconnect case, and confirm another highlight does not resend
 the acknowledged cover. Preserve device settings and offline queues during
-installation. Only after these checks should the tested firmware commit replace
-the old source pin and the final installer be rebuilt.
+installation. Record these results against the exact firmware commit and app
+artifact being released; a successful source build is separate evidence.
 
 ## Combined Mac app with iCloud backup (2026-10-01)
 
@@ -83,9 +82,9 @@ same account and positions, startup configuration, fixture pairing with retained
 highlight queues, version 2 snapshots, safe restore and shutdown with retained
 data. Native Settings layout and the new position controls were inspected in
 the development build. These tests do not establish a physical Kindle/Xteink
-round trip, an actual Mac reboot, or measured battery usage. The physical
-two-reader checkpoint in `PROGRESS-SYNC.md` remains required before confirming
-setup. The firmware and notarization release gates above remain unchanged.
+round trip, an actual Mac reboot, or measured battery usage. Those were separate
+acceptance checks at this checkpoint. Current onboarding does not require users
+to carry out a test script or enable the optional reading-position service.
 
 ## Stale position protection (0.6.2, 2026-10-02)
 
@@ -123,3 +122,29 @@ port to be fully released before starting it again. Existing port guards
 continue to reject unknown listeners and ports reserved by another process.
 The packaged smoke test includes upgrading an owned service that advertises
 the older health contract before pairing the guarded reader.
+
+## Single-reader installer candidate (0.7.0, 2026-10-02)
+
+Native onboarding was inspected with disposable app data for Kindle-only,
+CrossPoint-only and combined selection. Kindle-only setup reached completion
+with reading positions deferred. Prerequisite guides remain in the relevant
+reader step; a second reader can be added later.
+
+The candidate pins CrossPoint source
+`d03f6e6a2afbdbdf99d35fcb91d35a847166f514`, including the cover and highlight
+changes. All five build environments completed with PlatformIO 6.1.19,
+producing verified images for six profiles: Xteink X3, X4, X4 Pro, X4 Classic,
+Sticky and M5Stack Paper Mono. Source, dependency notices and image checksums
+are packaged with the firmware. Compilation does not establish physical
+acceptance on all six models.
+
+Packaged acceptance stages every included image through the desktop pairing
+command onto disposable SD-card folders, with developer commands unavailable.
+Its report lists the models actually exercised; source-only CI packages have
+an empty staging list. Device flashing remains a separate physical action.
+
+The Test workflow checks the Python and KOReader suites and builds and exercises
+the packaged app on Apple Silicon and Intel. A development disk image is not a
+consumer release. Developer ID signing, accepted Apple notarization, a clean-Mac
+walkthrough and exact-artifact physical-reader evidence are required by the
+[release process](RELEASING.md) before publishing a supported installer.

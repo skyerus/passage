@@ -1,4 +1,6 @@
-# Set up Reader Bridge on a Mac
+# Advanced command-line setup
+
+For the native app's download and first-reader setup, use [Passage for Mac](MAC-APP.md). This guide covers the legacy command-line wizard and optional services. It requires Python 3.10 or later and GitHub CLI authenticated with your own account; explicit firmware source builds also require Git and downloaded build tools.
 
 Reader Bridge collects Kindle KOReader highlights and Xteink CrossPoint clippings in your own archive. It can also help connect both readers to a home book library and the same reading-progress account.
 
@@ -22,7 +24,7 @@ Back up the readers before modifying them. Include the Kindle's `koreader` direc
 
 Skip installation if KOReader already opens and reads your EPUB.
 
-1. In Kindle **Settings → Device options → Device info**, record the exact model and firmware. Follow the [KindleModding introduction](https://kindlemodding.org/jailbreaking/), then its [Find My Jailbreak wizard](https://kindlemodding.org/kindle-models). Complete its compatibility questions and the method it selects, including its post-jailbreak and update-blocking steps. **Stop if it reports no supported method.** Reader Bridge does not jailbreak or downgrade a Kindle.
+1. In Kindle **Settings → Device options → Device info**, record the exact model and firmware. Follow the [KindleModding introduction](https://kindlemodding.org/jailbreaking/), then its [Find My Jailbreak wizard](https://kindlemodding.org/jailbreak-wizard.html). Complete its compatibility questions and the method it selects, including its post-jailbreak and update-blocking steps. **Stop if it reports no supported method.** Reader Bridge does not jailbreak or downgrade a Kindle.
 2. Follow the matching path in the [official KOReader Kindle installation guide](https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices). Modern jailbreaks may provide KPM. When the guide confirms KPM applies, enter these commands separately in the Kindle search bar, waiting for each to finish:
 
    ```text
@@ -36,11 +38,11 @@ Skip installation if KOReader already opens and reads your EPUB.
 
 **Checkpoint:** KOReader launches and reads the EPUB. The stock Kindle reader is not the reading app used by this bridge. KOReader does not read DRM-protected books or KFX. Exit KOReader before connecting its USB storage.
 
-## 2. Prepare the Xteink X4 Pro
+## 2. Prepare a CrossPoint reader
 
-If CrossPoint is not installed, start with the [official CrossPoint site](https://crosspointreader.com/) and its device-specific installation instructions. Select **X4 Pro**, not X4 or X3. Stop if the installer does not explicitly support your model.
+If CrossPoint is not installed, start with the [official CrossPoint site](https://crosspointreader.com/) and its [device picker](https://updates.crosspointreader.com/). Select your exact hardware model. Stop if the installer does not explicitly support it.
 
-**Checkpoint:** The device is confirmed as an X4 Pro, CrossPoint starts, and it can open your EPUB. Install the custom highlights build during the Xteink pairing step below; you do not need to build it before running the Mac wizard.
+**Checkpoint:** The model is confirmed, CrossPoint starts, and it can open your EPUB. Passage's custom highlights build is also needed. Available profiles and source pins are recorded in [firmware.json](../firmware.json); a declared profile or successful compilation alone is not a physical compatibility pass.
 
 ## 3. Run the Mac setup wizard
 
@@ -84,17 +86,25 @@ Open a book, highlight a short unique sentence, then use **Tools → More tools 
 
 ### Xteink
 
-Reader Bridge highlights require its custom CrossPoint firmware. Stock CrossPoint compatibility alone does not provide the shared-highlights uploader. The installer identifies the target model, builds the pinned CrossPoint source locally with PlatformIO in an isolated environment, then stages the resulting application firmware. Allow extra time and internet access for compiler and dependency downloads. This release provides source rather than a public prebuilt binary; redistribution of every bundled binary dependency has not been verified.
+Passage highlights require its custom CrossPoint firmware. Stock CrossPoint alone does not provide the uploader. Normal `--firmware` setup stages the model's verified bundled image or downloads its checksum-pinned release asset. A source-only checkout can have null prebuilt records; in that case use an already compatible reader or explicitly choose a developer source build. It never silently installs compilers during normal reader pairing.
 
-For an SD-card update, use the installer's locally built **application firmware** with **Settings → System → SD Card Firmware Update**. Follow the installer's printed instructions for the filename/location and complete the update on the reader itself. Do not write an application-only binary to flash address zero. Preserve the SD card and hidden `.crosspoint` directory; it contains settings, clippings, and pending uploads.
+For a developer build on an example X4 Pro SD-card mount:
+
+```sh
+python3 setup.py xteink --model xteink_x4_pro --mount /Volumes/Xteink --developer-build
+```
+
+Replace the mount and model ID with your actual target. `--developer-build` downloads the pinned PlatformIO toolchain and dependencies into an isolated build directory, then stages an application image. Allow extra time and internet access. [Firmware packaging and corresponding source](RELEASING.md#include-application-firmware).
+
+For an SD-card update, follow the selected profile's printed filename and on-device firmware-update instructions. Complete the update on the reader itself. These are **application firmware** images: do not write one to flash address zero. Preserve the SD card and hidden `.crosspoint` directory; it contains settings, clippings, and pending uploads.
 
 **Firmware checkpoint:** CrossPoint starts, reports the intended custom version, opens the EPUB, and offers **More → Save Clipping**, **View Clippings**, and **Sync Highlights**.
 
-Choose the X4 Pro pairing step in the wizard. Use its current private IP while it is in File Transfer mode, or pair through its mounted SD card. The model must be explicitly `xteink_x4_pro`; follow the wizard's firmware prompt if upgrading is required.
+Choose the CrossPoint pairing step in the wizard. Use its current private IP while it is in File Transfer mode, or pair through its mounted SD card. Select the exact model ID listed by the wizard; follow its firmware prompt if upgrading is required.
 
 The pairing file is `/.crosspoint/highlight-sync.json`. It contains a dedicated token and the Mac collector endpoint, such as `http://192.168.1.20:8084/v1/highlights`. Use the generated values. The token is distinct from your library and progress passwords.
 
-Leave File Transfer mode and open a book. Tap the center, choose **More → Save Clipping**, drag over text, and release to save. The reader quietly attempts uploads from Home or the normal reader using a saved Wi-Fi network. Failed attempts back off; sleeping readers do not wake just to sync. **More → Sync Highlights** is available to test immediately.
+Leave File Transfer mode and open a book. Use that model's touch or button controls to save a clipping. The reader quietly attempts uploads from Home or the normal reader using a saved Wi-Fi network. Failed attempts back off; sleeping readers do not wake just to sync. **Sync Highlights** is available to test immediately.
 
 **Checkpoint:** Find one new test quote from each reader in the collector's chosen archive. Check the full excerpt and title, then restart the Mac service and confirm those quotes remain. A successful local receipt and a successful GitHub publication are separate checks.
 

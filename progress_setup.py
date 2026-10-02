@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 import lua_settings
 import progress_sync
 import setup
+import device_profiles
 
 
 def book_documents(mount):
@@ -75,9 +76,10 @@ class ProgressSetup:
         return {'enabled':bool(saved.get('enabled')), 'healthy':bool(saved.get('enabled')) and self.progress_authenticated(),
                 'endpoint':saved.get('endpoint',''), 'port':saved.get('port',8085),
                 'kindle_paired':bool(saved.get('kindle')) and saved['kindle'].get('endpoint') == saved.get('endpoint'),
+                'xteink_model':device_profiles.saved_model(saved.get('xteink')),
                 'xteink_paired':bool(saved.get('xteink')) and saved['xteink'].get('endpoint') == saved.get('endpoint'),
                 'book_count':len(rows), 'uploads':uploads, 'error':error,
-                'verified':bool(saved.get('verified')) and saved.get('kindle',{}).get('guard_version') == 1}
+                'verified':bool(saved.get('verified')) and (not saved.get('kindle') or saved.get('kindle',{}).get('guard_version') == 1)}
 
     def start_progress(self, endpoint, port=None):
         self.stable_installation()
@@ -235,34 +237,38 @@ class ProgressSetup:
         self.state['progress_sync']['verified'] = False
         self.save()
 
-    def pair_progress_xteink(self, mount=None, device_url=None):
+    def pair_progress_xteink(self, mount=None, device_url=None, model=None):
         endpoint = self.paired_progress_endpoint()
-        if self.state['progress_sync'].get('kindle',{}).get('endpoint') != endpoint:
-            raise setup.SetupError('Connect Kindle progress first so its existing server positions are copied before switching Xteink.')
-        if bool(mount) == bool(device_url): raise setup.SetupError('Choose one Xteink connection method.')
+        spec = self.device_profile(model)
+        if not spec['capabilities']['progress']:
+            raise setup.SetupError('Reading-position sync is unavailable for this model.')
+        selected = device_profiles.saved_model(self.state.get('xteink'))
+        if selected and selected != model:
+            raise setup.SetupError('Choose the same model paired in reader setup before connecting positions.')
+        spec, client, mount = self.crosspoint_connection(model, mount, device_url)
         path = '/.crosspoint/koreader.json'
-        client = setup.Xteink(setup.private_url(device_url),self) if device_url else None
         if client:
-            if json.loads(client.get('/api/status')).get('device') != 'xteink_x4_pro':
-                raise setup.SetupError('The connected device is not an Xteink X4 Pro.')
             old = client.read_file(path)
         else:
-            mount = setup.guarded(Path(mount).expanduser())
-            if not (mount/'.crosspoint').is_dir(): raise setup.SetupError('Select the Xteink SD card with its .crosspoint folder.')
             local = setup.guarded(mount/path.lstrip('/'))
             old = local.read_bytes() if local.is_file() else None
         previous = json.loads(old) if old else {}
         if not isinstance(previous,dict): raise setup.SetupError('Unrecognized Xteink settings. No reader files were changed.')
         account = self.progress_account()
-        if previous.get('username') and previous['username'] != account['username']:
+        if previous.get('username'):
             source = self.state['progress_sync'].get('migration_source',{})
             old_server = previous.get('serverUrl') or ('https://sync.koreader.rocks:443' if previous.get('cfgVersion',1) < 2 else 'https://sync.crosspointreader.com')
             if '://' not in old_server: old_server = 'http://' + old_server
             def origin(value):
                 url = urlsplit(value)
                 return (url.scheme,url.hostname,url.port or (443 if url.scheme == 'https' else 80),url.path.rstrip('/'))
-            if previous['username'] != source.get('username') or origin(old_server) != origin(source.get('server','')):
-                raise setup.SetupError('Xteink uses a different previous progress account than Kindle. Its settings are unchanged; sync both readers to the same old account before migrating.')
+            same_account = previous['username'] == account['username'] and origin(old_server) == origin(endpoint)
+            known_migration = previous['username'] == source.get('username') and origin(old_server) == origin(source.get('server',''))
+            if not same_account and not known_migration:
+                # KOSync has no account-wide export API. An SD card also cannot
+                # decode the reader's hardware-key-obfuscated password. Keep the
+                # old account intact until a complete migration is available.
+                raise setup.SetupError("Your reader already uses another progress account. Passage cannot safely copy its saved server positions from this connection yet. Choose Finish setup for now and keep using the reader's current progress sync; its settings and saved positions are unchanged.")
         previous.pop('password_obf',None)
         previous.update(cfgVersion=2, username=account['username'], password=account['password'], serverUrl=endpoint,matchMethod=1,sendMetadata=True)
         previous.setdefault('syncBehavior',0)
@@ -270,6 +276,6 @@ class ProgressSetup:
         if client: client.put_file(path,data,old)
         else: self.install_file(local,data)
         # Firmware imports the legacy password field and resaves it obfuscated.
-        self.state['progress_sync']['xteink'] = {'url':device_url or '', 'endpoint':endpoint, 'paired_at':datetime.now(timezone.utc).isoformat()}
+        self.state['progress_sync']['xteink'] = {'model':model, 'url':device_url or '', 'endpoint':endpoint, 'paired_at':datetime.now(timezone.utc).isoformat()}
         self.state['progress_sync']['verified'] = False
         self.save()

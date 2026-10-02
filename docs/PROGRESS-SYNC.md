@@ -1,15 +1,15 @@
-# Reading-position sync inside Reader Bridge
+# Reading-position sync in Passage
 
-The Mac app includes a private KOSync-compatible service. KOReader on Kindle and CrossPoint on Xteink use their existing **Progress sync** features to save their place to Reader Bridge. No public sync account, Docker installation, or hosting subscription is required.
+The Mac app includes a private KOSync-compatible service. KOReader on Kindle and CrossPoint use their existing **Progress sync** features to save their place to Passage. This service is optional; a single-reader highlight archive can finish setup without it. No public sync account, Docker installation, or hosting subscription is required.
 
 ## Connect once
 
 1. In **Settings → Reading positions**, choose **Turn on position sync**. Reader Bridge starts the service and creates a dedicated local account.
 2. In **Setup → Reading positions**, close KOReader, connect Kindle in USB drive mode, and choose **Connect Kindle**. The app preserves its old settings, installs the Reader Bridge progress patch, and copies existing server positions for EPUBs on that Kindle. A current KOReader version with user patches enabled is required. It checks the old server before changing the account. Internet access is needed for this one-time copy if the old server is online.
-3. On Xteink X4 Pro, open **File Transfer** on the same trusted network. Enter the shown address in Reader Bridge and choose **Connect Xteink**. Alternatively, connect its SD card and choose **Use its SD card instead**. No firmware change is needed if the reader already supports custom KOSync servers.
+3. On your selected CrossPoint reader, open **File Transfer** on the same trusted network. Enter the shown address in Passage and choose **Connect reader**. Alternatively, connect its SD card and choose **Use its SD card instead**. No firmware change is needed for position sync if the reader already supports custom KOSync servers.
 4. Eject Kindle and reopen KOReader. Restart Xteink so it loads the new settings. Keep the exact same EPUB bytes on both readers.
 
-Setup completes from the saved pairings. No manual sync test or confirmation is required. **Readers paired** means the settings are saved; received timestamps show actual uploads.
+Setup records the selected readers' pairings. **Readers paired** means settings are saved; received timestamps show actual uploads. Verify a physical round trip before relying on a two-reader connection. You can choose **Finish without position sync** and return later.
 
 Reader Bridge preserves KOReader's existing automatic-sync preferences. New configurations enable Auto sync; the reader's own Wi-Fi settings still apply. CrossPoint's Upload Local and Apply Remote actions remain manual. Choosing a new server does not add a polling loop, keep the readers' Wi-Fi on, change their sleep settings, or create Amazon Whispersync compatibility.
 

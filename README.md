@@ -1,158 +1,63 @@
-# Passage: Kindle and Xteink highlight sync
+# Passage
 
 <img src="docs/images/passage-icon.png" alt="Passage open-book icon" width="96">
 
-Formerly Reader Bridge. The repository URL, archive formats, and existing reader connections remain compatible.
+Keep the passages you highlight in one place, whether you read on a Kindle with KOReader, a CrossPoint reader, or both. Passage is a native Mac app with guided reader setup, a searchable book library, and optional iCloud Drive or folder backups.
 
-Collect highlights from **KOReader on a Kindle** and **CrossPoint on an Xteink X4 Pro** in one personal archive. Set up reading-progress sync between the readers, import existing Kindle highlights, and optionally serve the same EPUB books to both devices from your Mac.
+Formerly Reader Bridge. Existing archives and reader connections keep their identities.
 
-Passage is an open-source macOS setup wizard for this workflow. It brings together the reader plugins, custom CrossPoint firmware, local highlight collector, and device instructions. **Shared highlights means one quote collection; it does not copy highlight underlines into the book on the other reader.**
+[Get started](docs/MAC-APP.md) · [Releases](https://github.com/skyerus/reader-bridge/releases) · [Reading positions](docs/PROGRESS-SYNC.md)
 
-[Setup guide](docs/SETUP.md) · [Download the release](https://github.com/skyerus/reader-bridge/releases/latest) · [Common questions](#common-questions) · [Compatibility](#compatibility)
+**Downloads:** use [Releases](https://github.com/skyerus/reader-bridge/releases) for installer availability. A release marked **Pre-release** is a test candidate; its notes list the available Mac architecture and remaining acceptance checks. The older v0.1.0 release contains command-line source only. [Release requirements](docs/RELEASING.md).
 
-**Native Mac app in development:** Passage includes a SwiftUI app with guided device pairing and a searchable local highlight archive with book covers. Browse by book with covers sent automatically by the updated readers, or choose artwork from an EPUB or image. **iCloud Drive is the recommended backup option on Mac**; another folder or optional GitHub backup also works. The build bundles Python, so basic setup needs no Terminal, Python installation or GitHub account. See [build and use the Mac app](docs/MAC-APP.md). The existing v0.1.0 release is the command-line setup; a notarized public app installer is not available yet.
+![Passage book library with sample highlights and covers](docs/images/mac-books-dark.png)
 
-![Passage book library with offline covers and highlights](docs/images/mac-books-dark.png)
+## What you can do
 
-The Mac app offers one-step-at-a-time setup, visual device guides, and a local archive. [See setup screenshots and instructions](docs/MAC-APP.md).
+- Collect highlights from one reader or several, including their recorded dates and embedded book covers.
+- Search, copy, import an existing Kindle `My Clippings.txt`, and export a portable archive.
+- Back up automatically to iCloud Drive or another folder. A GitHub account is optional.
+- Continue at the same passage on another reader with the app's optional reading-position service and identical EPUB files. CrossPoint uses **Upload Local** and **Apply Remote**.
 
-## The problem: switching readers without leaving your reading history behind
+Your quotes stay on your Mac. The app's collector starts after login and continues when you close the window. The Mac must be awake and reachable for uploads; readers retain their offline queues.
 
-You have a Kindle, a collection of highlighted passages, and a new Xteink X4 Pro. You want to read on whichever device suits the moment, pick up at the same passage, and keep the quotes you save in one place.
+Shared highlights are a quote collection. Each reader retains its own in-book underlines. Amazon's stock Kindle reader and Whispersync are separate: use KOReader for automatic Kindle capture, or import an updated Clippings export for stock-reader highlights.
 
-Getting there takes several separate pieces: a supported Kindle jailbreak, KOReader, CrossPoint, a shared reading-progress account, a way to collect highlights from both readers, and identical book files. Each piece has its own installation, credentials, menus, and restart steps. An existing Amazon highlight collection also needs an import path.
+## Before connecting a reader
 
-Passage packages that setup into a guided, resumable workflow. The wizard installs and pairs the components it can control, preserves queued highlights and credentials when rerun, and gives you the on-device steps for the parts that need a tap, eject, or restart. The Mac services start after login, so you do not need to keep a Terminal window open.
+**Kindle:** it must have a supported jailbreak and working KOReader. Read [KindleModding's introduction](https://kindlemodding.org/jailbreaking/), check your exact model and firmware with [Find My Jailbreak](https://kindlemodding.org/jailbreak-wizard.html), and follow the [official KOReader Kindle installation guide](https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices). Complete the guide's post-jailbreak steps and open an EPUB in KOReader before pairing. Passage does not jailbreak or downgrade a Kindle. If the wizard has no supported method for yours, you can still import an existing Clippings file.
 
-## What Passage does
+**CrossPoint reader:** install CrossPoint for your exact model using its [official site](https://crosspointreader.com/) and [device picker](https://updates.crosspointreader.com/). Passage then needs its matching custom firmware to collect highlights. Setup lists the supported models and whether a verified image is included. An upstream CrossPoint installation alone does not provide Passage's uploader. Preserve your books and hidden `.crosspoint` folder when updating.
 
-| What you want | How it works |
-| --- | --- |
-| Keep Kindle and Xteink highlights together | KOReader highlights and CrossPoint clippings upload automatically to a local collector. Add iCloud Drive, a backup folder or GitHub for another copy. Offline changes wait for a connection. |
-| Continue reading on the other device | The Mac app hosts a private KOReader-compatible position service and connects both readers. KOReader can sync automatically; Xteink uses manual **Upload Local** and **Apply Remote** actions. |
-| Bring your existing Kindle highlights | Import `My Clippings.txt` or Kindle highlights JSON in the Mac app, preserving recorded dates and cover links without an Amazon login in Passage. |
-| Browse the books behind your quotes | A visual book library with offline covers automatically sent by updated readers; portable exports include the artwork. |
-| Highlight across pages on the X4 Pro | Custom CrossPoint firmware keeps a selection active when you drag to a page edge, within the current chapter. |
-| Download the same EPUB to both readers | Optional Calibre-Web setup provides a local OPDS book catalog, preserving the downloaded EPUB bytes needed for binary progress matching. |
-| Run it from your Mac | Highlight sync, position sync and the optional library run after login. Your Mac needs to be awake and reachable for those services; downloaded books remain readable offline. |
+Use your Mac and readers on the same trusted home network, with DRM-free books you can read on the selected devices. A second reader is optional.
 
-Progress sync uses the existing KOReader/CrossPoint client capabilities with a service included in the Mac app. Passage adds the setup workflow, shared-highlight collection, KOReader plugin, and custom CrossPoint highlighting and upload behavior. It does not replace Amazon's stock reader or automatically migrate DRM-protected books.
+## Install the Mac app
 
-## Prerequisite: jailbreak your Kindle and install KOReader
+When a release includes a Passage disk image:
 
-**Your Kindle must already be jailbroken and able to open books in KOReader before setting up Passage.** Passage does not jailbreak your Kindle.
+1. Download the `.dmg` for your Mac: **arm64** for Apple Silicon, **x86_64** for Intel. Check that release's accepted macOS versions and reader models.
+2. Open it, drag **Passage** into **Applications**, and eject the disk image.
+3. Open Passage from Applications, choose the reader or readers you use, and follow Setup. Basic highlight setup uses the app's bundled runtime and firmware; it needs no Terminal, Python, Git, compiler, or GitHub account.
+4. Save one highlight with the reader connected to Wi-Fi and check it appears in Passage.
 
-1. Read the [KindleModding jailbreak guide](https://kindlemodding.org/jailbreaking/), then use [Find My Jailbreak](https://kindlemodding.org/kindle-models) to check your exact Kindle model and firmware version.
-2. Follow the method the wizard recommends, including its post-jailbreak steps. If no supported method is available for your device, stop here.
-3. Follow the [official KOReader installation instructions for Kindle](https://github.com/koreader/koreader/wiki/Installation-on-Kindle-devices). Open an EPUB in KOReader to confirm it works, then return here.
+[First-install walkthrough, backups, upgrades, and troubleshooting](docs/MAC-APP.md).
 
-Already reading in KOReader? Continue below. Our [Kindle setup checklist](docs/SETUP.md#1-get-koreader-working-on-the-kindle) adds the device checkpoints for this workflow.
+## Compatibility and privacy
 
-## Quick start on macOS
+The app targets macOS 13 or later; architecture and physical acceptance are recorded per release. Source builds and a successful automated test do not establish a clean-Mac or physical-reader pass. The previous integration reference used a Kindle Paperwhite 5 with KOReader and an Xteink X4 Pro. Other profiles need their own physical acceptance before release notes claim support.
 
-Start the guided setup:
+Passage preserves settings, reader identities, queued highlights, and archive formats across upgrades. Local data remains in `~/Library/Application Support/Reader Bridge`; see the [upgrade instructions](docs/MAC-APP.md#upgrading-reader-bridge) before changing an existing app's location.
 
-```sh
-git clone https://github.com/skyerus/reader-bridge.git
-cd reader-bridge
-python3 setup.py
-```
-
-You need macOS, Python 3.10+, Git, and [GitHub CLI](https://cli.github.com/) signed in with `gh auth login`. The wizard asks before creating your own **private** highlight archive. It never chooses the developer's archive.
-
-[Follow the complete device and setup guide](docs/SETUP.md). Software tests and a firmware build do not replace the guide's physical-device checkpoints.
-
-## Compatibility
-
-| Component | Integration reference |
-| --- | --- |
-| Mac | macOS; Python 3.10 or newer; authenticated GitHub CLI |
-| Kindle | Paperwhite 5, firmware 5.19.2, already jailbroken, KOReader kindlehf build based on v2026.07.2 |
-| Xteink | X4 Pro, pinned custom CrossPoint 1.6.5 source |
-
-This device pair was used for integration testing. Other Kindle models require their own supported jailbreak and KOReader path. The wizard's full fresh-Mac/device walkthrough still needs the physical acceptance checkpoints in the guide; compilation and automated tests do not establish compatibility with every device.
-
-## Preview, resume and diagnose
-
-```sh
-python3 setup.py --dry-run
-python3 setup.py --help
-python3 setup.py doctor
-python3 setup.py status
-```
-
-Run the wizard again to resume skipped steps. Each component also has a subcommand; use `python3 setup.py COMMAND --help`. The wizard never erases books, factory-resets readers, or flashes a Kindle.
-
-Passage keeps local data under `~/Library/Application Support/Reader Bridge`. Highlight sync and the optional library use ports 8084 and 8083; the Mac app's position service normally uses 8085. Occupied ports are checked. Its own LaunchAgents include `com.readerbridge.collector`, `com.readerbridge.progress` and `com.readerbridge.library`. An asleep Mac cannot receive uploads; devices retain their local reading data.
-
-```sh
-python3 setup.py uninstall
-```
-
-This removes only owned background services. Archives, local inboxes, backups, library books and device installations remain available.
-
-## Import existing Kindle highlights
-
-KOReader's plugin imports modern annotations from books still in reading history. Open older annotated books once to let KOReader migrate their sidecars. You can also import an English Kindle export:
-
-```sh
-python3 setup.py --dry-run import-clippings "/path/to/My Clippings.txt"
-python3 setup.py import-clippings "/path/to/My Clippings.txt"
-```
-
-Notes and bookmarks are excluded. Unsupported languages are skipped rather than guessed; the source export is never changed. Quotes are first acknowledged locally; `status` reports whether GitHub publication is still pending.
-
-## Common questions
-
-### Can I sync Kindle highlights with an Xteink X4 Pro?
-
-Yes, when you read in KOReader on the Kindle and use the custom CrossPoint firmware on the X4 Pro. Both send saved passages to the same personal archive. Existing Amazon Kindle highlights can be imported from an English `My Clippings.txt` export. Highlights made later in Amazon's stock Kindle reader are not automatically captured by the KOReader plugin; import an updated export to add them.
-
-### Can KOReader and CrossPoint sync reading progress?
-
-Yes. In the Mac app, enable **Settings → Reading positions → Use Passage for positions**, then connect each reader in Setup. Use the exact same EPUB file on both readers. See [local progress setup](docs/PROGRESS-SYNC.md). KOReader supports automatic progress sync. On Xteink, use **Upload Local** before switching away and **Apply Remote** when returning. The [progress setup instructions](docs/SETUP.md#6-connect-reading-progress) include a test in both directions.
-
-### Does this use Amazon Whispersync?
-
-No. Reading progress uses the app’s local KOReader-compatible service, separately from Amazon Whispersync. Highlights use the Mac collector and your archive. This workflow reads books with KOReader on Kindle and CrossPoint on Xteink; it does not sync reading positions with Amazon's stock Kindle reader or Kindle mobile app.
-
-### Do highlights appear inside the book on both devices?
-
-No. The shared archive contains the passages you saved on either reader. Each reader keeps its own in-book annotations. Cross-device underline placement is not implemented.
-
-### Do I need a hosted server or a Readwise account?
-
-You can run the highlight collector and optional EPUB library on your Mac without renting a server. Passage does not require Readwise or GitHub for the Mac app. Choose iCloud Drive or another folder for automatic snapshots; GitHub remains optional. The Mac app includes its own reading-position service; readers connect through their existing KOReader-compatible sync settings. The Mac-hosted services are unavailable while the Mac is asleep or shut down.
-
-### Can one script jailbreak my Kindle and install everything?
-
-The wizard automates Mac setup, plugin pairing, and building and transferring the custom X4 Pro firmware. Kindle jailbreaking and initial KOReader installation still follow the current upstream instructions for your exact model and firmware. Firmware installation also needs confirmation on the Xteink itself. Follow the [full setup guide](docs/SETUP.md) for these checkpoints.
-
-### Can I read my Amazon purchases in this setup?
-
-KOReader and CrossPoint need supported, DRM-free book files for this EPUB workflow. Passage does not download Amazon purchases, remove DRM, or include books. Importing old Kindle highlights transfers the exported quote text, not the purchased ebook.
-
-## Privacy and limits
-
-### Wi-Fi and battery
-
-Automatic highlights do not require an always-on Wi-Fi connection. Xteink connects to a saved network only when uploads are waiting, and switches the radio off afterwards if the sync task enabled it. An already-connected radio remains under its existing owner's control. Failed attempts back off from one minute to fifteen minutes; sleeping readers are not woken to upload. The KOReader plugin only uses an already-connected network and stops its work on suspend.
-
-Uploads, retries and awake queue checks still consume some energy. Long-duration battery drain has not been measured; this is not a zero-overhead claim. Reading-progress sync and other network features have their own Wi-Fi settings.
-
-### Data and scope
-
-Use a trusted home LAN. Device highlight HTTP requests carry a dedicated bearer token without transport encryption. Do not forward these ports through your router or publish pairing files, queue files, backups, books or account exports.
-
-The shared archive collects excerpts; it does not synchronize underlines between rendering engines. Deleting a quote suppresses the matching normalized title, author and passage. Snapshot restore preserves current deletions and edits. Earlier snapshots and Git history can still contain deleted text; deletion does not rewrite them or remove annotations from the other device.
-
-Custom firmware is built from the source revision in [firmware.json](firmware.json), with PlatformIO 6.2.0 and SdFat 2.3.1. This project does not redistribute prebuilt firmware, jailbreak bundles, DRM tools or books. First builds require internet access and may take several minutes. [Upstream sources and packaging notes](docs/UPSTREAM-SOURCES.md).
+Highlight connections use a private LAN address and a dedicated bearer token over HTTP. Keep them on a trusted network; do not forward service ports through your router. Pairing files and backups are private. [Security policy](SECURITY.md).
 
 ## Development
 
+[Build and release the app](docs/RELEASING.md) · [Advanced command-line setup](docs/SETUP.md) · [Validation history](docs/VALIDATION.md) · [Upstream sources and notices](docs/UPSTREAM-SOURCES.md)
+
 ```sh
 python3 -m unittest discover -s tests -v
-for test in koreader/sharedhighlights.koplugin/tests/*_test.lua; do lua5.1 "$test"; done
+swift test --package-path desktop
+python3 scripts/build-macos.py --dmg
 ```
 
-Tests use temporary files and mocked external commands; collector HTTP tests bind localhost. They never install live services, create a GitHub repository or modify a device. Passage's original code is MIT licensed; external applications retain their own licenses.
+Development disk images are labeled `-development` and are signed ad hoc by default. Consumer releases require Developer ID Application signing, accepted notarization, stapled tickets, Gatekeeper verification, and a separate clean-Mac and physical-reader acceptance report. Firmware packages include pinned application images, corresponding source, and dependency notices. No jailbreak tools, KOReader itself, books, fonts, or dictionaries are bundled.
