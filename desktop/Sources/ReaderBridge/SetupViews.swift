@@ -181,7 +181,7 @@ struct SetupView: View {
     }
 
     private var kindleStep: some View {
-        Card(title: status.kindle.paired ? "Kindle connected" : "Connect your Kindle") {
+        Card(title: status.kindle.paired ? "Kindle pairing saved" : "Connect your Kindle") {
             if status.kindle.paired {
                 DeviceIllustration(guide: .kindleUSB)
                 Text("Eject the Kindle, then open KOReader with Wi-Fi connected.").foregroundStyle(.secondary)
@@ -251,7 +251,7 @@ struct SetupView: View {
     }
 
     private var crossPointConnectedStep: some View {
-        Card(title: "\(deviceName) connected") {
+        Card(title: "\(deviceName) pairing saved") {
             DeviceIllustration(guide: .xteinkLAN, crosspointName: deviceName)
             Text(selectedDevice?.capabilities.highlights == true ? "Leave File Transfer or eject the SD card. Save a clipping in a book with Wi-Fi connected." : "Leave File Transfer or eject the SD card, then reopen your book.").foregroundStyle(.secondary)
             continueButton
@@ -316,7 +316,7 @@ struct SetupView: View {
                     Button("Finish setup for now") {
                         savedPositionChoice = SetupPositionChoice.later.rawValue
                         flow.advance(readiness)
-                    }.disabled(model.busy)
+                    }.buttonStyle(.borderedProminent).disabled(model.busy)
                 }
             }
             Text("Optional. You can change this in Settings at any time.").font(.caption).foregroundStyle(.secondary)
@@ -324,8 +324,10 @@ struct SetupView: View {
     }
 
     private var completedStep: some View {
-        Card(title: "Your readers are ready") {
-            Label(deviceChoice == .both ? "Both readers connected" : "\(deviceChoice?.title ?? "Reader") connected", systemImage: "checkmark.circle.fill").foregroundStyle(teal)
+        Card(title: "Reader setup saved") {
+            Label(deviceChoice == .both ? "Both readers paired" : "\(deviceChoice?.title ?? "Reader") paired", systemImage: "checkmark.circle.fill").foregroundStyle(teal)
+            Text("New highlights appear in Highlights. Save a highlight with Wi-Fi connected while your Mac is awake.")
+                .font(.callout).foregroundStyle(.secondary)
             HStack {
                 Button("View highlights") { model.selection = .highlights }.buttonStyle(.borderedProminent)
                 Button(deviceChoice == .both ? "Manage readers" : "Add another reader") { flow.visit(.readers, readiness: readiness) }.disabled(model.busy)
