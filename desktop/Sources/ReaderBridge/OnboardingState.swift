@@ -15,19 +15,6 @@ enum SetupStep: Int, CaseIterable, Identifiable {
     }
 }
 
-enum ProgressCheckpoint: Int, CaseIterable {
-    case sameBook, xteinkAccount, kindleAccount, sendToKindle, returnToXteink
-    var title: String {
-        switch self {
-        case .sameBook: return "Open the same EPUB"
-        case .xteinkAccount: return "Set up the X4 Pro account"
-        case .kindleAccount: return "Use that account in KOReader"
-        case .sendToKindle: return "Send a passage to Kindle"
-        case .returnToXteink: return "Bring the next passage back"
-        }
-    }
-}
-
 /// Backend facts stay separate from the user's firmware acknowledgement.
 /// Neither a pairing file nor a staged binary proves the reader is reachable.
 struct SetupReadiness: Equatable {
@@ -36,7 +23,7 @@ struct SetupReadiness: Equatable {
     var xteinkPaired: Bool
     var firmwareStaged: Bool
     var firmwareConfirmedByUser: Bool
-    var roundTripConfirmedByUser: Bool
+    var progressConfigured: Bool
 
     init(status: BridgeStatus, firmwareConfirmedByUser: Bool) {
         collectorOnline = status.service.healthy
@@ -44,7 +31,7 @@ struct SetupReadiness: Equatable {
         xteinkPaired = status.xteink.paired
         firmwareStaged = status.xteink.firmwareStaged
         self.firmwareConfirmedByUser = firmwareConfirmedByUser
-        roundTripConfirmedByUser = status.progressVerified
+        progressConfigured = status.localProgress?.isConfigured == true
     }
 
     var firmwareNeedsConfirmation: Bool { xteinkPaired && !firmwareConfirmedByUser }
@@ -52,7 +39,7 @@ struct SetupReadiness: Equatable {
         if !collectorOnline { return .bridge }
         if !kindlePaired { return .kindle }
         if !xteinkPaired || firmwareNeedsConfirmation { return .xteink }
-        if !roundTripConfirmedByUser { return .progress }
+        if !progressConfigured { return .progress }
         return .complete
     }
 
@@ -71,27 +58,24 @@ struct SetupReadiness: Equatable {
         case .bridge: return collectorOnline
         case .kindle: return kindlePaired
         case .xteink: return xteinkPaired && !firmwareNeedsConfirmation
-        case .progress, .complete: return roundTripConfirmedByUser
+        case .progress, .complete: return progressConfigured
         }
     }
 }
 
 struct SetupNavigation {
     private(set) var step = SetupStep.bridge
-    private(set) var checkpoint = ProgressCheckpoint.sameBook
     private var resumed = false
 
     mutating func reconcile(_ readiness: SetupReadiness) {
         if !resumed || !readiness.canVisit(step) {
             step = readiness.recommendedStep
-            checkpoint = .sameBook
         }
         resumed = true
     }
 
     mutating func visit(_ destination: SetupStep, readiness: SetupReadiness) {
         guard readiness.canVisit(destination) else { return }
-        if step != destination { checkpoint = .sameBook }
         step = destination
     }
 
@@ -101,21 +85,9 @@ struct SetupNavigation {
     }
 
     mutating func back(_ readiness: SetupReadiness) {
-        if step == .progress, checkpoint != .sameBook {
-            checkpoint = ProgressCheckpoint(rawValue: checkpoint.rawValue - 1) ?? .sameBook
-        } else if let previous = SetupStep(rawValue: step.rawValue - 1) {
+        if let previous = SetupStep(rawValue: step.rawValue - 1) {
             visit(previous, readiness: readiness)
         }
-    }
-
-    mutating func continueProgress(_ readiness: SetupReadiness) {
-        guard step == .progress, readiness.canVisit(.progress),
-              let next = ProgressCheckpoint(rawValue: checkpoint.rawValue + 1) else { return }
-        checkpoint = next
-    }
-
-    func canConfirmRoundTrip(_ readiness: SetupReadiness) -> Bool {
-        step == .progress && checkpoint == .returnToXteink && readiness.canVisit(.progress)
     }
 }
 

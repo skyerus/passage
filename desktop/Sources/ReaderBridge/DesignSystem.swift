@@ -121,22 +121,20 @@ struct BridgeEmptyState: View {
                 .frame(width: 72, height: 72).background(teal.opacity(0.07), in: RoundedRectangle(cornerRadius: 23))
                 .accessibilityHidden(true)
             Text(title).font(.system(size: 22, weight: .medium, design: .serif)).multilineTextAlignment(.center)
-            Text(detail).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                .lineSpacing(3).frame(maxWidth: 350)
+            if !detail.isEmpty {
+                Text(detail).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    .lineSpacing(3).frame(maxWidth: 350)
+            }
         }.padding(30).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 struct BridgeSettingRow<Content: View>: View {
     let title: String
-    let detail: String
     @ViewBuilder var content: Content
     var body: some View {
         HStack(alignment: .center, spacing: 24) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(title).font(.system(size: 14, weight: .medium))
-                Text(detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
+            Text(title).font(.system(size: 14, weight: .medium))
             Spacer(minLength: 12)
             content
         }.padding(.vertical, 3)

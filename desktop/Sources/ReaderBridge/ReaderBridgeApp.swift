@@ -46,7 +46,7 @@ struct MenuContent: View {
     @Environment(\.openWindow) var openWindow
     var body: some View {
         Text(model.serviceLabel)
-        if let status = model.status { Text("\(status.highlightCount) archived highlights") }
+        if let status = model.status { Text("\(status.highlightCount) highlights") }
         if model.busy { Text(model.activity) }
         Divider()
         Button("Open Reader Bridge") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
@@ -84,7 +84,7 @@ struct ContentView: View {
                         }
                     }
                 } else {
-                    BridgeEmptyState(symbol: "books.vertical", title: model.busy ? "Opening your highlights" : "Highlights are unavailable", detail: model.busy ? "Loading your saved books and quotes…" : "Refresh to try again.")
+                    BridgeEmptyState(symbol: "books.vertical", title: model.busy ? "Loading highlights…" : "Highlights are unavailable", detail: model.busy ? "" : "Refresh to try again.")
                 }
             }
             .padding(.horizontal, 28).padding(.top, 25).padding(.bottom, 24)
@@ -105,23 +105,13 @@ struct ContentView: View {
 
     private var pageHeader: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(model.selection.rawValue).font(.system(size: 30, weight: .medium, design: .serif))
-                Text(subtitle).font(.system(size: 13)).foregroundStyle(.secondary)
-            }
+            Text(model.selection.rawValue).font(.system(size: 30, weight: .medium, design: .serif))
             Spacer()
             Button { Task { await model.perform("status") } } label: {
                 Image(systemName: "arrow.clockwise").font(.system(size: 14, weight: .medium)).frame(width: 36, height: 36)
             }
             .buttonStyle(.plain).bridgeGlass(cornerRadius: 18, interactive: true)
             .disabled(model.busy).help("Refresh status (⌘R)").accessibilityLabel("Refresh status")
-        }
-    }
-    private var subtitle: String {
-        switch model.selection {
-        case .setup: return "Connect once. Keep your reading close."
-        case .highlights: return "Your quotes, gathered on this Mac."
-        case .settings: return "A few preferences. Everything in its place."
         }
     }
     private func message(_ text: String, symbol: String, color: Color, dismiss: (() -> Void)? = nil) -> some View {
@@ -145,7 +135,6 @@ struct BridgeSidebar: View {
                 Image(systemName: "books.vertical").font(.system(size: 27, weight: .light)).foregroundStyle(teal)
                     .accessibilityHidden(true)
                 Text("Reader Bridge").font(.system(size: 22, weight: .medium, design: .serif))
-                Text("YOUR READING, TOGETHER").font(.system(size: 8, weight: .semibold)).tracking(1.1).foregroundStyle(.secondary)
             }.padding(.horizontal, 15).padding(.top, 25).padding(.bottom, 32)
             VStack(spacing: 5) {
                 ForEach(AppModel.Section.allCases) { section in
@@ -181,10 +170,6 @@ struct BridgeSidebar: View {
                         .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
                         .help("Backup settings")
                 }
-                if let checked = model.lastUpdated {
-                    Text("Checked \(checked.formatted(date: .omitted, time: .shortened))").font(.system(size: 10)).foregroundStyle(.tertiary)
-                }
-                Text("Receives uploads while\nyour Mac is awake.").font(.system(size: 11)).lineSpacing(3).foregroundStyle(.secondary)
             }.padding(.horizontal, 15).padding(.bottom, 20)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

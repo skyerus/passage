@@ -11,25 +11,18 @@ struct CloudBackupView: View {
         Card(title: "Backup") {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: "icloud").font(.system(size: 27, weight: .light)).foregroundStyle(teal)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(backup?.enabled == true ? status.backupSummary : "Keep your reading safe")
-                        .font(.headline)
-                    Text("Your highlights, dates, book covers and reading positions.")
-                        .font(.callout).foregroundStyle(.secondary)
-                }
+                Text(backup?.enabled == true ? status.backupSummary : "Automatic backup")
+                    .font(.headline)
             }
             if backup?.enabled == true {
                 if let backup {
-                    Text(backup.provider == "icloud" ? "iCloud Drive" : "Backup folder").font(.callout.weight(.medium))
                     if !backup.savedAt.isEmpty {
                         Text("Saved \(HighlightPresentation.date(backup.savedAt))")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    Text(backup.provider == "icloud" ? "iCloud uploads your saved snapshots when online. Check Finder for upload status." : "Your folder’s sync app handles cloud uploads, if enabled.")
-                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     if !backup.error.isEmpty { Text(backup.error).font(.callout).foregroundStyle(.orange) }
                     HStack {
-                        Button("Back up now") { Task { await model.perform("backup_now", activity: "Saving backup…", success: "Snapshot saved to your backup folder.") } }
+                        Button("Back up now") { Task { await model.perform("backup_now", activity: "Saving backup…", success: "Backup saved.") } }
                         BackupFinderButton(backup: backup)
                         Menu("More") {
                             Button("Use iCloud Drive…") { provider = "icloud"; chooseDestination() }
@@ -40,20 +33,15 @@ struct CloudBackupView: View {
                 }
             } else {
                 Picker("Save backups to", selection: $provider) {
-                    Text("iCloud Drive · Recommended").tag("icloud")
+                    Text("iCloud Drive").tag("icloud")
                     Text("Another folder").tag("folder")
                 }.pickerStyle(.menu).frame(maxWidth: 360, alignment: .leading)
                 Button(provider == "icloud" ? "Turn on iCloud backup" : "Choose backup folder…", action: enableBackup)
                     .buttonStyle(.borderedProminent).tint(teal).disabled(!status.service.installed)
-                Text("Runs automatically, even after you quit the app. Earlier snapshots are kept.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
             Divider()
-            HStack {
-                Button("Restore a backup…", action: restore).disabled(!status.service.healthy)
-                Text("Adds missing highlights; keeps your current edits and deletions.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+            Button("Restore a backup…", action: restore).disabled(!status.service.healthy)
+                .help("Adds missing highlights; keeps your current edits and deletions.")
         }
         .disabled(model.busy)
         .onAppear { provider = backup?.provider ?? "icloud" }
@@ -84,7 +72,7 @@ struct CloudBackupView: View {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false; panel.canChooseFiles = true; panel.allowsMultipleSelection = false
         panel.prompt = "Restore highlights"
-        panel.message = "Choose a .readerbridge snapshot. A recovery copy is saved before restoring."
+        panel.message = "Choose a .readerbridge backup. Missing highlights are restored; current edits and deletions are kept."
         if let folder = backup?.folder, !folder.isEmpty { panel.directoryURL = URL(fileURLWithPath: folder) }
         if panel.runModal() == .OK, let url = panel.url {
             Task { await model.perform("restore_backup", ["path": url.path], activity: "Restoring archive…", success: "Backup restored. Your current edits and deletions were kept.") }
@@ -99,7 +87,7 @@ struct BackupFinderButton: View {
     var body: some View {
         Button { reveal() } label: { Label("Show in Finder", systemImage: "folder") }
             .disabled(backup.folder.isEmpty)
-            .help("Open your backup folder and select the latest saved highlights backup")
+            .help(backup.provider == "icloud" ? "Show the latest backup and its iCloud upload status" : "Show the latest backup")
     }
     private func reveal() {
         if let path = backup.snapshotPath, !path.isEmpty, FileManager.default.fileExists(atPath: path) {

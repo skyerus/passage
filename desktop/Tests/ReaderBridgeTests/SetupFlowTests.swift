@@ -8,8 +8,12 @@ final class SetupFlowTests: XCTestCase {
         """.utf8))
     }
 
-    private func ready(online: Bool = true, kindle: Bool = true, xteink: Bool = true, staged: Bool = false, firmwareConfirmed: Bool = true, verified: Bool = false) throws -> SetupReadiness {
-        SetupReadiness(status: try status(online: online, kindle: kindle, xteink: xteink, staged: staged, verified: verified), firmwareConfirmedByUser: firmwareConfirmed)
+    private func ready(online: Bool = true, kindle: Bool = true, xteink: Bool = true, staged: Bool = false, firmwareConfirmed: Bool = true, verified: Bool = false, progressPaired: Bool = false) throws -> SetupReadiness {
+        var saved = try status(online: online, kindle: kindle, xteink: xteink, staged: staged, verified: verified)
+        if progressPaired {
+            saved.localProgress = .init(enabled: true, healthy: true, endpoint: "http://reader.local:8085", port: 8085, kindlePaired: true, xteinkPaired: true, bookCount: 0, uploads: [], error: "", verified: false)
+        }
+        return SetupReadiness(status: saved, firmwareConfirmedByUser: firmwareConfirmed)
     }
 
     func testResumeUsesSavedFactsAndRequiresCustomFirmwareAcknowledgement() throws {
@@ -22,7 +26,8 @@ final class SetupFlowTests: XCTestCase {
         XCTAssertFalse(oldPairing.canVisit(.progress))
         XCTAssertFalse(oldPairing.canVisit(.complete))
         XCTAssertEqual(try ready().recommendedStep, .progress)
-        XCTAssertEqual(try ready(verified: true).recommendedStep, .complete)
+        XCTAssertEqual(try ready(verified: true).recommendedStep, .progress)
+        XCTAssertEqual(try ready(progressPaired: true).recommendedStep, .complete)
     }
 
     func testStagedFirmwareCannotAdvanceUntilUserConfirmsInstallation() throws {
@@ -34,11 +39,10 @@ final class SetupFlowTests: XCTestCase {
         XCTAssertEqual(navigation.step, .xteink)
         navigation.visit(.progress, readiness: staged)
         XCTAssertEqual(navigation.step, .xteink)
-        XCTAssertFalse(navigation.canConfirmRoundTrip(staged))
         let acknowledged = try ready(staged: true)
         navigation.advance(acknowledged)
         XCTAssertEqual(navigation.step, .progress)
-        XCTAssertFalse(acknowledged.roundTripConfirmedByUser)
+        XCTAssertFalse(acknowledged.progressConfigured)
     }
 
     func testAllStepsAreReachableAndPairingResultsWaitForContinue() throws {
@@ -58,34 +62,27 @@ final class SetupFlowTests: XCTestCase {
         XCTAssertEqual(navigation.step, .xteink)
         navigation.advance(try ready())
         XCTAssertEqual(navigation.step, .progress)
-        XCTAssertFalse(navigation.canConfirmRoundTrip(try ready()))
-        for _ in 0..<4 { navigation.continueProgress(try ready()) }
-        XCTAssertEqual(navigation.checkpoint, .returnToXteink)
-        XCTAssertTrue(navigation.canConfirmRoundTrip(try ready()))
         navigation.advance(try ready())
         XCTAssertEqual(navigation.step, .progress)
-        navigation.advance(try ready(verified: true))
+        // Pairing completes setup without a test checkbox or fabricated sync traffic.
+        navigation.advance(try ready(progressPaired: true))
         XCTAssertEqual(navigation.step, .complete)
     }
 
-    func testBacktrackingAndOfflineRecoveryCannotConfirmProgress() throws {
+    func testBacktrackingAndOfflineRecoveryPreservePairings() throws {
         var navigation = SetupNavigation()
         let online = try ready()
         navigation.reconcile(online)
-        navigation.continueProgress(online)
-        navigation.continueProgress(online)
         navigation.back(online)
-        XCTAssertEqual(navigation.checkpoint, .xteinkAccount)
+        XCTAssertEqual(navigation.step, .xteink)
         navigation.visit(.kindle, readiness: online)
         XCTAssertEqual(navigation.step, .kindle)
         navigation.visit(.progress, readiness: online)
-        XCTAssertEqual(navigation.checkpoint, .sameBook)
-        for _ in 0..<4 { navigation.continueProgress(online) }
-        let offline = try ready(online: false, verified: true)
+        XCTAssertEqual(navigation.step, .progress)
+        let offline = try ready(online: false, progressPaired: true)
         XCTAssertTrue(offline.kindlePaired)
         XCTAssertTrue(offline.xteinkPaired)
-        XCTAssertTrue(offline.roundTripConfirmedByUser)
-        XCTAssertFalse(navigation.canConfirmRoundTrip(offline))
+        XCTAssertTrue(offline.progressConfigured)
         navigation.reconcile(offline)
         XCTAssertEqual(navigation.step, .bridge)
         navigation.visit(.complete, readiness: offline)
