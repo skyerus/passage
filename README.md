@@ -10,7 +10,7 @@ Formerly Reader Bridge. Existing archives and reader connections keep their iden
 
 **Passage 0.7.0 release candidate 2** is a Developer ID signed, notarized download for Apple Silicon Macs (M1 or later), requiring macOS 13 or later. It is a **pre-release** for testing; the separate clean-Mac walkthrough and physical-reader acceptance of this exact installer remain open. Read the [release notes and checksums](https://github.com/skyerus/reader-bridge/releases/tag/v0.7.0-rc.2). Intel Macs can build from source; no Intel, Windows, or Linux consumer installer is available.
 
-![Passage book library with sample highlights and covers](docs/images/mac-books-dark.png)
+![Passage book library with sample highlights and covers](docs/images/mac-books.png)
 
 ## What you can do
 

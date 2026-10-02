@@ -47,6 +47,8 @@ For a Kindle Clippings file, connect the Kindle in USB storage mode and copy `do
 
 Choose **Set up your reader**, then answer **What will you read on?** with **Kindle**, **CrossPoint reader**, or **Both readers**. Select **Start Passage sync** when Setup reaches **Connect to your Mac**, then follow the next action shown. You can add another reader later. Existing verified installations offer **Use existing setup**. A saved pairing confirms the settings were written; your first received highlight confirms the upload path works.
 
+![Passage setup lets you choose Kindle, a CrossPoint reader, or both](images/mac-setup.png)
+
 **Kindle:** complete the prerequisite checklist, exit KOReader, then connect the Kindle in USB storage mode. Choose the detected Kindle and let Passage install its plugin and settings. Eject it safely, unplug, reopen KOReader, and enable Wi-Fi. New highlights appear with their book in **Highlights**. The plugin uses an existing Wi-Fi connection; it does not enable Wi-Fi itself.
 
 **CrossPoint:** select your exact **Model** and complete its prerequisite checklist. Connect its SD card or use its File Transfer mode as Setup directs. Leave **Prepare Passage firmware** selected when updating and choose **Prepare firmware and connect**. Passage verifies and stages the included application image without downloading compilers. Finish the device's own SD-card firmware-update action shown in Setup, then confirm **I installed it and see Sync Highlights**. Leave File Transfer mode and reopen your EPUB. New clippings appear in Passage. Button and touch controls differ by model; follow that model's guide.
@@ -62,6 +64,8 @@ To continue at the same passage on two readers, enable the optional reading-posi
 In **Settings → Backup**, choose **Turn on iCloud backup** or **Another folder**. Passage saves a new snapshot when the archive changes. A saved folder copy and a completed iCloud upload are different: Finder shows cloud upload status. Backups include highlights, recorded dates, notes, deletion history, cached covers, and local reading positions. They exclude passwords, pairing tokens, and EPUB books.
 
 Use **Highlights** to browse by book, search, and copy a quote. Its archive menu imports `My Clippings.txt`, supported Kindle JSON, and Passage exports; **Export highlights & covers** creates a portable JSON archive. Right-click a book to change its cover using an image or the book's EPUB. Export does not include private connection credentials.
+
+![Passage highlights view with public-domain sample text and covers](images/mac-highlights.png)
 
 The collector continues after you close the window or quit Passage and starts after Mac login. The app's **Open at login** setting controls whether its window also opens. The Mac can sleep normally; it cannot receive uploads while asleep. Readers keep pending changes and retry when connected. Keep the Mac awake during initial setup.
 
