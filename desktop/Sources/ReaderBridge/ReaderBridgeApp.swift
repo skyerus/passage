@@ -4,7 +4,7 @@ import AppKit
 @main struct ReaderBridgeApp: App {
     @StateObject private var model = AppModel()
     var body: some Scene {
-        Window("Reader Bridge", id: "main") {
+        Window("Passage", id: "main") {
             ContentView().environmentObject(model)
                 .frame(minWidth: 850, minHeight: 650)
                 .task { model.startPolling() }
@@ -16,7 +16,7 @@ import AppKit
             MenuContent().environmentObject(model)
         } label: {
             Image(nsImage: model.error == nil && model.status?.service.healthy == true ? BrandMenuIcon.ready : BrandMenuIcon.offline)
-                .accessibilityLabel("Reader Bridge: \(model.serviceLabel)")
+                .accessibilityLabel("Passage: \(model.serviceLabel)")
         }
     }
 }
@@ -50,10 +50,10 @@ struct MenuContent: View {
         if let status = model.status { Text("\(status.highlightCount) highlights") }
         if model.busy { Text(model.activity) }
         Divider()
-        Button("Open Reader Bridge") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
+        Button("Open Passage") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
         Button("Refresh status") { Task { await model.perform("status") } }.disabled(model.busy)
         Divider()
-        Button("Quit Reader Bridge") { NSApp.terminate(nil) }
+        Button("Quit Passage") { NSApp.terminate(nil) }
     }
 }
 
@@ -133,8 +133,8 @@ struct BridgeSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 13) {
-                BrandMark().frame(width: 48, height: 29)
-                Text("Reader Bridge").font(.system(size: 22, weight: .medium, design: .serif))
+                BrandMark().frame(width: 42, height: 40)
+                Text("Passage").font(.system(size: 22, weight: .medium, design: .serif))
             }.padding(.horizontal, 15).padding(.top, 25).padding(.bottom, 32)
             VStack(spacing: 5) {
                 ForEach(AppModel.Section.allCases) { section in

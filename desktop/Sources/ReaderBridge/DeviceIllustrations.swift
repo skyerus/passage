@@ -20,13 +20,13 @@ struct DeviceIllustration: View {
             HStack(spacing: 18) {
                 device("Kindle", symbol: "book.closed", detail: "KOReader")
                 Image(systemName: "wifi").foregroundStyle(teal)
-                device("Your Mac", symbol: "desktopcomputer", detail: "Reader Bridge")
+                device("Your Mac", symbol: "desktopcomputer", detail: "Passage")
                 Image(systemName: "wifi").foregroundStyle(teal)
                 device("X4 Pro", symbol: "book.closed", detail: "CrossPoint")
             }
         case .kindleUSB:
             HStack(spacing: 26) {
-                device("Your Mac", symbol: "desktopcomputer", detail: "Reader Bridge")
+                device("Your Mac", symbol: "desktopcomputer", detail: "Passage")
                 VStack(spacing: 8) { Image(systemName: "cable.connector").font(.system(size: 28)); Text("USB").font(.caption) }.foregroundStyle(teal)
                 device("Kindle", symbol: "book.closed", detail: "USB storage")
             }

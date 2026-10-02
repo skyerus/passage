@@ -177,7 +177,7 @@ struct HighlightsView: View {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false; panel.canChooseFiles = true; panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.plainText, .json]
-        panel.message = "Choose My Clippings.txt, a Kindle highlights JSON archive, or a Reader Bridge export. Covers in JSON are imported too."
+        panel.message = "Choose My Clippings.txt, a Kindle highlights JSON archive, or a Passage export. Covers in JSON are imported too."
         panel.prompt = "Import"
         if panel.runModal() == .OK, let url = panel.url {
             let command = url.pathExtension.lowercased() == "json" ? "import_archive" : "import_clippings"
@@ -347,7 +347,7 @@ struct SettingsView: View {
                     BridgeStatusBadge(title: model.error != nil ? "Unable to check" : status.service.healthy ? "Ready" : "Paused", healthy: model.error == nil && status.service.healthy)
                 }
                 if loginNeedsApproval {
-                    Text("Approve Reader Bridge in System Settings → General → Login Items.").font(.caption).foregroundStyle(.secondary)
+                    Text("Approve Passage in System Settings → General → Login Items.").font(.caption).foregroundStyle(.secondary)
                     Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() }
                 }
                 if let loginError { Text(loginError).foregroundStyle(.orange).font(.caption) }
@@ -390,7 +390,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: "books.vertical").foregroundStyle(teal)
-                    Text("Reader Bridge \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")").font(.system(size: 14, weight: .medium, design: .serif))
+                    Text("Passage \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")").font(.system(size: 14, weight: .medium, design: .serif))
                     Spacer()
                     Link("Documentation & source ↗", destination: URL(string: "https://github.com/skyerus/reader-bridge")!).font(.system(size: 12))
                 }

@@ -72,7 +72,7 @@ enum Backend {
         let python = env["READER_BRIDGE_PYTHON"] ?? resources.appendingPathComponent("runtime/bin/python3").path
         let script = env["READER_BRIDGE_BACKEND"] ?? resources.appendingPathComponent("bridge/desktop.py").path
         guard FileManager.default.isExecutableFile(atPath: python), FileManager.default.fileExists(atPath: script) else {
-            throw BridgeFailure.message("Reader Bridge’s bundled runtime is missing. Reinstall the app, or set the documented developer runtime paths.")
+            throw BridgeFailure.message("Passage’s bundled runtime is missing. Reinstall the app, or set the documented developer runtime paths.")
         }
         var request = parameters; request["command"] = command
         let input = try JSONSerialization.data(withJSONObject: request)

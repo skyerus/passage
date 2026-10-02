@@ -6,16 +6,7 @@ struct BrandMark: View {
         GeometryReader { geometry in
             // Crop the master icon's clear space for the compact sidebar lockup.
             let rect = BrandMarkGeometry.canvas(in: geometry.size)
-            ZStack {
-                Path(BrandMarkGeometry.fitted(BrandMarkGeometry.page, in: rect)).fill(teal)
-                Path(BrandMarkGeometry.fitted(BrandMarkGeometry.otherPage, in: rect)).fill(teal)
-                Path(BrandMarkGeometry.fitted(BrandMarkGeometry.bookmark, in: rect))
-                    .fill(Color(nsColor: NSColor(name: "BridgeBookmark") { appearance in
-                        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                            ? NSColor(red: 0.90, green: 0.72, blue: 0.43, alpha: 1)
-                            : NSColor(red: 0.58, green: 0.36, blue: 0.12, alpha: 1)
-                    }))
-            }
+            Path(BrandMarkGeometry.fitted(BrandMarkGeometry.mark, in: rect)).fill(teal)
         }
         .aspectRatio(BrandMarkGeometry.bounds.width / BrandMarkGeometry.bounds.height, contentMode: .fit)
         .accessibilityHidden(true)
@@ -39,7 +30,7 @@ enum BrandMenuIcon {
                 context.addPath(BrandMarkGeometry.fitted(page, in: rect))
                 if ready { context.fillPath() } else { context.strokePath() }
             }
-            context.addPath(BrandMarkGeometry.fitted(BrandMarkGeometry.bookmark, in: rect))
+            context.addPath(BrandMarkGeometry.fitted(BrandMarkGeometry.pageEdges, in: rect))
             context.fillPath()
             return true
         }
