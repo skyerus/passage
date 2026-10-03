@@ -188,5 +188,14 @@ Serial diagnostics exposed a fragmented-heap failure allocating the inflater's
 32 KB window during cover extraction. Firmware now lends the existing
 framebuffer under the render lock, restores it, and redraws the page. It adds no
 permanent buffer or Wi-Fi polling. The X4 Pro build and 502 host tests passed;
-other board profiles still require their own physical acceptance. Automatic
-deletion and final restoration checks are not included in these results yet.
+other board profiles still require their own physical acceptance.
+
+Deleting a Kindle test highlight and closing its book automatically delivered
+the deletion, without pressing Sync. The Xteink also delivered its queued
+deletion after returning to the book. Serial diagnostics showed why delivery
+had stalled on Home: its temporary cover cache left less free memory than the
+uploader requires. The firmware now releases rebuildable display caches only
+when queued work needs the space, then rechecks the unchanged memory budget.
+This adds no permanent buffer or network polling. The X4 Pro build and 502 host
+tests passed; the Home-screen physical retest and original-setup restoration
+remain pending.
