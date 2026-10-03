@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "version": "0.7.0",
-  "build": "23",
+  "build": "24",
   "minimum_macos": "13.0",
   "bundle_identifier": "com.readerbridge.desktop"
 }

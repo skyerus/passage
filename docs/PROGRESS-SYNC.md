@@ -11,7 +11,7 @@ The Mac app includes a private KOSync-compatible service. KOReader on Kindle and
 
 Setup records the selected readers' pairings. **Readers paired** means settings are saved; received timestamps show actual uploads. Verify a physical round trip before relying on a two-reader connection. You can choose **Finish without position sync** and return later.
 
-Reader Bridge preserves KOReader's existing automatic-sync preferences. New configurations enable Auto sync; the reader's own Wi-Fi settings still apply. CrossPoint's Upload Local and Apply Remote actions remain manual. Choosing a new server does not add a polling loop, keep the readers' Wi-Fi on, change their sleep settings, or create Amazon Whispersync compatibility.
+Keep **Sync automatically** selected when connecting Kindle to sync on book open/close and sleep/wake. Passage also sets KOReader's **Action when Wi-Fi is off** to **Turn on**, which KOReader requires for automatic sync. Uncheck it for manual sync. Pairing backs up these settings and leaves Wi-Fi disconnect and sleep preferences unchanged. CrossPoint's Upload Local and Apply Remote actions remain manual. Position sync does not add a polling loop, keep Wi-Fi continuously on, or create Amazon Whispersync compatibility.
 
 ## Daily use
 

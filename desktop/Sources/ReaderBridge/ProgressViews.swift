@@ -17,6 +17,7 @@ struct ReadingProgressView: View {
     private var crossPointPaired: Bool { progress?.xteinkPaired == true && (progress?.xteinkModel ?? BridgeStatus.SupportedDevice.legacyX4Pro.id) == selectedModel }
     private var configured: Bool { progress?.isConfigured(for: choice, crosspointModel: choice.includesCrossPoint ? selectedModel : nil) == true }
     @State private var kindleMount = ""
+    @State private var kindleAutoSync = true
     @State private var xteinkMount = ""
     @State private var deviceURL = ""
     @State private var useWiFi = false
@@ -95,11 +96,15 @@ struct ReadingProgressView: View {
                 Label(progress?.kindlePaired == true ? "Kindle settings saved" : "Connect your Kindle", systemImage: progress?.kindlePaired == true ? "checkmark.circle" : "cable.connector")
                     .font(.headline)
                 Text("Close KOReader and connect by USB.").font(.callout).foregroundStyle(.secondary)
+                Toggle("Sync automatically", isOn: $kindleAutoSync).font(.callout)
+                if kindleAutoSync {
+                    Text("KOReader turns Wi-Fi on when needed.").font(.caption).foregroundStyle(.secondary)
+                }
                 HStack {
                     TextField("Kindle USB folder", text: $kindleMount).textFieldStyle(.roundedBorder)
                     Button("Choose…") { if let path = chooseFolder() { kindleMount = path } }
                     Button(progress?.kindlePaired == true ? "Reconnect Kindle" : "Connect Kindle") {
-                        Task { await model.perform("pair_progress_kindle", ["mount": kindleMount], activity: "Copying positions and connecting Kindle…", success: "Kindle settings saved. Eject it and reopen KOReader.") }
+                        Task { await model.perform("pair_progress_kindle", ["mount": kindleMount, "auto_sync": kindleAutoSync], activity: "Copying positions and connecting Kindle…", success: "Kindle settings saved. Eject it and reopen KOReader.") }
                     }.disabled(!canConnectReader || kindleMount.isEmpty)
                 }
             }

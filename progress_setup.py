@@ -186,7 +186,9 @@ class ProgressSetup:
         progress_sync.Store(self.progress_directory()/'positions.sqlite3').seed(rows.values(), newer=True)
         return queue_path if queue_path.is_file() else None
 
-    def pair_progress_kindle(self, mount):
+    def pair_progress_kindle(self, mount, auto_sync=None):
+        if auto_sync is not None and not isinstance(auto_sync, bool):
+            raise setup.SetupError('Automatic sync must be true or false.')
         endpoint = self.paired_progress_endpoint()
         mount = setup.guarded(Path(mount).expanduser())
         root = next((p for p in [mount/'koreader',mount/'.adds/koreader'] if (p/'reader.lua').is_file()),None)
@@ -216,9 +218,19 @@ class ProgressSetup:
         account = self.progress_account()
         settings = previous['settings']
         settings.update(custom_server=endpoint, username=account['username'], userkey=progress_sync.auth_headers(account)['x-auth-key'], checksum_method=0, send_metadata=True)
-        settings.setdefault('auto_sync', True)
+        if auto_sync is not None:
+            settings['auto_sync'] = auto_sync
+        else:
+            settings.setdefault('auto_sync', True)
         settings.setdefault('sync_forward',1); settings.setdefault('sync_backward',1)
         updates = [(path,lua_settings.dumps(previous).encode())]
+        # KOSync disables auto_sync at startup unless this prerequisite is set.
+        # Match its own Auto sync flow: allow Wi-Fi when needed, without enabling
+        # periodic syncing or changing disconnect/suspend preferences.
+        if settings['auto_sync'] and reader_settings.get('wifi_enable_action') != 'turn_on':
+            reader_settings['wifi_enable_action'] = 'turn_on'
+            updates.append((setup.guarded(root/'settings.reader.lua'),
+                            lua_settings.dumps(reader_settings).encode()))
         updates.append((setup.guarded(root/'settings/readerbridge-progress-config.lua'),
                         lua_settings.dumps({'version':1,'endpoint':endpoint,'username':account['username']}).encode()))
         for name in ('2-reader-bridge-progress.lua','readerbridge-api.json'):

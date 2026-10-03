@@ -219,6 +219,63 @@ class PairingTests(unittest.TestCase):
         with patch.object(self.bridge,'progress_authenticated',return_value=True):
             with self.assertRaises(setup.SetupError):self.bridge.pair_progress_kindle(str(self.kind))
         self.assertEqual(self.path.read_bytes(),before)
+
+    def test_fresh_kindle_auto_sync_sets_required_wifi_action(self):
+        self.path.unlink()
+        reader = self.kor/'settings.reader.lua'
+        reader.write_text(lua_settings.dumps({'device_id':'kindle-fixture',
+            'wifi_enable_action':'prompt', 'auto_disable_wifi':True, 'auto_suspend_timeout_seconds':900}))
+        before = reader.read_bytes()
+        with patch.object(self.bridge,'progress_authenticated',return_value=True):
+            self.bridge.pair_progress_kindle(str(self.kind))
+        network = lua_settings.loads(reader.read_text())
+        sync_settings = lua_settings.loads(self.path.read_text())['settings']
+        # These are the two conditions used by native KOSync:init to keep auto sync enabled.
+        self.assertTrue(sync_settings['auto_sync'])
+        self.assertEqual(network['wifi_enable_action'],'turn_on')
+        self.assertTrue(network['auto_disable_wifi'])
+        self.assertEqual(network['auto_suspend_timeout_seconds'],900)
+        self.assertNotIn('pages_before_update',sync_settings)
+        self.assertTrue(any(p.read_bytes()==before for p in (self.bridge.app/'backups').glob('*settings.reader.lua')))
+
+    def test_explicit_auto_sync_repairs_native_disabled_setting(self):
+        self.original['settings'].update(username=self.account['username'],
+            custom_server=self.bridge.state['progress_sync']['endpoint'])
+        self.path.write_text(lua_settings.dumps(self.original))
+        with patch.object(self.bridge,'progress_authenticated',return_value=True):
+            self.bridge.mutate('pair_progress_kindle',{'mount':str(self.kind),'auto_sync':True})
+        self.assertTrue(lua_settings.loads(self.path.read_text())['settings']['auto_sync'])
+        self.assertEqual(lua_settings.loads((self.kor/'settings.reader.lua').read_text())['wifi_enable_action'],'turn_on')
+
+    def test_manual_sync_keeps_network_preferences(self):
+        self.path.unlink()
+        reader = self.kor/'settings.reader.lua'
+        before = reader.read_bytes()
+        with patch.object(self.bridge,'progress_authenticated',return_value=True):
+            self.bridge.pair_progress_kindle(str(self.kind),auto_sync=False)
+        self.assertFalse(lua_settings.loads(self.path.read_text())['settings']['auto_sync'])
+        self.assertEqual(reader.read_bytes(),before)
+
+    def test_auto_sync_pairing_failure_restores_network_and_sync_settings(self):
+        self.path.write_text(lua_settings.dumps({'settings':{'auto_sync':False}}))
+        reader = self.kor/'settings.reader.lua'
+        before_reader, before_sync = reader.read_bytes(), self.path.read_bytes()
+        original_install = self.bridge.install_file
+        def fail_patch(path,data):
+            if path.name=='2-reader-bridge-progress.lua': raise OSError('USB disconnected')
+            original_install(path,data)
+        with patch.object(self.bridge,'progress_authenticated',return_value=True),patch.object(self.bridge,'install_file',side_effect=fail_patch):
+            with self.assertRaisesRegex(OSError,'USB disconnected'):
+                self.bridge.pair_progress_kindle(str(self.kind),auto_sync=True)
+        self.assertEqual(reader.read_bytes(),before_reader)
+        self.assertEqual(self.path.read_bytes(),before_sync)
+        self.assertNotIn('kindle',self.bridge.state['progress_sync'])
+
+    def test_invalid_auto_sync_option_cannot_change_reader(self):
+        before=self.path.read_bytes()
+        with self.assertRaises(setup.SetupError):
+            self.bridge.mutate('pair_progress_kindle',{'mount':str(self.kind),'auto_sync':'yes'})
+        self.assertEqual(self.path.read_bytes(),before)
     def test_failed_old_server_leaves_reader_settings_unchanged(self):
         before=self.path.read_bytes()
         with patch.object(self.bridge,'progress_authenticated',return_value=True),patch.object(setup,'http',side_effect=OSError('offline')):
