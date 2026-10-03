@@ -169,3 +169,24 @@ Current upstream protects progress credentials from Wi-Fi file access. Desktop
 pairing now uses USB/SD by default, explains a protected-file response, and keeps
 previous settings when setup fails. Physical retesting and restoration of the
 original reader setup remain required before recording acceptance.
+
+## Fresh reader retest and cover memory fix (2026-10-03)
+
+A Paperwhite 5 running firmware 5.19.2 was tested with a clean KOReader
+installation while retaining its existing jailbreak. An Xteink X4 Pro was
+tested with clean CrossPoint settings and books. Personal data and original
+firmware were backed up and retained separately. This does not establish
+that jailbreaking a stock Kindle is automatic or supported on every firmware.
+
+The physical test confirmed dated highlights from both readers, original-colour
+cover upload, and reading-position exchange in both directions. A separate book
+installed only on the Xteink proved that its cover association came from that
+reader; the received JPEG matched the EPUB image byte for byte. Opening the
+book triggered cover delivery without a manual Sync command.
+
+Serial diagnostics exposed a fragmented-heap failure allocating the inflater's
+32 KB window during cover extraction. Firmware now lends the existing
+framebuffer under the render lock, restores it, and redraws the page. It adds no
+permanent buffer or Wi-Fi polling. The X4 Pro build and 502 host tests passed;
+other board profiles still require their own physical acceptance. Automatic
+deletion and final restoration checks are not included in these results yet.
