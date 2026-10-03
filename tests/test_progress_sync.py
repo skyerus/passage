@@ -8,6 +8,7 @@ import sqlite3
 import threading
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 import archive_backup
 from collector import Store as HighlightStore, initialize
@@ -297,6 +298,93 @@ class PairingTests(unittest.TestCase):
         value=json.loads(config.read_text())
         self.assertEqual(value['extra'],'keep');self.assertEqual(value['syncBehavior'],1)
         self.assertEqual(value['password'],self.account['password'])
+
+    def test_protected_progress_config_refuses_lan_without_changing_pairing_or_positions(self):
+        self.bridge.state['progress_sync'].update(xteink={'model':'xteink_x4','endpoint':'http://192.168.1.20:8085'},verified=True)
+        self.bridge.save()
+        before=copy.deepcopy(self.bridge.state);saved=self.bridge.state_path.read_bytes()
+        store=sync.Store(self.bridge.progress_directory()/'positions.sqlite3');store.seed([self.item])
+        positions=sync.read_archive(store.path)
+        def http(url,**kwargs):
+            if url.endswith('/api/status'): return b'{"device":"X4"}'
+            raise HTTPError(url,403,'Protected',{},None)
+        with patch.object(self.bridge,'progress_authenticated',return_value=True),patch.object(setup,'http',side_effect=http) as requests:
+            with self.assertRaisesRegex(setup.SetupError,'USB drive mode') as error:
+                self.bridge.pair_progress_xteink(device_url='http://192.168.1.42',model='xteink_x4')
+        self.assertEqual(requests.call_count,2)
+        self.assertNotIn(self.account['password'],str(error.exception))
+        self.assertEqual(self.bridge.state,before);self.assertEqual(self.bridge.state_path.read_bytes(),saved)
+        self.assertEqual(sync.read_archive(store.path),positions)
+        self.assertFalse((self.bridge.app/'backups').exists())
+
+    def test_protected_progress_upload_has_storage_recovery_and_keeps_pairing(self):
+        self.bridge.save();before=copy.deepcopy(self.bridge.state);saved=self.bridge.state_path.read_bytes()
+        def http(url,data=None,**kwargs):
+            if url.endswith('/api/status'): return b'{"device":"X4"}'
+            raise HTTPError(url,403 if '/upload?' in url else 404,'Unavailable',{},None)
+        with patch.object(self.bridge,'progress_authenticated',return_value=True),patch.object(setup,'http',side_effect=http) as requests:
+            with self.assertRaisesRegex(setup.SetupError,'USB drive mode'):
+                self.bridge.pair_progress_xteink(device_url='http://192.168.1.42',model='xteink_x4')
+        self.assertEqual(requests.call_count,3)
+        self.assertFalse(any('/delete?' in call.args[0] for call in requests.call_args_list))
+        self.assertEqual(self.bridge.state,before);self.assertEqual(self.bridge.state_path.read_bytes(),saved)
+
+    def test_legacy_lan_does_not_delete_existing_progress_config_for_repair(self):
+        original=json.dumps({'cfgVersion':2,'username':self.account['username'],'password_obf':'private',
+                             'serverUrl':self.bridge.state['progress_sync']['endpoint'],'syncBehavior':1,'extra':'keep'}).encode()
+        before=copy.deepcopy(self.bridge.state)
+        with patch.object(self.bridge,'progress_authenticated',return_value=True),patch.object(setup,'http',side_effect=[b'{"device":"X4"}',original]) as requests:
+            with self.assertRaisesRegex(setup.SetupError,'update existing progress settings safely'):
+                self.bridge.pair_progress_xteink(device_url='http://192.168.1.42',model='xteink_x4')
+        self.assertEqual(requests.call_count,2);self.assertEqual(self.bridge.state,before)
+        self.assertFalse((self.bridge.app/'backups').exists())
+
+    def test_first_time_legacy_lan_pairing_still_verifies_uploaded_config(self):
+        reader={}
+        def http(url,data=None,**kwargs):
+            if url.endswith('/api/status'): return b'{"device":"X4"}'
+            if '/upload?' in url:
+                reader['config']=data.split(b'\r\n\r\n',1)[1].rsplit(b'\r\n--',1)[0]
+                return b'ok'
+            if 'config' not in reader: raise HTTPError(url,404,'Missing',{},None)
+            return reader['config']
+        with patch.object(self.bridge,'progress_authenticated',return_value=True),patch.object(setup,'http',side_effect=http) as requests:
+            self.bridge.pair_progress_xteink(device_url='http://192.168.1.42',model='xteink_x4')
+        value=json.loads(reader['config'])
+        self.assertEqual(value['password'],self.account['password'])
+        self.assertEqual(value['serverUrl'],self.bridge.state['progress_sync']['endpoint'])
+        self.assertEqual(requests.call_count,4)
+        self.assertTrue(self.bridge.progress_status()['xteink_paired'])
+
+    def test_usb_pairing_restores_reader_and_pairing_if_write_or_save_fails(self):
+        card=self.root/'card';(card/'.crosspoint').mkdir(parents=True)
+        config=card/'.crosspoint/koreader.json'
+        original=json.dumps({'cfgVersion':2,'username':self.account['username'],'password_obf':'private',
+                             'serverUrl':self.bridge.state['progress_sync']['endpoint'],'extra':'keep'}).encode()
+        self.bridge.state['progress_sync'].update(xteink={'model':'xteink_x4','endpoint':'http://192.168.1.20:8085'},verified=True)
+        self.bridge.save();before=copy.deepcopy(self.bridge.state);saved=self.bridge.state_path.read_bytes()
+        for failure in ('install_file','save'):
+            with self.subTest(failure=failure):
+                config.write_bytes(original)
+                operation=getattr(self.bridge,failure)
+                def fail(*args,**kwargs):
+                    operation(*args,**kwargs)
+                    raise OSError('simulated interrupted write')
+                with patch.object(self.bridge,'progress_authenticated',return_value=True),patch.object(self.bridge,failure,side_effect=fail):
+                    with self.assertRaises(OSError):self.bridge.pair_progress_xteink(mount=str(card),model='xteink_x4')
+                self.assertEqual(config.read_bytes(),original)
+                self.assertEqual(self.bridge.state,before);self.assertEqual(self.bridge.state_path.read_bytes(),saved)
+                self.assertTrue(any(p.read_bytes()==original for p in (self.bridge.app/'backups').glob('*koreader.json')))
+
+    def test_invalid_crosspoint_progress_config_stays_unchanged(self):
+        card=self.root/'card';(card/'.crosspoint').mkdir(parents=True)
+        config=card/'.crosspoint/koreader.json';config.write_bytes(b'{invalid-private-settings')
+        before=copy.deepcopy(self.bridge.state)
+        with patch.object(self.bridge,'progress_authenticated',return_value=True):
+            with self.assertRaisesRegex(setup.SetupError,'Unrecognized Xteink settings') as error:
+                self.bridge.pair_progress_xteink(mount=str(card),model='xteink_x4')
+        self.assertNotIn('private',str(error.exception))
+        self.assertEqual(config.read_bytes(),b'{invalid-private-settings');self.assertEqual(self.bridge.state,before)
 
     def test_different_xteink_account_cannot_silently_lose_its_remote_positions(self):
         self.bridge.state['progress_sync']['kindle']={'endpoint':self.bridge.state['progress_sync']['endpoint']}

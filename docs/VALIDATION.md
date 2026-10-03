@@ -131,8 +131,9 @@ with reading positions deferred. Prerequisite guides remain in the relevant
 reader step; a second reader can be added later.
 
 The candidate pins CrossPoint source
-`d03f6e6a2afbdbdf99d35fcb91d35a847166f514`, including the cover and highlight
-changes. All five build environments completed with PlatformIO 6.1.19,
+`d03f6e6a2afbdbdf99d35fcb91d35a847166f514`, including highlight changes.
+Fresh-reader testing on 2026-10-03 showed that this pin omitted the cover
+uploader; earlier cover tests used a separate development image. All five build environments completed with PlatformIO 6.1.19,
 producing verified images for six profiles: Xteink X3, X4, X4 Pro, X4 Classic,
 Sticky and M5Stack Paper Mono. Source, dependency notices and image checksums
 are packaged with the firmware. Compilation does not establish physical
@@ -148,3 +149,23 @@ the packaged app on Apple Silicon and Intel. A development disk image is not a
 consumer release. Developer ID signing, accepted Apple notarization, a clean-Mac
 walkthrough and exact-artifact physical-reader evidence are required by the
 [release process](RELEASING.md) before publishing a supported installer.
+
+
+## Fresh-reader regression fixes (2026-10-03)
+
+A fresh KOReader installation on a jailbroken Paperwhite 5 and a clean CrossPoint
+setup on an X4 Pro received highlights automatically. The bundled Xteink image
+failed to upload its cover and rejected local HTTP progress sync with a low-memory
+error. These results are failures of the release candidate, not completed
+physical acceptance.
+
+The replacement source includes original-cover upload and applies the existing
+TLS heap thresholds only to HTTPS connections. Queued artwork lives outside
+reader caches, and cancellation stops the finite upload stream. Firmware
+packaging rejects images missing the highlight and cover protocol markers.
+Those marker checks catch missing features; they do not prove runtime behavior.
+
+Current upstream protects progress credentials from Wi-Fi file access. Desktop
+pairing now uses USB/SD by default, explains a protected-file response, and keeps
+previous settings when setup fails. Physical retesting and restoration of the
+original reader setup remain required before recording acceptance.
