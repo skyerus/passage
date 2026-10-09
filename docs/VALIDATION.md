@@ -230,3 +230,8 @@ patches must be bundled, and pairing must install the quiet Wi-Fi patch.
 These checks do not replace the separate clean-Mac walkthrough, actual
 logout/login check, or physical-reader acceptance of the final disk image.
 The download remains a public beta while those checks are outstanding.
+
+Build 27 updates the public repository to `skyerus/passage`, including the app's
+help links. The archive safeguard rejects both the new source repository name
+and its legacy alias. The 27 setup tests and 52 Swift tests passed after this
+change; the complete GitHub workflow also passed on Apple Silicon and Intel.
