@@ -475,7 +475,7 @@ struct SettingsView: View {
                     Image(systemName: "books.vertical").foregroundStyle(teal)
                     Text("Passage \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")").font(.system(size: 14, weight: .medium, design: .serif))
                     Spacer()
-                    Link("Documentation & source ↗", destination: URL(string: "https://github.com/skyerus/reader-bridge")!).font(.system(size: 12))
+                    Link("Documentation & source ↗", destination: URL(string: "https://github.com/skyerus/passage")!).font(.system(size: 12))
                 }
             }.padding(.horizontal, 4).padding(.top, 5)
         }
@@ -515,7 +515,7 @@ struct SettingsView: View {
             Button(status.library.installed ? "Update library" : "Install book library") {
                 Task { await model.perform("install_library", ["books": books, "port": Int(libraryPort) ?? 0], activity: "Installing book library…", success: "Library installed. Follow the guide to sign in and add its catalog on both readers.") }
             }.disabled(model.busy || books.isEmpty || !(1024...65535).contains(Int(libraryPort) ?? 0))
-            Link("Library sign-in and reader setup ↗", destination: URL(string: "https://github.com/skyerus/reader-bridge/blob/main/docs/SETUP.md#5-add-the-home-book-library")!).font(.caption)
+            Link("Library sign-in and reader setup ↗", destination: URL(string: "https://github.com/skyerus/passage/blob/main/docs/SETUP.md#5-add-the-home-book-library")!).font(.caption)
         }
     }
     private func settingsLabel(_ title: String, detail: String, symbol: String) -> some View {

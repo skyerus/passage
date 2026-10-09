@@ -131,8 +131,9 @@ with reading positions deferred. Prerequisite guides remain in the relevant
 reader step; a second reader can be added later.
 
 The candidate pins CrossPoint source
-`d03f6e6a2afbdbdf99d35fcb91d35a847166f514`, including the cover and highlight
-changes. All five build environments completed with PlatformIO 6.1.19,
+`d03f6e6a2afbdbdf99d35fcb91d35a847166f514`, including highlight changes.
+Fresh-reader testing on 2026-10-03 showed that this pin omitted the cover
+uploader; earlier cover tests used a separate development image. All five build environments completed with PlatformIO 6.1.19,
 producing verified images for six profiles: Xteink X3, X4, X4 Pro, X4 Classic,
 Sticky and M5Stack Paper Mono. Source, dependency notices and image checksums
 are packaged with the firmware. Compilation does not establish physical
@@ -148,3 +149,89 @@ the packaged app on Apple Silicon and Intel. A development disk image is not a
 consumer release. Developer ID signing, accepted Apple notarization, a clean-Mac
 walkthrough and exact-artifact physical-reader evidence are required by the
 [release process](RELEASING.md) before publishing a supported installer.
+
+
+## Fresh-reader regression fixes (2026-10-03)
+
+A fresh KOReader installation on a jailbroken Paperwhite 5 and a clean CrossPoint
+setup on an X4 Pro received highlights automatically. The bundled Xteink image
+failed to upload its cover and rejected local HTTP progress sync with a low-memory
+error. These results are failures of the release candidate, not completed
+physical acceptance.
+
+The replacement source includes original-cover upload and applies the existing
+TLS heap thresholds only to HTTPS connections. Queued artwork lives outside
+reader caches, and cancellation stops the finite upload stream. Firmware
+packaging rejects images missing the highlight and cover protocol markers.
+Those marker checks catch missing features; they do not prove runtime behavior.
+
+Current upstream protects progress credentials from Wi-Fi file access. Desktop
+pairing now uses USB/SD by default, explains a protected-file response, and keeps
+previous settings when setup fails. Physical retesting and restoration of the
+original reader setup remain required before recording acceptance.
+
+## Fresh reader retest and cover memory fix (2026-10-03)
+
+A Paperwhite 5 running firmware 5.19.2 was tested with a clean KOReader
+installation while retaining its existing jailbreak. An Xteink X4 Pro was
+tested with clean CrossPoint settings and books. Personal data and original
+firmware were backed up and retained separately. This does not establish
+that jailbreaking a stock Kindle is automatic or supported on every firmware.
+
+The physical test confirmed dated highlights from both readers, original-colour
+cover upload, and reading-position exchange in both directions. A separate book
+installed only on the Xteink proved that its cover association came from that
+reader; the received JPEG matched the EPUB image byte for byte. Opening the
+book triggered cover delivery without a manual Sync command.
+
+Serial diagnostics exposed a fragmented-heap failure allocating the inflater's
+32 KB window during cover extraction. Firmware now lends the existing
+framebuffer under the render lock, restores it, and redraws the page. It adds no
+permanent buffer or Wi-Fi polling. The X4 Pro build and 502 host tests passed;
+other board profiles still require their own physical acceptance.
+
+Deleting a Kindle test highlight and closing its book automatically delivered
+the deletion, without pressing Sync. The Xteink also delivered its queued
+deletion after returning to the book. Serial diagnostics showed why delivery
+had stalled on Home: its temporary cover cache left less free memory than the
+uploader requires. The firmware now releases rebuildable display caches only
+when queued work needs the space, then rechecks the unchanged memory budget.
+This adds no permanent buffer or network polling. The X4 Pro build and 502 host
+tests passed. The subsequent Home-screen physical retest released its
+15,364-byte temporary cover cache, met the unchanged upload budget, and completed
+automatic upload 8.118 seconds after boot. The replayed deletion remained deleted.
+Original reader data and Mac services were restored on 2026-10-04. The Xteink's
+original full-flash image passed a separate readback verification.
+
+## Consolidated public beta 3 (2026-10-09)
+
+The app pins the corrected, publicly available firmware source
+`e33bf7006e9081a149ca44e63f17686d817b50ee`, including the original-cover uploader,
+local HTTP memory threshold fix, and Home-screen memory recovery. The verified
+bundle provides six profiles from five build environments, with matching source
+and dependency notices. Only the Paperwhite 5 and X4 Pro have the physical
+integration evidence recorded above.
+
+Kindle reading-position pairing now installs a quiet Wi-Fi user patch alongside
+the revision guard. Automatic wake/reconnect uses KOReader's asynchronous restore
+and bounded connectivity check; explicit network actions retain their normal UI.
+Offline suspend preserves the current position and its revision in the native
+queue. This adds no periodic polling or change to Wi-Fi shutdown preferences.
+The patch was installed and hash-verified on the existing Kindle; a physical
+sleep/wake confirmation is still outstanding.
+
+The merged source passed 231 Python tests, 52 Swift tests, and nine Lua suites.
+The rebuilt app passed packaged acceptance using isolated launchd services and
+reader fixtures, including original cover bytes, automatic folder backup,
+safe restore, deletion replay, pairing, and reading-position round trips and
+restart. A packaging regression is covered explicitly: both KOReader user
+patches must be bundled, and pairing must install the quiet Wi-Fi patch.
+
+These checks do not replace the separate clean-Mac walkthrough, actual
+logout/login check, or physical-reader acceptance of the final disk image.
+The download remains a public beta while those checks are outstanding.
+
+Build 27 updates the public repository to `skyerus/passage`, including the app's
+help links. The archive safeguard rejects both the new source repository name
+and its legacy alias. The 27 setup tests and 52 Swift tests passed after this
+change; the complete GitHub workflow also passed on Apple Silicon and Intel.

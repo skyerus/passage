@@ -92,7 +92,7 @@ class SetupTests(unittest.TestCase):
     def test_archive_repoint_and_public_defaults_refused(self):
         self.bridge.state['collector'] = {'archive': 'example/old'}
         with self.assertRaises(setup.SetupError): self.bridge.collector('example/new')
-        for archive in ('skyerus/kindle-highlights', 'skyerus/reader-bridge', ''):
+        for archive in ('skyerus/kindle-highlights', 'skyerus/reader-bridge', 'skyerus/passage', ''):
             with self.assertRaises(setup.SetupError): self.bridge.collector(archive)
     def test_port_conflict_does_not_modify_anything(self):
         with patch.object(setup, 'available', return_value=False):

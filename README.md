@@ -6,11 +6,19 @@ Keep your Kindle and Xteink highlights in one Mac library. Passage collects pass
 
 Formerly Reader Bridge. Existing archives and reader connections keep their identities.
 
-[Download for Apple Silicon](https://github.com/skyerus/reader-bridge/releases/download/v0.7.0-rc.2/Passage-0.7.0-arm64.dmg) · [Get started](docs/MAC-APP.md) · [Get help](SUPPORT.md)
+[Download for Apple Silicon](https://github.com/skyerus/passage/releases/download/v0.7.0-rc.3/Passage-0.7.0-arm64.dmg) · [Get started](docs/MAC-APP.md) · [Get help](SUPPORT.md)
 
-**Passage 0.7.0 release candidate 2** is a Developer ID signed, notarized download for Apple Silicon Macs (M1 or later), requiring macOS 13 or later. It is a **pre-release** for testing; the separate clean-Mac walkthrough and physical-reader acceptance of this exact installer remain open. Read the [release notes and checksums](https://github.com/skyerus/reader-bridge/releases/tag/v0.7.0-rc.2). Intel Macs can build from source; no Intel, Windows, or Linux consumer installer is available.
+**Passage 0.7.0 release candidate 3** is a Developer ID signed, notarized download for Apple Silicon Macs (M1 or later), requiring macOS 13 or later. It is a **pre-release** for testing; the separate clean-Mac walkthrough and physical-reader acceptance of this exact installer remain open. Read the [release notes and checksums](https://github.com/skyerus/passage/releases/tag/v0.7.0-rc.3). Intel Macs can build from source; no Intel, Windows, or Linux consumer installer is available.
 
 ![Passage book library with sample highlights and covers](docs/images/mac-books.png)
+
+Browse by book, sort by the most recent recorded highlight, or search your library.
+
+| Read and copy a highlight | Connect one reader or both |
+| --- | --- |
+| ![Passage showing a quote, its book cover, author, and recorded date](docs/images/mac-highlights.png) | ![Passage setup with Kindle, CrossPoint reader, and both readers options](docs/images/mac-setup.png) |
+
+Screenshots use a sample library with public-domain passages, not personal reading data.
 
 ## What you can do
 
@@ -35,7 +43,7 @@ Use your Mac and readers on the same trusted home network, with DRM-free EPUBs. 
 
 ## Install the Mac app
 
-1. Download [Passage-0.7.0-arm64.dmg](https://github.com/skyerus/reader-bridge/releases/download/v0.7.0-rc.2/Passage-0.7.0-arm64.dmg) for your Apple Silicon Mac.
+1. Download [Passage-0.7.0-arm64.dmg](https://github.com/skyerus/passage/releases/download/v0.7.0-rc.3/Passage-0.7.0-arm64.dmg) for your Apple Silicon Mac.
 2. Open it, drag **Passage** into **Applications**, and eject the disk image.
 3. Open Passage from Applications. Follow **Set up your reader** for automatic capture, or choose **Highlights → ⋯ → Import highlights** for an existing archive. Basic setup uses the bundled runtime and firmware; it needs no Terminal, Python, Git, compiler, or GitHub account.
 4. Check your imported highlights appear. For a paired reader, save one new highlight with Wi-Fi connected and check it arrives in Passage.
@@ -53,6 +61,8 @@ Highlight connections use a private LAN address and a dedicated bearer token ove
 ## Development
 
 [Contribute](CONTRIBUTING.md) · [Build and release the app](docs/RELEASING.md) · [Advanced command-line setup](docs/SETUP.md) · [Validation history](docs/VALIDATION.md) · [Upstream sources and notices](docs/UPSTREAM-SOURCES.md)
+
+The [release video production kit](media/release/README.md) includes the narration, editable motion graphics, and YouTube description. It uses the same native screenshots shown above.
 
 ```sh
 python3 -m unittest discover -s tests -v

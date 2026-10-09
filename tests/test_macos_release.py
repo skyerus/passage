@@ -30,6 +30,11 @@ release = load('release-macos')
 
 
 class PackageBoundaryTests(unittest.TestCase):
+    def test_pairing_patches_are_available_inside_the_packaged_app(self):
+        allowlist = set(builder.resource_paths()['bridge_files'])
+        for name in ('2-reader-bridge-progress.lua', '2-reader-bridge-quiet-wifi.lua', 'readerbridge-api.json'):
+            self.assertIn(Path('koreader/patches') / name, allowlist)
+
     def test_resource_allowlist_excludes_unlisted_private_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -18,6 +18,7 @@
     "firmware.json",
     "LICENSE",
     "koreader/patches/2-reader-bridge-progress.lua",
+    "koreader/patches/2-reader-bridge-quiet-wifi.lua",
     "koreader/patches/readerbridge-api.json",
     "koreader/sharedhighlights.koplugin/README.md",
     "koreader/sharedhighlights.koplugin/_meta.lua",

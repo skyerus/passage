@@ -1,6 +1,6 @@
 # Contributing to Passage
 
-For a setup problem, use the [support guide](SUPPORT.md). For a proposed behavior or reader profile, [open an issue](https://github.com/skyerus/reader-bridge/issues/new) describing the user problem, exact hardware, and expected result. Physical testing is especially useful: include the exact app release, macOS version, reader firmware, and steps you observed, using synthetic books and quotes.
+For a setup problem, use the [support guide](SUPPORT.md). For a proposed behavior or reader profile, [open an issue](https://github.com/skyerus/passage/issues/new) describing the user problem, exact hardware, and expected result. Physical testing is especially useful: include the exact app release, macOS version, reader firmware, and steps you observed, using synthetic books and quotes.
 
 Create a branch or worktree from the current remote default branch. Keep changes focused and preserve existing data paths, reader identities, pairing tokens, offline queues, and archive compatibility. Reader support is defined by the modular profiles in [firmware.json](firmware.json); adding a model requires verified source routing and its own physical acceptance before claiming it tested. Firmware build output belongs in release artifacts, rather than Git.
 

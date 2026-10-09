@@ -1,4 +1,4 @@
-local patchfile=assert(arg[1]);local native=assert(arg[2])
+local patchfile=assert(arg[1]);local native=assert(arg[2]);local quietpatch=arg[3]
 local scheduled,patch,clock={},nil,1000
 local config={version=1,endpoint='http://192.168.1.20:8085',username='fixture'}
 local files={}
@@ -29,13 +29,20 @@ local Spore={new_from_spec=function(path)
 end}
 local Widget={new=function(_,o)return o end,extend=function(_,o)return o end}
 local no=function()end
+local online, restores, foreground = true, 0, 0
+local Network={isOnline=function()return online end,isConnected=function()return online end,
+ willRerunWhenOnline=function()if not online then foreground=foreground+1;return true end;return false end,
+ restoreWifiAsync=function()restores=restores+1 end,
+ scheduleConnectivityCheck=function(self)self.pending_connectivity_check=true end,
+ unscheduleConnectivityCheck=function(self)self.pending_connectivity_check=false end}
+G_reader_settings={readSetting=function(_,key)if key=='wifi_enable_action' then return 'turn_on' end end,isTrue=function()return false end}
 local modules={
  datastorage={getSettingsDir=function()return '/test/settings'end},luasettings=stores,
  ['ui/uimanager']=UI, ['ui/widget/container/widgetcontainer']=Widget,
  ['ui/widget/confirmbox']=Widget,['ui/widget/infomessage']=Widget,['ui/widget/inputdialog']=Widget,['ui/widget/multiinputdialog']=Widget,
  ['ui/widget/notification']={}, ['ui/event']={new=function(_,kind,value)return {kind=kind,value=value}end},
- ['ui/network/manager']={isOnline=function()return true end,willRerunWhenOnline=function()return false end},
- device={model='Kindle',hasWifiManager=function()return false end},dispatcher={},logger={dbg=no,warn=no,info=no},
+ ['ui/network/manager']=Network,
+ device={model='Kindle',hasWifiManager=function()return false end,isKindle=function()return true end,hasWifiRestore=function()return true end},dispatcher={},logger={dbg=no,warn=no,info=no},
  optmath={roundPercent=function(p)return math.floor(p*10000)/10000 end},
  ['ffi/sha2']={md5=function(s)return s end},['ui/time']={s=function(n)return n end},
  util={splitFilePathName=function(p)return '',p end},['ffi/util']={template=function(s)return s end},gettext=function(s)return s end,
@@ -46,6 +53,7 @@ for name,m in pairs(modules)do package.preload[name]=function()return m end end
 package.preload.KOSyncClient=function()return dofile(native..'/KOSyncClient.lua')end
 local Plugin=dofile(native..'/main.lua')
 dofile(patchfile);patch(Plugin)
+if quietpatch then dofile(quietpatch);patch(Plugin) end
 local owner=setmetatable({settings={username='fixture',userkey='hash',custom_server=config.endpoint,send_metadata=true,sync_forward=2,sync_backward=1},
  path=native,device_id='kindle',position='original',percentage=.3,push_timestamp=0,pull_timestamp=0,last_page_turn_timestamp=0,
  view={document={file='fixture.epub'}},ui={document={file='fixture.epub',info={has_pages=false}},doc_props={display_title='Fixture',authors='Author'}}}, {__index=Plugin})
@@ -66,3 +74,23 @@ assert(#queue==0 and #files.accounts[config.endpoint..'\nfixture'].conflicts==1)
 owner.position='intentional-earlier';owner.percentage=.1;owner:updateProgress(true,true)
 assert(remote.progress=='intentional-earlier' and requests[#requests].metadata.reader_bridge.force)
 print('Real installed KOSync main.lua and KOSyncClient.lua passed reconnect, stale queue, automatic pull, and explicit backward push')
+if quietpatch then
+ owner.settings.auto_sync=true
+ online=false;Network.wifi_was_on=false
+ owner:_onResume()
+ while #scheduled>0 do local fn=table.remove(scheduled,1);fn() end
+ assert(restores==1 and foreground==0,'actual native resume entered foreground connection path')
+ owner.position='saved-before-sleep';owner.percentage=.2
+ owner:_onSuspend()
+ assert(#queue==1 and queue[1].progress=='saved-before-sleep' and foreground==0)
+ assert(queue[1].metadata.reader_bridge.base_revision==remote.reader_bridge_revision,'quiet suspend lost revision protection')
+ assert(not Network.pending_connectivity_check,'own restore must stop when suspending')
+ owner:_onResume()
+ while #scheduled>0 do local fn=table.remove(scheduled,1);fn() end
+ online=true;Network.pending_connectivity_check=false;owner:_onNetworkConnected()
+ while #scheduled>0 do local fn=table.remove(scheduled,1);fn() end
+ assert(#queue==0 and remote.progress=='saved-before-sleep','saved progress did not drain on reconnect')
+ online=false;owner:getProgress(true,true)
+ assert(foreground==1,'manual sync must keep native connection UI')
+ print('Real installed KOSync also passed quiet failed-reconnect wake, offline suspend, guarded queue drain, and manual sync')
+end
