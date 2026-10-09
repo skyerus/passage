@@ -18,7 +18,9 @@ Browse by book, sort by the most recent recorded highlight, or search your libra
 | --- | --- |
 | ![Passage showing a quote, its book cover, author, and recorded date](docs/images/mac-highlights.png) | ![Passage setup with Kindle, CrossPoint reader, and both readers options](docs/images/mac-setup.png) |
 
-Screenshots use a sample library with public-domain passages, not personal reading data.
+Screenshots show the native Mac app in dark appearance, with its Liquid Glass
+controls and a sample library of public-domain passages and cover artwork.
+[Capture details and artwork sources](media/release/capture/provenance.json).
 
 ## What you can do
 
