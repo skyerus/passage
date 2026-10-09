@@ -23,13 +23,17 @@ def main():
     if not key:
         parser.error('Set GEMINI_API_KEY in your environment; never commit it.')
     script = Path(__file__).with_name('narration.txt').read_text().strip()
-    style = ('Natural British English, explaining a useful tool to a friend. '
-             'Calm and conversational, with ordinary speech inflection rather than an advertising voice. '
-             'About 155 words per minute, short natural pauses, never shouty or breathless. '
-             'Pronounce Passage as the ordinary English word, Xteink as ex-tee-ink, KOReader as kay-oh reader, and EPUB as ee-pub. '
-             'Read only the supplied transcript, exactly once.')
+    # Spell unfamiliar product names for speech, while retaining the readable
+    # source transcript. Pauses are interpreted by the TTS model, not spoken.
+    spoken = script.replace('Xteink', 'X-tee-ink').replace('KOReader', 'K.O. Reader')
+    spoken = spoken.replace('\n\n', '\n<short pause>\n')
+    style = ('British English. A friendly conversational explanation, with varied sentence '
+             'intonation and natural phrase stress. Moderate pace, around 165 words per minute. '
+             'Speak the single-Kindle sentence as a relaxed aside. Keep sentence endings natural. '
+             'Pronounce Passage as the ordinary English word and EPUB as ee-pub. '
+             'Read the supplied transcript once.')
     body = {'model': args.model, 'input': [{'type': 'user_input', 'content': [{
-        'type': 'text', 'text': script,
+        'type': 'text', 'text': spoken,
         'annotations': [{'type': 'speech_metadata', 'style': style}]}]}],
         'response_format': {'type': 'audio'},
         'generation_config': {'speech_config': [{'voice': args.voice}]}}
@@ -58,6 +62,8 @@ def main():
         duration = audio.getnframes() / audio.getframerate()
     receipt = {'model': args.model, 'voice': args.voice, 'duration_seconds': duration,
         'script_sha256': hashlib.sha256(script.encode()).hexdigest(),
+        'spoken_text_sha256': hashlib.sha256(spoken.encode()).hexdigest(),
+        'api_version': 'v1beta', 'endpoint': 'interactions', 'style': style,
         'audio_sha256': hashlib.sha256(data).hexdigest(),
         'usage': result.get('usage', {}), 'api_documentation': 'https://ai.google.dev/gemini-api/docs/speech-generation'}
     args.output.with_suffix('.voice.json').write_text(json.dumps(receipt, indent=2) + '\n')

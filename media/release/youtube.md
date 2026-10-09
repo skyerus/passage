@@ -18,9 +18,9 @@ Check Kindle jailbreak compatibility:
 https://kindlemodding.org/jailbreak-wizard.html
 
 0:00 Kindle and Xteink
-0:13 Collect and import highlights
-0:34 Reading progress and backups
-0:51 Setup and download
+0:12 Collect and import highlights
+0:31 Reading progress and backups
+0:47 Setup and download
 
 This video shows a Kindle Paperwhite (11th generation) and an Xteink X4 Pro. Passage also has firmware profiles for the Xteink X3, X4 and X4 Classic. Use the image for your exact model. Physical integration has been tested with Paperwhite 5 and X4 Pro; the other profiles have compiled images but still need testing on those readers.
 
@@ -30,6 +30,6 @@ Reading progress uses the same EPUB on both readers. CrossPoint's Upload Local a
 
 Separate clean-Mac and final-installer acceptance remain open. Read the release notes for the tested scope. The Mac app is MIT licensed; bundled firmware and dependencies keep their own licenses. You don't need a GitHub account or paid hosting to use Passage.
 
-Narration generated with Gemini TTS. App shots are direct captures of Passage 0.7.0 in its native dark appearance, using a sample library with public-domain passages and cover artwork from Standard Ebooks. Reader visuals are original 3D models based on official product references, with typeset public-domain pages. Music and sound effects were synthesized for this video.
+Narration generated with Gemini 3.8 Flash TTS (Charon) through the v1beta Interactions API, played at its original speed. App shots are direct captures of Passage 0.7.0 in its native dark appearance, using a sample library with public-domain passages and cover artwork from Standard Ebooks. Reader visuals are original 3D models based on official product references, with typeset public-domain pages. Quote, import, progress and backup movements are illustrations of the workflow. Music and sound effects were synthesized for this video.
 
 #Xteink #Kindle #Passage

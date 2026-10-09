@@ -8,7 +8,7 @@ Highlight in KOReader or a supported CrossPoint reader. Passage collects your qu
 
 Search for a passage, then copy just the quote or include its book and author.
 
-You can also import your existing Kindle highlights from My Clippings. One reader is enough to use Passage.
+If you only use a Kindle, you can still keep your highlights in Passage. Just import its My Clippings file.
 
 For reading progress, put the same EPUB on both readers. On CrossPoint, use Upload Local and Apply Remote to move your position between them.
 
