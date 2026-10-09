@@ -16,7 +16,13 @@ Kindle Paperwhite (11th generation) and Xteink X4 Pro.
 - `render_product_film.py` and `graphics.py`: composition, native app screenshots,
   animated highlights, typography, captions, thumbnail, original music and SFX.
 - `youtube.md`: suggested title, description and chapters.
-- `../../docs/images`: native app captures with sample public-domain text.
+- `../../docs/images`: on-screen captures of the released native app in dark
+  appearance, including its actual Liquid Glass controls and sidebar.
+- `capture/prepare.py`: prepares an isolated, read-only sample session using the
+  release executable. It does not recreate views or change the app's theme.
+- `capture/provenance.json`: source build and capture details, including cover
+  artwork sources. Sample passages and artwork come from public-domain books
+  in [Standard Ebooks](https://standardebooks.org/).
 
 The models follow the visible controls and proportions in
 [Xteink's official X4 Pro page](https://www.xteink.com/products/xteink-x4-pro-pocket-ereader)
@@ -31,6 +37,21 @@ Its progress sequence shows CrossPoint's manual controls. It identifies the app
 as a public beta and states the jailbreak, firmware and awake-Mac requirements.
 
 ## Rebuild
+
+To refresh the app shots, run:
+
+```sh
+python3 media/release/capture/prepare.py --app /Applications/Passage.app \
+  --output /tmp/passage-capture.noindex
+```
+
+Open the resulting capture app, keep the
+Mac's normal appearance, and capture the actual Books, Highlights and Setup
+windows. Use the native app's glass rendering; do not use off-screen SwiftUI
+snapshots or force light mode. This sample session has a separate bundle
+identity and read-only data provider, so it cannot modify the real library.
+The checked-in images omit only the macOS title bar and bottom capture edge.
+Film framing may zoom into those captures without redrawing their contents.
 
 Use Python 3.12+, Pillow, NumPy, FFmpeg, Blender 5.1 and whisper.cpp with its
 `small.en` model. On macOS the renderers use Arial and Georgia; those font files

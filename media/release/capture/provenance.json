@@ -1,0 +1,20 @@
+{
+  "release_version": "0.7.0",
+  "release_build": "27",
+  "original_executable_sha256": "e6b93d2523f0d4b0b238b5373ef34162114d0a1c1d2318fb3856ac0752287a2a",
+  "native_views_modified": false,
+  "appearance": "System appearance; no override",
+  "capture_method": "On-screen native app window via CUA",
+  "data": "Read-only sample backend with public-domain passages",
+  "cover_sources": [
+    "https://github.com/standardebooks/jane-austen_pride-and-prejudice",
+    "https://github.com/standardebooks/herman-melville_moby-dick",
+    "https://github.com/standardebooks/lewis-carroll_alices-adventures-in-wonderland",
+    "https://github.com/standardebooks/charlotte-bronte_jane-eyre",
+    "https://github.com/standardebooks/henry-david-thoreau_walden",
+    "https://github.com/standardebooks/mary-shelley_frankenstein",
+    "https://github.com/standardebooks/oscar-wilde_the-picture-of-dorian-gray",
+    "https://github.com/standardebooks/frances-hodgson-burnett_the-secret-garden"
+  ],
+  "crop": "56 px macOS title bar and 32 px bottom capture edge; no app pixels recoloured or redesigned"
+}

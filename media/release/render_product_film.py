@@ -58,7 +58,7 @@ def trail(im,x1,y1,x2,y2,t):
     d.ellipse((x-10,y-10,x+10,y+10),fill=MINT)
 
 def scene(i,e,duration):
-    dark=i not in (4,5,7);im=(DARK if dark else LIGHT).copy();enter=ease(e/.85);dy=int((1-enter)*65);t=e+STARTS[i]
+    dark=i != 5;im=(DARK if dark else LIGHT).copy();enter=ease(e/.85);dy=int((1-enter)*65);t=e+STARTS[i]
     txt(im,78,48,'PASSAGE',23,'bold',MINT if dark else TEAL)
     txt(im,1840,48,'READING, TOGETHER.',20,color=MINT if dark else TEAL,anchor='ra')
     if i==0:
@@ -76,18 +76,16 @@ def scene(i,e,duration):
         txt(im,960,505+dy,'Meet Passage.',112,'serif',anchor='ma');txt(im,960,664,'Your reading, together.',41,color=MINT,anchor='ma')
         label(im,753,786,'FREE + OPEN SOURCE');product(im,'kindle',192-40*enter,638,523,t,0,13);product(im,'xteink',1723+30*enter,636,333,t,.55,-13)
     elif i==3:
-        txt(im,90,162+dy,'Every passage.',65,'serif');txt(im,90,242+dy,'One library.',65,'serif',MINT)
-        product(im,'kindle',216,570,516,t,.12,-3);product(im,'xteink',448,644,329,t,.64,3)
-        shot(im,'books',670+90*(1-enter),180,1150+int(8*math.sin(e*.45)),t)
-        for j,(x,value) in enumerate([(92,'COVERS'),(258,'DATES'),(406,'SEARCH')]):
-            if e>j*.8:label(im,x,867,value)
-        txt(im,680,971,'Actual Passage app · sample library',17,color=MINT)
-        if 2<e<4.1:
-            u=ease((e-2)/2.1);quote_card(im,310+470*u,690-300*math.sin(u*math.pi),.43)
+        txt(im,960,111+dy,'Every passage. One library.',64,'serif',anchor='ma')
+        # A camera detail of the actual native window. Preserve its glass,
+        # system colours and typography; never redraw the interface.
+        shot(im,'books',90,224+30*(1-enter),1730,t,crop=(0,0,2360,974))
+        txt(im,98,954,'Passage 0.7.0 · native Mac app · sample library',17,color=MINT)
     elif i==4:
-        txt(im,90,197+dy,'Find it.',76,'serif',INK);txt(im,90,291+dy,'Keep it.',76,'serif',INK);txt(im,90,385+dy,'Share it.',76,'serif',TEAL)
-        shot(im,'quotes',740,155,1060,t,crop=(510,130,1174,618));label(im,96,648,'COPY QUOTE',False)
-        if e>.75:label(im,96,727,'WITH BOOK + AUTHOR',False)
+        txt(im,82,222+dy,'Find it.',48,'serif');txt(im,82,285+dy,'Keep it.',48,'serif');txt(im,82,348+dy,'Share it.',48,'serif',MINT)
+        shot(im,'quotes',405,100,1340,t)
+        txt(im,85,521,'Copy quote',26,color=MINT)
+        if e>.75:txt(im,85,566,'With book\n+ author',26,color=MINT)
     elif i==5:
         product(im,'kindle',361,579,800,t,.13);txt(im,777,178+dy,'Bring years',83,'serif',INK);txt(im,777,282+dy,'of highlights.',83,'serif',INK)
         ImageDraw.Draw(im).rounded_rectangle((778,442,1780,678),radius=22,fill='#FFFDF4')
@@ -101,9 +99,9 @@ def scene(i,e,duration):
         txt(im,960,686,'SAME EPUB',26,'bold',MINT,anchor='ma');txt(im,960,781,'Upload Local / Apply Remote',35,'serif',anchor='ma')
         txt(im,960,842,'CrossPoint progress controls',25,color=MINT,anchor='ma');txt(im,960,930,'Illustrated progress flow',18,color='#A4BCAF',anchor='ma')
     elif i==7:
-        txt(im,101,143+dy,'Your library. Your Mac.',87,'serif',INK);shot(im,'books',104,310,980,t)
-        for j,(y,title,sub) in enumerate([(375,'iCloud Drive','Or any folder you choose.'),(580,'No hosting bill.','Your Mac hosts Passage.'),(785,'No GitHub account.','Download it and get started.')]):
-            dx=65*(1-ease((e-.2-j*.3)/.75));txt(im,1260+dx,y,title,40,'serif',INK);txt(im,1262+dx,y+66,sub,24,color=TEAL)
+        txt(im,101,143+dy,'Your library. Your Mac.',87,'serif');shot(im,'books',83,342,1190,t,crop=(0,0,2360,974))
+        for j,(y,title,sub) in enumerate([(342,'iCloud Drive','Or any folder you choose.'),(534,'No hosting bill.','Your Mac hosts Passage.'),(726,'No GitHub account.','Download it and get started.')]):
+            dx=65*(1-ease((e-.2-j*.3)/.75));txt(im,1355+dx,y,title,36,'serif');txt(im,1357+dx,y+61,sub,23,color=MINT)
     elif i==8:
         txt(im,960,138+dy,'A little setup. Then keep reading.',67,'serif',anchor='ma')
         product(im,'kindle',470,521,611,t,.16);product(im,'xteink',1445,553,390,t,.66)

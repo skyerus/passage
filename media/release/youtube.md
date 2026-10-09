@@ -34,6 +34,6 @@ Physical integration has been tested with Kindle Paperwhite 5 and Xteink X4 Pro.
 
 The Mac app is MIT licensed; bundled firmware and dependencies retain their own licenses. No GitHub account or paid hosting is needed to use Passage.
 
-Narration generated with Gemini TTS. Native app screenshots use a sample library with public-domain passages; reader visuals are original 3D models based on official product references, with typeset public-domain pages. Original synthesized background music and sound effects.
+Narration generated with Gemini TTS. App shots are direct on-screen captures of Passage 0.7.0 in its native dark appearance, including the actual macOS glass controls. They use a sample library with public-domain passages and cover artwork from Standard Ebooks. Reader visuals are original 3D models based on official product references, with typeset public-domain pages. Original synthesized background music and sound effects.
 
 #Passage #Kindle #Xteink #KOReader #OpenSource
