@@ -208,6 +208,8 @@ class PairingTests(unittest.TestCase):
         self.assertEqual((self.kind/'fixture.epub').read_bytes(),b'epub fixture bytes')
         self.assertTrue(any(self.original['settings']['userkey'] in p.read_text() for p in (self.bridge.app/'backups').glob('*kosync.lua')))
         self.assertTrue((self.kor/'patches/2-reader-bridge-progress.lua').is_file())
+        self.assertEqual((self.kor/'patches/2-reader-bridge-quiet-wifi.lua').read_bytes(),
+                         (setup.SOURCE/'koreader/patches/2-reader-bridge-quiet-wifi.lua').read_bytes())
         self.assertEqual(self.bridge.state['progress_sync']['kindle']['guard_version'],1)
         with self.assertRaises(sync.Conflict):
             sync.Store(self.bridge.progress_directory()/'positions.sqlite3').put(dict(self.item,device_id='kindle-fixture',progress='old'))

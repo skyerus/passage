@@ -215,7 +215,7 @@ class ProgressSetup:
         updates = [(path,lua_settings.dumps(previous).encode())]
         updates.append((setup.guarded(root/'settings/readerbridge-progress-config.lua'),
                         lua_settings.dumps({'version':1,'endpoint':endpoint,'username':account['username']}).encode()))
-        for name in ('2-reader-bridge-progress.lua','readerbridge-api.json'):
+        for name in ('2-reader-bridge-progress.lua','2-reader-bridge-quiet-wifi.lua','readerbridge-api.json'):
             updates.append((setup.guarded(root/'patches'/name),(setup.SOURCE/'koreader/patches'/name).read_bytes()))
         if queue_path: updates.append((queue_path,b'return {}\n'))
         originals = [(p,p.read_bytes() if p.is_file() else None) for p,_ in updates]

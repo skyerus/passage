@@ -13,6 +13,8 @@ Setup records the selected readers' pairings. **Readers paired** means settings 
 
 Reader Bridge preserves KOReader's existing automatic-sync preferences. New configurations enable Auto sync; the reader's own Wi-Fi settings still apply. CrossPoint's Upload Local and Apply Remote actions remain manual. Choosing a new server does not add a polling loop, keep the readers' Wi-Fi on, change their sleep settings, or create Amazon Whispersync compatibility.
 
+On Kindle, automatic progress sync uses the existing background reconnect when Wi-Fi is set to turn on automatically, including after an unsuccessful connection. It does not show the network-scan dialog on wake. Going to sleep offline saves progress to KOReader's queue on versions that support it; reconnecting sends the queued position with the usual conflict protection. Explicit sync and network actions retain KOReader's normal connection dialogs.
+
 ## Daily use
 
 On Xteink, choose **More → Sync Progress → Upload Local** before continuing on Kindle, or **Apply Remote** to pick up the position saved by KOReader.
