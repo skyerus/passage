@@ -50,7 +50,7 @@ Profiles cover Xteink X3, X4, X4 Pro, X4 Classic (X4C), Seeed reTerminal Sticky,
 
 ## 3. Run the Mac setup wizard
 
-Download or clone the public `skyerus/reader-bridge` source, open Terminal in that folder, and run:
+Download or clone the public `skyerus/passage` source, open Terminal in that folder, and run:
 
 ```sh
 python3 setup.py

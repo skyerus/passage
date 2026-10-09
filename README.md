@@ -6,9 +6,9 @@ Keep your Kindle and Xteink highlights in one Mac library. Passage collects pass
 
 Formerly Reader Bridge. Existing archives and reader connections keep their identities.
 
-[Download for Apple Silicon](https://github.com/skyerus/reader-bridge/releases/download/v0.7.0-rc.3/Passage-0.7.0-arm64.dmg) · [Get started](docs/MAC-APP.md) · [Get help](SUPPORT.md)
+[Download for Apple Silicon](https://github.com/skyerus/passage/releases/download/v0.7.0-rc.3/Passage-0.7.0-arm64.dmg) · [Get started](docs/MAC-APP.md) · [Get help](SUPPORT.md)
 
-**Passage 0.7.0 release candidate 3** is a Developer ID signed, notarized download for Apple Silicon Macs (M1 or later), requiring macOS 13 or later. It is a **pre-release** for testing; the separate clean-Mac walkthrough and physical-reader acceptance of this exact installer remain open. Read the [release notes and checksums](https://github.com/skyerus/reader-bridge/releases/tag/v0.7.0-rc.3). Intel Macs can build from source; no Intel, Windows, or Linux consumer installer is available.
+**Passage 0.7.0 release candidate 3** is a Developer ID signed, notarized download for Apple Silicon Macs (M1 or later), requiring macOS 13 or later. It is a **pre-release** for testing; the separate clean-Mac walkthrough and physical-reader acceptance of this exact installer remain open. Read the [release notes and checksums](https://github.com/skyerus/passage/releases/tag/v0.7.0-rc.3). Intel Macs can build from source; no Intel, Windows, or Linux consumer installer is available.
 
 ![Passage book library with sample highlights and covers](docs/images/mac-books.png)
 
@@ -43,7 +43,7 @@ Use your Mac and readers on the same trusted home network, with DRM-free EPUBs. 
 
 ## Install the Mac app
 
-1. Download [Passage-0.7.0-arm64.dmg](https://github.com/skyerus/reader-bridge/releases/download/v0.7.0-rc.3/Passage-0.7.0-arm64.dmg) for your Apple Silicon Mac.
+1. Download [Passage-0.7.0-arm64.dmg](https://github.com/skyerus/passage/releases/download/v0.7.0-rc.3/Passage-0.7.0-arm64.dmg) for your Apple Silicon Mac.
 2. Open it, drag **Passage** into **Applications**, and eject the disk image.
 3. Open Passage from Applications. Follow **Set up your reader** for automatic capture, or choose **Highlights → ⋯ → Import highlights** for an existing archive. Basic setup uses the bundled runtime and firmware; it needs no Terminal, Python, Git, compiler, or GitHub account.
 4. Check your imported highlights appear. For a paired reader, save one new highlight with Wi-Fi connected and check it arrives in Passage.

@@ -5,7 +5,7 @@ about: Report a setup or sync problem without private data
 
 Before posting, remove tokens, passwords, pairing/queue files, quote text, book files, private archive names and personal paths. Do not attach databases or device backups.
 
-Check the [support guide](https://github.com/skyerus/reader-bridge/blob/main/SUPPORT.md) first. Report vulnerabilities [privately](https://github.com/skyerus/reader-bridge/security/advisories/new).
+Check the [support guide](https://github.com/skyerus/passage/blob/main/SUPPORT.md) first. Report vulnerabilities [privately](https://github.com/skyerus/passage/security/advisories/new).
 
 **What happened?**
 

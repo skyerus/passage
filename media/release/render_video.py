@@ -199,7 +199,7 @@ def scene(index, elapsed, duration):
         text(im,(960,433+dy),'Keep the words.',88,'serif',WHITE,anchor='ma')
         text(im,(960,545+dy),'Choose the reader.',88,'serif',WHITE,anchor='ma')
         text(im,(960,703),'Passage',52,'serif','#B7D2C4',anchor='ma')
-        text(im,(960,818),'github.com/skyerus/reader-bridge',33,'bold',WHITE,anchor='ma')
+        text(im,(960,818),'github.com/skyerus/passage',33,'bold',WHITE,anchor='ma')
         text(im,(960,881),'Apple Silicon Mac · Public beta · Link in the description',24,color='#B7D2C4',anchor='ma')
     return im
 

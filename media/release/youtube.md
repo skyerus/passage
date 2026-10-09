@@ -9,10 +9,10 @@ You bought another e-reader. Your favourite passages shouldn't be scattered acro
 Passage is a free, open-source Mac app for collecting Kindle/KOReader and CrossPoint highlights in one searchable library, with book covers, recorded dates, and iCloud Drive or folder backups. Use one reader, connect both, or bring in your existing Kindle My Clippings file.
 
 Download the public beta and explore the code:
-https://github.com/skyerus/reader-bridge
+https://github.com/skyerus/passage
 
 Setup guide:
-https://github.com/skyerus/reader-bridge/blob/main/docs/MAC-APP.md
+https://github.com/skyerus/passage/blob/main/docs/MAC-APP.md
 
 Kindle jailbreak compatibility:
 https://kindlemodding.org/jailbreak-wizard.html

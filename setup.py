@@ -263,7 +263,7 @@ class Bridge:
     def collector(self, archive, create=False, port=8084, allow_public=False):
         if not archive or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', archive):
             raise SetupError('Select your personal archive explicitly with --archive OWNER/REPO.')
-        if archive.lower() in ('skyerus/reader-bridge', 'skyerus/kindle-highlights'):
+        if archive.lower() in ('skyerus/passage', 'skyerus/reader-bridge', 'skyerus/kindle-highlights'):
             raise SetupError('Select your own separate personal archive, not the public source or example archive.')
         if self.dry_run:
             print(f'Would verify {archive}, install a collector on port {port}, and preserve its existing inbox/token.')
