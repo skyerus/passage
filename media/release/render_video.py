@@ -156,7 +156,7 @@ def scene(index, elapsed, duration):
         text(im,(143,579),'My Clippings.txt',36,'bold')
         text(im,(143,637),'Import the archive you already have.',23,color=MUTED)
         text(im,(108,784),'One reader is enough to get started.',28,color=TEAL)
-        screenshot(im,'setup',742,240,1110,crop=(0,45,1180,555))
+        screenshot(im,'setup',742,240,1110,crop=(0,0,1180,565))
     elif index==6:
         text(im,(960,168+dy),'Continue at the same passage.',70,'serif',anchor='ma')
         device(im,342,330,275,'Kindle · KOReader',True)
