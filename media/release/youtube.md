@@ -1,39 +1,35 @@
 # Suggested title
 
-Kindle + Xteink Highlights, Together — Meet Passage
+Xteink + Kindle: Sync Progress and Save Highlights | Passage
 
 # Description
 
-You bought another e-reader. Your favourite passages shouldn't be scattered across devices.
+Read on a Kindle and an Xteink? Passage helps you move your reading position between them and collect highlights from both in one Mac library.
 
-Passage is a free, open-source Mac app for collecting Kindle/KOReader and CrossPoint highlights in one searchable library, with book covers, recorded dates, and iCloud Drive or folder backups. Use one reader, connect both, or bring in your existing Kindle My Clippings file.
+Passage is a free, open-source Mac app for KOReader and CrossPoint. Search your saved quotes, see their book covers, import Kindle My Clippings, and back up to iCloud Drive or a folder you choose. You can use it with just one reader, too.
 
-Download the public beta and explore the code:
+Download the public beta and get the source code:
 https://github.com/skyerus/passage
 
 Setup guide:
 https://github.com/skyerus/passage/blob/main/docs/MAC-APP.md
 
-Kindle jailbreak compatibility:
+Check Kindle jailbreak compatibility:
 https://kindlemodding.org/jailbreak-wizard.html
 
-0:00 Why another reader shouldn't mean starting over
-0:13 Meet Passage
-0:19 One highlight library
-0:35 Bring your Kindle highlights
-0:43 Reading progress across readers
-0:52 Your library, your Mac
-1:01 What setup needs
-1:12 Free and open source
+0:00 Kindle and Xteink
+0:13 Collect and import highlights
+0:34 Reading progress and backups
+0:51 Setup and download
 
-The download is a public beta for Apple Silicon Macs running macOS 13 or later. Live Kindle capture needs a compatible jailbreak and KOReader. CrossPoint capture needs Passage's matching firmware for the exact reader model. Importing My Clippings needs no jailbreak. The Mac must be awake and reachable for uploads.
+This video shows a Kindle Paperwhite (11th generation) and an Xteink X4 Pro. Passage also has firmware profiles for the Xteink X3, X4 and X4 Classic. Use the image for your exact model. Physical integration has been tested with Paperwhite 5 and X4 Pro; the other profiles have compiled images but still need testing on those readers.
 
-Reading progress uses the same EPUB on both readers; CrossPoint has manual Upload Local and Apply Remote controls. This collects quotes in Passage; it doesn't mirror underlines inside both books. Dates are retained when recorded by the source. It doesn't remove DRM or download Amazon purchases.
+The public beta download is for Apple Silicon Macs running macOS 13 or later. Live Kindle syncing needs a compatible jailbreak and KOReader. Xteink needs CrossPoint with Passage's matching firmware. Importing My Clippings needs no jailbreak. Your Mac must be awake and reachable for uploads.
 
-Physical integration has been tested with Kindle Paperwhite 5 and Xteink X4 Pro. Other profiles have compiled images; separate clean-Mac and final-installer acceptance remain open. Please read the release notes for the tested scope.
+Reading progress uses the same EPUB on both readers. CrossPoint's Upload Local and Apply Remote controls are manual. Highlights are collected in Passage; underlines aren't mirrored inside both books. Dates are retained when the source records them. Passage doesn't remove DRM or download Amazon purchases.
 
-The Mac app is MIT licensed; bundled firmware and dependencies retain their own licenses. No GitHub account or paid hosting is needed to use Passage.
+Separate clean-Mac and final-installer acceptance remain open. Read the release notes for the tested scope. The Mac app is MIT licensed; bundled firmware and dependencies keep their own licenses. You don't need a GitHub account or paid hosting to use Passage.
 
-Narration generated with Gemini TTS. App shots are direct on-screen captures of Passage 0.7.0 in its native dark appearance, including the actual macOS glass controls. They use a sample library with public-domain passages and cover artwork from Standard Ebooks. Reader visuals are original 3D models based on official product references, with typeset public-domain pages. Original synthesized background music and sound effects.
+Narration generated with Gemini TTS. App shots are direct captures of Passage 0.7.0 in its native dark appearance, using a sample library with public-domain passages and cover artwork from Standard Ebooks. Reader visuals are original 3D models based on official product references, with typeset public-domain pages. Music and sound effects were synthesized for this video.
 
-#Passage #Kindle #Xteink #KOReader #OpenSource
+#Xteink #Kindle #Passage
