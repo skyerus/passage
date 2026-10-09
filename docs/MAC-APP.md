@@ -2,7 +2,7 @@
 
 Passage collects your reading highlights in a searchable local library. Use a Kindle with KOReader, a supported CrossPoint reader, or both. Backups and reading-position sync are optional.
 
-Download [Passage 0.7.0 release candidate 2 for Apple Silicon](https://github.com/skyerus/reader-bridge/releases/download/v0.7.0-rc.2/Passage-0.7.0-arm64.dmg). The app and disk image are Developer ID signed and notarized. This **pre-release** still needs a separate clean-Mac walkthrough and physical-reader acceptance of the exact installer. [Release notes, checksums, and candidate evidence](https://github.com/skyerus/reader-bridge/releases/tag/v0.7.0-rc.2).
+Download [Passage 0.7.0 release candidate 3 for Apple Silicon](https://github.com/skyerus/reader-bridge/releases/download/v0.7.0-rc.3/Passage-0.7.0-arm64.dmg). The app and disk image are Developer ID signed and notarized. This **pre-release** still needs a separate clean-Mac walkthrough and physical-reader acceptance of the exact installer. [Release notes, checksums, and candidate evidence](https://github.com/skyerus/reader-bridge/releases/tag/v0.7.0-rc.3).
 
 ## Before you start
 
@@ -28,7 +28,7 @@ The prior live integration is not a fresh-install pass for this release candidat
 
 ## Download and open
 
-1. Download [Passage-0.7.0-arm64.dmg](https://github.com/skyerus/reader-bridge/releases/download/v0.7.0-rc.2/Passage-0.7.0-arm64.dmg). Source-code ZIPs and `-development.dmg` files are for developers.
+1. Download [Passage-0.7.0-arm64.dmg](https://github.com/skyerus/reader-bridge/releases/download/v0.7.0-rc.3/Passage-0.7.0-arm64.dmg). Source-code ZIPs and `-development.dmg` files are for developers.
 2. In **Apple menu → About This Mac**, check for an Apple **Chip** such as M1, M2, M3, or M4. This download does not run on an Intel Mac.
 3. Open the disk image. Drag **Passage** onto **Applications**, wait for copying, and eject the image in Finder.
 4. Open **Applications → Passage**. Confirm macOS's normal downloaded-app prompt. Allow local-network and removable-volume access when Passage asks so it can reach and configure the selected reader. Allow its background service when macOS asks.

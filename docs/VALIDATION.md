@@ -197,5 +197,36 @@ had stalled on Home: its temporary cover cache left less free memory than the
 uploader requires. The firmware now releases rebuildable display caches only
 when queued work needs the space, then rechecks the unchanged memory budget.
 This adds no permanent buffer or network polling. The X4 Pro build and 502 host
-tests passed; the Home-screen physical retest and original-setup restoration
-remain pending.
+tests passed. The subsequent Home-screen physical retest released its
+15,364-byte temporary cover cache, met the unchanged upload budget, and completed
+automatic upload 8.118 seconds after boot. The replayed deletion remained deleted.
+Original reader data and Mac services were restored on 2026-10-04. The Xteink's
+original full-flash image passed a separate readback verification.
+
+## Consolidated public beta 3 (2026-10-09)
+
+The app pins the corrected, publicly available firmware source
+`e33bf7006e9081a149ca44e63f17686d817b50ee`, including the original-cover uploader,
+local HTTP memory threshold fix, and Home-screen memory recovery. The verified
+bundle provides six profiles from five build environments, with matching source
+and dependency notices. Only the Paperwhite 5 and X4 Pro have the physical
+integration evidence recorded above.
+
+Kindle reading-position pairing now installs a quiet Wi-Fi user patch alongside
+the revision guard. Automatic wake/reconnect uses KOReader's asynchronous restore
+and bounded connectivity check; explicit network actions retain their normal UI.
+Offline suspend preserves the current position and its revision in the native
+queue. This adds no periodic polling or change to Wi-Fi shutdown preferences.
+The patch was installed and hash-verified on the existing Kindle; a physical
+sleep/wake confirmation is still outstanding.
+
+The merged source passed 231 Python tests, 52 Swift tests, and nine Lua suites.
+The rebuilt app passed packaged acceptance using isolated launchd services and
+reader fixtures, including original cover bytes, automatic folder backup,
+safe restore, deletion replay, pairing, and reading-position round trips and
+restart. A packaging regression is covered explicitly: both KOReader user
+patches must be bundled, and pairing must install the quiet Wi-Fi patch.
+
+These checks do not replace the separate clean-Mac walkthrough, actual
+logout/login check, or physical-reader acceptance of the final disk image.
+The download remains a public beta while those checks are outstanding.

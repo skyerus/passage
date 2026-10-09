@@ -221,6 +221,7 @@ def main():
             retained=json.loads(setup.http(base+'/syncs/progress/'+'a'*32,headers=headers))
             assert retained['percentage'] == .2 and retained['device'] == 'CrossPoint'
             assert (kindle/'koreader/patches/2-reader-bridge-progress.lua').read_bytes() == (bridge_source/'koreader/patches/2-reader-bridge-progress.lua').read_bytes()
+            assert (kindle/'koreader/patches/2-reader-bridge-quiet-wifi.lua').read_bytes() == (bridge_source/'koreader/patches/2-reader-bridge-quiet-wifi.lua').read_bytes()
             assert queue.read_text() == '{"fixture":"offline queue"}'
             assert json.loads((sd / '.crosspoint/highlight-sync.json').read_text())['token'] == token
             spec = __import__('plistlib').loads((agents / (labels['progress_sync']+'.plist')).read_bytes())

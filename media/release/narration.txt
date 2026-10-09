@@ -1,0 +1,21 @@
+You bought a second e-reader. So why does your reading life have to start over?
+
+One book on your Kindle. Another reader in your pocket. And the line you wanted to remember? On the wrong device.
+
+Meet Passage. A free, open-source Mac app that brings your reading together.
+
+Highlight in KOReader or a supported CrossPoint reader. Passage collects your quotes into one searchable library, with book covers and the dates your reader records.
+
+Find a favourite line. Copy it on its own, or take the book and author with it.
+
+Already have years of Kindle highlights? Import your My Clippings file. One reader is enough to get started.
+
+Reading progress can travel too. Use the same EPUB on both readers, with manual upload and apply controls on CrossPoint.
+
+Your library lives on your Mac. Back up to iCloud Drive or a folder you choose. No hosting bill. No GitHub account needed to use it.
+
+For live syncing, Kindle needs a supported jailbreak and KOReader. CrossPoint needs Passage's matching firmware. Your Mac must be awake and reachable.
+
+Passage is in public beta. Download it. Explore the code. Make it your own.
+
+Different readers. One place for the words worth keeping.
