@@ -23,10 +23,10 @@ def main():
     if not key:
         parser.error('Set GEMINI_API_KEY in your environment; never commit it.')
     script = Path(__file__).with_name('narration.txt').read_text().strip()
-    style = ('Warm, engaging British English product narrator. Confident, conversational, '
-             'a little playful in the opening questions, then clear and inviting. '
+    style = ('Natural British English, explaining a useful tool to a friend. '
+             'Calm and conversational, with ordinary speech inflection rather than an advertising voice. '
              'About 155 words per minute, short natural pauses, never shouty or breathless. '
-             'Pronounce Passage as the ordinary English word and KOReader as kay-oh reader. '
+             'Pronounce Passage as the ordinary English word, Xteink as ex-tee-ink, KOReader as kay-oh reader, and EPUB as ee-pub. '
              'Read only the supplied transcript, exactly once.')
     body = {'model': args.model, 'input': [{'type': 'user_input', 'content': [{
         'type': 'text', 'text': script,

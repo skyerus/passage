@@ -1,9 +1,10 @@
 # Passage release film
 
-An approximately 84-second, 1920 × 1080 product introduction for YouTube. The film
+An approximately 71-second, 1920 × 1080 product introduction for YouTube. The film
 explains the shared-highlight problem, shows the native Mac app, and introduces
-the open-source project. Its device shots are animated Blender renders of a
-Kindle Paperwhite (11th generation) and Xteink X4 Pro.
+the open-source project. Its device shots use Blender renders of a Kindle
+Paperwhite (11th generation) and Xteink X4 Pro. The opening has a short reveal; subsequent device and app
+shots stay still. There are no decorative eyebrow labels or burned-in captions.
 
 ## Sources
 
@@ -14,7 +15,7 @@ Kindle Paperwhite (11th generation) and Xteink X4 Pro.
   device screens as a texture, so it stays consistent through camera movement.
 - `render_devices.py`: original model geometry, materials, lighting and motion.
 - `render_product_film.py` and `graphics.py`: composition, native app screenshots,
-  animated highlights, typography, captions, thumbnail, original music and SFX.
+  still layouts, typography, thumbnail, original music and restrained SFX.
 - `youtube.md`: suggested title, description and chapters.
 - `../../docs/images`: on-screen captures of the released native app in dark
   appearance, including its actual Liquid Glass controls and sidebar.
@@ -33,8 +34,8 @@ as an early composition study; the final device screens and motion are rendered
 from deterministic geometry and type, with no AI-generated lettering.
 
 The film describes a shared quote archive, not mirrored in-book underlines.
-Its progress sequence shows CrossPoint's manual controls. It identifies the app
-as a public beta and states the jailbreak, firmware and awake-Mac requirements.
+Its progress sequence shows CrossPoint's manual controls. The narration identifies
+the app as a public beta and states the jailbreak, firmware and awake-Mac requirements.
 
 ## Rebuild
 
@@ -72,7 +73,7 @@ ffmpeg -i /tmp/passage-film.noindex/narration.wav -af atempo=0.9 -ar 16000 \
 ffmpeg -i /tmp/passage-film.noindex/narration.wav -af atempo=0.9 -ar 48000 \
   /tmp/passage-film.noindex/narration-master.wav
 whisper-cli -ng -m /path/to/ggml-small.en.bin \
-  -f /tmp/passage-film.noindex/narration-paced.wav -l en -oj -osrt \
+  -f /tmp/passage-film.noindex/narration-paced.wav -l en -oj \
   -of /tmp/passage-film.noindex/narration -ml 46 -sow
 /tmp/passage-video-venv/bin/python media/release/page_textures.py \
   --output media/release/assets
@@ -85,13 +86,13 @@ blender --background --factory-startup --python media/release/render_devices.py 
 ```
 
 Gemini speech generation is nondeterministic. Review its transcript and update
-`STARTS` in `graphics.py` when narration changes. Check captions against the
-script before publishing. The initial voice is Charon with Gemini 3.8 Flash TTS;
+`STARTS` in `graphics.py` when narration changes. Compare the transcript with
+the script before exporting. The transcript is an internal timing aid; captions
+are left to YouTube. The initial voice is Charon with Gemini 3.8 Flash TTS;
 see the [official speech API documentation](https://ai.google.dev/gemini-api/docs/speech-generation)
 for current availability and API details.
 
-Output: `Passage-release-film.mp4`, `Passage-thumbnail.jpg`, `Passage-captions.srt`,
-a render receipt, and intermediate frames/audio. Captions are burned in; the SRT
-is also available for accessible YouTube captions. Rendered video and API
-responses stay out of Git. Every sound effect and the score are synthesized by
-the renderer, with no third-party music samples.
+Output: `Passage-release-film.mp4`, `Passage-thumbnail.jpg`, a render receipt,
+and intermediate frames/audio. The MP4 has no captions or subtitle track.
+Rendered video and API responses stay out of Git. Every sound effect and the
+score are synthesized by the renderer, with no third-party music samples.

@@ -1,21 +1,21 @@
-You bought a second e-reader. So why does your reading life have to start over?
+Do you read on a Kindle and an Xteink?
 
-One book on your Kindle. Another reader in your pocket. And the line you wanted to remember? On the wrong device.
+You want to pick up where you left off on either reader, and have somewhere to find the highlights you've made on both.
 
-Meet Passage. A free, open-source Mac app that brings your reading together.
+Passage is a free, open-source Mac app built for that.
 
 Highlight in KOReader or a supported CrossPoint reader. Passage collects your quotes into one searchable library, with book covers and the dates your reader records.
 
-Find a favourite line. Copy it on its own, or take the book and author with it.
+Search for a passage, then copy just the quote or include its book and author.
 
-Already have years of Kindle highlights? Import your My Clippings file. One reader is enough to get started.
+You can also import your existing Kindle highlights from My Clippings. One reader is enough to use Passage.
 
-Reading progress can travel too. Use the same EPUB on both readers, with manual upload and apply controls on CrossPoint.
+For reading progress, put the same EPUB on both readers. On CrossPoint, use Upload Local and Apply Remote to move your position between them.
 
-Your library lives on your Mac. Back up to iCloud Drive or a folder you choose. No hosting bill. No GitHub account needed to use it.
+Your library stays on your Mac, with backups to iCloud Drive or a folder you choose. You don't need paid hosting or a GitHub account.
 
-For live syncing, Kindle needs a supported jailbreak and KOReader. CrossPoint needs Passage's matching firmware. Your Mac must be awake and reachable.
+Live Kindle syncing needs a supported jailbreak and KOReader. CrossPoint needs Passage's matching firmware. Your Mac must be awake and reachable.
 
-Passage is in public beta. Download it. Explore the code. Make it your own.
+Passage is in public beta, with setup instructions and all the source code on GitHub.
 
-Different readers. One place for the words worth keeping.
+You can download it using the link below.
