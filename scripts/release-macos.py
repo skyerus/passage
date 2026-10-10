@@ -212,6 +212,21 @@ def profiles(build):
     return result
 
 
+def export_firmware_source(source, bundle, output):
+    """Publish source separately, checking it against the signed app's receipt."""
+    if not bundle or source.get('filename') != 'passage-firmware-source.tar.gz':
+        raise ValueError('Corresponding firmware source bundle is required')
+    builder = module(ROOT / 'scripts/build-macos.py')
+    archive = builder.bundle_file(bundle.expanduser().resolve(), source['filename'])
+    if archive.stat().st_size != source['size'] or digest(archive) != source['sha256']:
+        raise ValueError('Corresponding firmware source changed after packaging')
+    destination = output / source['filename']
+    shutil.copy2(archive, destination)
+    if destination.stat().st_size != source['size'] or digest(destination) != source['sha256']:
+        raise ValueError('Corresponding firmware source release copy differs from the signed receipt')
+    (output / (source['filename'] + '.sha256')).write_text(f'{source["sha256"]}  {source["filename"]}\n')
+
+
 def prepare(args):
     builder = module(ROOT / 'scripts/build-macos.py')
     builder.validate_identity(args.sign_identity, args.keychain)
@@ -264,11 +279,7 @@ def prepare(args):
     dmg.with_suffix('.dmg.sha256').write_text(f'{checksum}  {dmg.name}\n')
     source = build.get('firmware_source')
     if source:
-        archive = app / 'Contents/Resources/firmware-source' / source['filename']
-        if archive.stat().st_size != source['size'] or digest(archive) != source['sha256']:
-            raise ValueError('Packaged corresponding firmware source changed')
-        shutil.copy2(archive, output / source['filename'])
-        (output / (source['filename'] + '.sha256')).write_text(f'{source["sha256"]}  {source["filename"]}\n')
+        export_firmware_source(source, args.firmware_bundle, output)
     record = {'schema_version': 1, 'state': 'notarized-candidate', 'ready': False,
               'created_at': datetime.now(timezone.utc).isoformat(),
               'commit': build['commit'], 'version': build['version'], 'architecture': build['architecture'],

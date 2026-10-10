@@ -157,8 +157,27 @@ def firmware_bundle(bundle, root=ROOT):
     if source_file.stat().st_size != source['size'] or file_digest(source_file) != source['sha256']:
         raise ValueError('Corresponding firmware source checksum mismatch')
     return {'manifest': json.loads(manifest_file.read_text()), 'bridge_files': files,
-            'source_files': {source['filename']: source_file, 'firmware-build.json': receipt_file},
+            'source_archive': source_file, 'receipt_file': receipt_file,
             'receipt': receipt, 'file_hashes': {name: file_digest(path) for name, path in files.items()}}
+
+
+def install_firmware_assets(resources, assets):
+    """Keep runtime images/notices in the app; source is a separate release asset."""
+    for name, source in assets['bridge_files'].items():
+        destination = resources / 'bridge' / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+    provenance = resources / 'firmware-source'
+    provenance.mkdir()
+    shutil.copy2(assets['receipt_file'], provenance / 'firmware-build.json')
+    source = assets['receipt']['source_archive']
+    (provenance / 'READ ME.txt').write_text(
+        'Corresponding firmware source is a separate download beside this installer:\n'
+        'https://github.com/skyerus/passage/releases\n'
+        f'Download {source["filename"]} from the same release.\n'
+        f'SHA-256: {source["sha256"]}\n'
+        'The source archive is not required to run Passage or install its firmware.\n'
+        'Firmware images and dependency notices are included in the app.\n')
 
 
 def validate_identity(identity, keychain=None):
@@ -185,7 +204,9 @@ def create_dmg(app, dmg, *, development=True):
             shutil.copytree(app, install / app.name, symlinks=True)
             (install / 'Applications').symlink_to('/Applications')
             warning = 'Development build: not notarized for public distribution.\n' if development else ''
-            source_note = ('Firmware source: Passage.app/Contents/Resources/firmware-source/.\n'
+            source_note = ('Firmware source: download passage-firmware-source.tar.gz from the same release at\n'
+                           'https://github.com/skyerus/passage/releases (optional for using the app).\n'
+                           'Source checksum and build receipt: Passage.app/Contents/Resources/firmware-source/.\n'
                            'Firmware notices: Passage.app/Contents/Resources/bridge/desktop/licenses/firmware/.\n'
                            if (app / 'Contents/Resources/firmware-source').is_dir() else
                            'This package does not include application firmware images.\n')
@@ -292,14 +313,7 @@ def main():
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / relative, destination)
         if assets:
-            for name, source in assets['bridge_files'].items():
-                destination = bridge / name
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, destination)
-            for name, source in assets['source_files'].items():
-                destination = resources / 'firmware-source' / name
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, destination)
+            install_firmware_assets(resources, assets)
         shutil.copy2(ROOT / 'desktop/resources.json', resources / 'resources.json')
         for relative in allowlist['runtime_license_files']:
             destination = resources / 'licenses' / relative.relative_to('desktop/licenses')
