@@ -103,6 +103,21 @@ class DiskImageCreationTests(unittest.TestCase):
         image.write_bytes(b'Synthetic image')
         return image
 
+    def test_installer_points_to_separate_source_without_claiming_firmware_is_missing(self):
+        provenance = self.app / 'Contents/Resources/firmware-source'
+        provenance.mkdir(parents=True)
+        (provenance / 'firmware-build.json').write_text('{}')
+        def inspect(*args, **kwargs):
+            self.image_command(args)
+            note = (self.installs[-1] / 'READ ME.txt').read_text()
+            self.assertIn('download passage-firmware-source.tar.gz from the same release', note)
+            self.assertIn('https://github.com/skyerus/passage/releases', note)
+            self.assertNotIn('does not include application firmware', note)
+            self.assertFalse(list(self.installs[-1].rglob('*.tar.gz')))
+            return subprocess.CompletedProcess(args, 0)
+        with patch.object(builder, 'run', side_effect=inspect):
+            builder.create_dmg(self.app, self.dmg, development=False)
+
     def test_resource_busy_retries_three_times_with_fresh_staging_then_publishes(self):
         def transient(*args, **kwargs):
             self.image_command(args)
@@ -236,8 +251,41 @@ class FirmwareBundleTests(unittest.TestCase):
         result = builder.firmware_bundle(self.bundle, self.root)
         self.assertIn(self.artifact['bundled_path'], result['bridge_files'])
         self.assertNotIn('private-unlisted.txt', result['bridge_files'])
-        self.assertEqual(result['source_files']['passage-firmware-source.tar.gz'].read_bytes(),
+        self.assertEqual(result['source_archive'].read_bytes(),
                          (self.bundle / 'passage-firmware-source.tar.gz').read_bytes())
+
+    def test_app_keeps_firmware_and_provenance_without_the_source_archive(self):
+        assets = builder.firmware_bundle(self.bundle, self.root)
+        resources = Path(self.temporary.name) / 'Passage.app/Contents/Resources'
+        builder.install_firmware_assets(resources, assets)
+        self.assertEqual((resources / 'bridge' / self.artifact['bundled_path']).read_bytes(), self.image)
+        self.assertEqual(json.loads((resources / 'firmware-source/firmware-build.json').read_text()), self.receipt)
+        instructions = (resources / 'firmware-source/READ ME.txt').read_text()
+        self.assertIn('https://github.com/skyerus/passage/releases', instructions)
+        self.assertIn(self.receipt['source_archive']['sha256'], instructions)
+        self.assertFalse(list(resources.rglob('*.tar.gz')))
+        self.assertTrue(assets['source_archive'].is_file())
+        output = Path(self.temporary.name) / 'release'
+        output.mkdir()
+        release.export_firmware_source(self.receipt['source_archive'], self.bundle, output)
+        self.assertEqual((output / assets['source_archive'].name).read_bytes(), assets['source_archive'].read_bytes())
+        checksum = (output / 'passage-firmware-source.tar.gz.sha256').read_text()
+        self.assertEqual(checksum, self.receipt['source_archive']['sha256'] + '  passage-firmware-source.tar.gz\n')
+
+    def test_source_export_rejects_missing_or_changed_bundle(self):
+        output = Path(self.temporary.name) / 'release'
+        output.mkdir()
+        source = self.receipt['source_archive']
+        with self.assertRaisesRegex(ValueError, 'bundle is required'):
+            release.export_firmware_source(source, None, output)
+        archive = self.bundle / source['filename']
+        archive.write_bytes(archive.read_bytes() + b'changed')
+        with self.assertRaisesRegex(ValueError, 'changed after packaging'):
+            release.export_firmware_source(source, self.bundle, output)
+        archive.unlink()
+        with self.assertRaisesRegex(ValueError, 'Missing or unsafe'):
+            release.export_firmware_source(source, self.bundle, output)
+        self.assertEqual(list(output.iterdir()), [])
 
     def test_changed_image_is_rejected_before_packaging(self):
         self.write(self.artifact['bundled_path'], self.image[:-1] + b'X')
@@ -509,15 +557,16 @@ class CandidatePreparationTests(unittest.TestCase):
             self.fail('Unexpected command boundary: ' + str(args[0]))
         return subprocess.CompletedProcess(args, 0)
 
-    def prepare(self):
+    def prepare(self, firmware_bundle=None):
         resources = self.installed / 'Contents/Resources'
         resources.mkdir(parents=True, exist_ok=True)
         (resources / 'build.json').write_text(json.dumps(self.installed_build))
         def create_dmg(app, dmg, **kwargs):
             dmg.write_bytes(b'Synthetic signed disk image')
-        builder = SimpleNamespace(validate_identity=lambda *args: None, create_dmg=create_dmg)
+        builder = SimpleNamespace(validate_identity=lambda *args: None, create_dmg=create_dmg,
+                                  bundle_file=globals()['builder'].bundle_file)
         args = SimpleNamespace(output=self.output, sign_identity='Developer ID Application: Fixture (TESTTEAM12)',
-                               keychain=None, notary_profile='fixture-only', firmware_bundle=None)
+                               keychain=None, notary_profile='fixture-only', firmware_bundle=firmware_bundle)
         def signature(app):
             return self.installed_signing if app == self.installed else self.signing
         with patch.object(release, 'module', return_value=builder), patch.object(release, 'run', side_effect=self.command), \
@@ -533,6 +582,20 @@ class CandidatePreparationTests(unittest.TestCase):
         self.assertEqual(candidate['state'], 'notarized-candidate')
         self.assertEqual(candidate['automated_acceptance'], self.acceptance)
         self.assertEqual(self.acceptance_calls, 1)
+
+    def test_candidate_exports_source_from_input_without_embedding_it_in_app(self):
+        bundle = self.root / 'firmware-bundle'
+        bundle.mkdir()
+        archive = bundle / 'passage-firmware-source.tar.gz'
+        archive.write_bytes(b'Synthetic corresponding source')
+        source = {'filename': archive.name, 'size': archive.stat().st_size, 'sha256': release.digest(archive)}
+        self.build['firmware_source'] = source
+        self.installed_build = copy.deepcopy(self.build)
+        self.prepare(firmware_bundle=bundle)
+        self.assertFalse((self.output / 'Passage.app/Contents/Resources/firmware-source' / archive.name).exists())
+        self.assertEqual((self.output / archive.name).read_bytes(), archive.read_bytes())
+        candidate = json.loads((self.output / 'release-candidate.json').read_text())
+        self.assertEqual(candidate['firmware_source'], source)
 
     def test_different_valid_signed_app_cannot_emit_a_candidate(self):
         self.installed_signing['cdhash'] = 'c' * 40

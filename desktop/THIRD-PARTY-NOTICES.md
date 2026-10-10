@@ -8,4 +8,6 @@ The app bundles unmodified CPython 3.13.15 from Astral's Python Build Standalone
 - [Runtime release and source downloads](https://github.com/astral-sh/python-build-standalone/releases/tag/20260929)
 - [Upstream Python licensing notes](https://github.com/astral-sh/python-build-standalone/blob/b498734a5791d0e6786695a226fd398a41c6f7f6/python-licenses.rst)
 
-The app does not bundle KOReader itself, jailbreak tools, CrossPoint firmware binaries, books, fonts, dictionaries, or Calibre-Web. It includes Passage's KOReader plugin. Optional firmware and library setup download and build/install their separately licensed dependencies on the user's Mac, just as the command-line installer does. See `docs/UPSTREAM-SOURCES.md` for those boundaries.
+The app includes Passage’s KOReader plugin. Release installers also include prebuilt CrossPoint application firmware and its dependency notices under `bridge/desktop/licenses/firmware`. The matching `passage-firmware-source.tar.gz` is available as a separate asset on the same [GitHub release](https://github.com/skyerus/passage/releases); its checksum, build receipt and download instructions are retained in `firmware-source`. Users do not need that source archive or a compiler to install the bundled firmware.
+
+The app does not bundle KOReader itself, jailbreak tools, books, fonts, dictionaries, or Calibre-Web. Optional library setup installs separately licensed dependencies on the user’s Mac. See `docs/UPSTREAM-SOURCES.md` for those boundaries.
