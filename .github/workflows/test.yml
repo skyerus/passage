@@ -23,6 +23,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y lua5.1
       - run: for test in koreader/sharedhighlights.koplugin/tests/*_test.lua; do lua5.1 "$test"; done
       - run: for test in koreader/progress-tests/*_test.lua; do lua5.1 "$test"; done
+      - run: for test in koreader/bookinbox.koplugin/tests/*_test.lua; do lua5.1 "$test"; done
   mac-app:
     strategy:
       fail-fast: false

@@ -11,6 +11,7 @@ python3 -m unittest discover -s tests -v
 swift test --package-path desktop
 for test in koreader/sharedhighlights.koplugin/tests/*_test.lua; do lua "$test"; done
 for test in koreader/progress-tests/*_test.lua; do lua "$test"; done
+for test in koreader/bookinbox.koplugin/tests/*_test.lua; do lua "$test"; done
 ```
 
 Swift and app packaging require macOS; Lua tests use Lua 5.1. See [building and releasing](docs/RELEASING.md) for packaged runtime and firmware checks. Documentation changes need correct links and claims checked against the current release; an automated test or compiled image is separate from a physical device result.
