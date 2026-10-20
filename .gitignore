@@ -4,6 +4,12 @@ __pycache__/
 .DS_Store
 *.sqlite3*
 *.epub
+*.kfx
+*.kfx-zip
+bookinbox-state.json
+bookinbox-result.json
+bookinbox-export.log
+device-status.json
 *.bin
 highlights.json
 highlight-tombstones.json

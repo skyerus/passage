@@ -1,5 +1,31 @@
 # Validation for the initial source release
 
+## Optional Kindle book inbox (2026-10-18)
+
+A purchased KFX book completed the device export, authenticated LAN upload,
+Calibre conversion/import and automatic EPUB return to a Paperwhite 5 with
+firmware 5.19.2 and KOReader `v2026.07.2-185-gdcf6e3b42_2026-09-20_kindlehf`.
+The Kindle's delivery acknowledgement matched the canonical EPUB's SHA-256,
+and an authenticated Calibre-Web download returned the same bytes. The library
+contained one entry for the new purchase; two previously converted books kept
+their original hashes. The source purchase and existing reader settings were
+preserved. Calibre 7.24 and KFX Input 2.34.2 performed the conversion.
+
+This test exposed an exporter naming difference: the installed tool retained the
+full input basename. The importer accepts that form and the ASIN-only form;
+the full-basename failure is retained as a synthetic regression test. Failed
+exports remain pending, rather than reporting an up-to-date inbox.
+
+Tests cover authenticated receipt/download, upload checksums, duplicate uploads,
+restart recovery, immutable existing EPUBs, conversion backoff, delivery
+acknowledgements, partial downloads, and continued imports after another export
+fails. The feature has manual source setup and is not part of the released Mac
+app. A fresh Mac/Kindle setup by another user, physical reading of the delivered
+EPUB, actual logout/login, battery measurements, other protection versions and
+Xteink background delivery remain separate checks. See [setup and limits](BOOK-SYNC.md).
+
+## Initial release checks
+
 Automated checks cover collector receipt durability, retries, deletion propagation, concurrent publication, setup preview, private URL validation, queue and identity preservation, device model gates, upload readback, archive/port guards, LaunchAgent ownership recovery, partial library initialization, clippings parsing, and source-build override rejection. Plugin tests cover lifecycle, subprocess cancellation, queue races, and deletion behavior.
 
 A fresh isolated Calibre-Web 0.6.27 setup was exercised through `Bridge.library` using a disposable library: generated administrator credentials, disabled anonymous browsing/public registration/metadata embedding, unauthenticated OPDS returning 401, and authenticated OPDS returning 200. Repeating the library setup preserved the generated administrator credentials. The smoke test substituted a temporary loopback server for LaunchAgent registration and did not change existing services.
