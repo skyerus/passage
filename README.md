@@ -64,7 +64,7 @@ Highlight connections use a private LAN address and a dedicated bearer token ove
 
 [Contribute](CONTRIBUTING.md) · [Build and release the app](docs/RELEASING.md) · [Advanced command-line setup](docs/SETUP.md) · [Validation history](docs/VALIDATION.md) · [Upstream sources and notices](docs/UPSTREAM-SOURCES.md)
 
-The optional [Kindle book inbox](docs/BOOK-SYNC.md) can convert supported purchases
+The optional [Kindle book inbox](docs/BOOK-SYNC.md) ([download the experimental add-on](https://github.com/skyerus/passage/releases/tag/book-inbox-v0.1.0-rc.1)) can convert supported purchases
 after they download to a jailbroken Kindle, add the EPUB to a local Calibre
 library, and deliver it to KOReader. It requires separate export/conversion
 tools and manual setup from source; it is not included in the current Mac app

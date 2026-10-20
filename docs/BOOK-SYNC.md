@@ -58,6 +58,24 @@ The physical transfer was verified on a Paperwhite 5 (11th generation), firmware
 and KFX Input 2.34.2. This is one tested configuration, not a claim that every
 Kindle, firmware, book format or newer protection version works.
 
+## Download the add-on
+
+Download the experimental [Book Inbox 0.1.0 release candidate 1](https://github.com/skyerus/passage/releases/tag/book-inbox-v0.1.0-rc.1)
+archive and its `.sha256` file into the same folder. In that folder, verify the
+archive before extracting it:
+
+```sh
+shasum -a 256 -c passage-book-inbox-0.1.0-rc.1.tar.gz.sha256
+tar -xzf passage-book-inbox-0.1.0-rc.1.tar.gz
+```
+
+The extracted folder contains the service, plugin, this guide, synthetic tests,
+license and a `release.json` file with source provenance and file hashes. Use
+that folder wherever these instructions refer to the Passage source. It does
+not contain Python, Calibre, KFX Input, an export tool, or a Mac app installer;
+install those prerequisites separately. Keep existing private configuration and
+state outside the extracted folder.
+
 ## Manual pairing
 
 Exit KOReader and connect the Kindle by USB. Back up its `koreader/settings`

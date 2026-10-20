@@ -74,3 +74,25 @@ A signed, notarized candidate may be published as a GitHub **Pre-release** while
 For stable promotion, retain the candidate evidence, accepted notary logs, clean-Mac report and final manifest. Publish the unchanged disk image, its final checksum, the matching firmware source archive/checksum, and the redacted distribution-ready release manifest. State which architecture, macOS versions and reader models were physically tested, and whether position sync passed. Keep candidate/development downloads distinct. Once assets are published, update the README and first-install guide's download links and independently check the public download and its digest.
 
 Do not label a source ZIP, private upload, signed-only package, or isolated namespace test as a finished Mac release.
+
+## Optional Book Inbox source add-on
+
+Book Inbox has an independent version in `scripts/package-book-inbox.py`; it is
+not part of the Mac app bundle or its version. After the source PR's Python,
+Lua and Mac checks pass and it is merged, check out the exact merged default-
+branch commit in a clean release worktree and run:
+
+```sh
+python3 scripts/package-book-inbox.py --output /path/to/fresh/release-output
+```
+
+The packager reads an explicit Git allowlist, refuses a dirty tree, and produces
+a reproducible archive and checksum. It includes only the service, plugin,
+synthetic checks, license and setup guide, with an internal commit/file-hash
+manifest. Run the Python and Lua checks again from an extracted archive.
+Publish the unchanged archive and checksum as a GitHub pre-release with a
+`book-inbox-vVERSION` tag targeting that exact commit. State that manual setup
+and separately installed prerequisites are required; this is an experimental
+source add-on, not a signed or integrated Mac app release. Keep the existing
+Mac-app download current, link the add-on from its setup guide and README, then
+independently download the public archive and verify its checksum and manifest.
