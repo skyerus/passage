@@ -1,10 +1,14 @@
 name: Test
 on: [push, pull_request]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 jobs:
   python:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(((github.actor != 'skyerus' && github.actor != 'github-actions[bot]') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)) && '["ubuntu-24.04"]' || '["self-hosted","Linux","X64","macbook-linux"]') }}
     strategy:
       matrix:
         python: ['3.10', '3.13']
@@ -17,7 +21,7 @@ jobs:
       - run: python setup.py --dry-run
       - run: python setup.py --help
   plugin:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(((github.actor != 'skyerus' && github.actor != 'github-actions[bot]') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)) && '["ubuntu-24.04"]' || '["self-hosted","Linux","X64","macbook-linux"]') }}
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y lua5.1
